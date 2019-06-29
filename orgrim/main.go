@@ -64,10 +64,10 @@ func main() {
 			return
 		}
 
-		tagSet := map[string]bool{}
+		tags := map[string]string{}
 		for k, values := range r.URL.Query() {
 			for _, v := range values {
-				tagSet[fmt.Sprintf("%s:%s", k, v)] = true
+				tags[k] = v
 			}
 		}
 		p, o, err := publish(*dataTopic, data, producer)
@@ -77,10 +77,6 @@ func main() {
 			return
 		}
 
-		tags := []string{}
-		for t, _ := range tagSet {
-			tags = append(tags, t)
-		}
 		metadata := &spec.EventMetadata{
 			Tags:        tags,
 			Topic:       *dataTopic,
