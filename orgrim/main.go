@@ -6,17 +6,17 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
+	"math/rand"
 
 	"github.com/gogo/protobuf/proto"
+	"github.com/jackdoe/blackrock/orgrim/balancer"
 	log "github.com/sirupsen/logrus"
 
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
 	"./spec"
-	"github.com/Shopify/sarama"
 )
 
 func dumpObj(src interface{}) string {
@@ -38,8 +38,10 @@ func errToStr(e error) string {
 
 func main() {
 	var dataTopic = flag.String("topic-data", "blackrock-data", "topic for the data")
-	var kafkaServers = flag.String("kafka", "localhost:9092,localhost:9092", "kafka addrs")
+	var metaTopic = flag.String("topic-meta", "blackrock-metadata", "topic for the metadata")
+	var kafkaServers = flag.String("kafka", "localhost:9092", "kafka addr")
 	var verbose = flag.Bool("verbose", false, "print info level logs to stdout")
+	rand.Seed(time.Now().Unix())
 
 	var bind = flag.String("bind", ":9001", "bind to")
 	flag.Parse()
@@ -48,9 +50,15 @@ func main() {
 	} else {
 		log.SetLevel(log.WarnLevel)
 	}
-	producer, err := initProducer(strings.Split(*kafkaServers, ","))
+
+	brokers := strings.Split(*kafkaServers, ",")
+	dc, err := balancer.NewKafkaBalancer(*dataTopic, brokers)
 	if err != nil {
-		log.Panic(err)
+		log.Fatal(err)
+	}
+	mc, err := balancer.NewKafkaBalancer(*metaTopic, brokers)
+	if err != nil {
+		log.Fatal(err)
 	}
 
 	http.HandleFunc("/push/raw", func(w http.ResponseWriter, r *http.Request) {
@@ -64,6 +72,14 @@ func main() {
 			return
 		}
 
+		p, o, err := dc.Write(data)
+
+		if err != nil {
+			log.Warnf("[orgrim] error producing in %s, data length: %s, error: %s", *dataTopic, len(data), err.Error())
+			http.Error(w, errToStr(err), 500)
+			return
+		}
+
 		tags := map[string]string{}
 		for k, values := range r.URL.Query() {
 			for _, v := range values {
@@ -74,20 +90,21 @@ func main() {
 			Tags:        tags,
 			RemoteAddr:  r.RemoteAddr,
 			CreatedAtNs: time.Now().UnixNano(),
+			Offset:      o,
+			Partition:   p,
 		}
 
-		envelope := &spec.Envelope{Metadata: metadata, Payload: data}
-		encoded, err := proto.Marshal(envelope)
+		encoded, err := proto.Marshal(metadata)
 		if err != nil {
 			log.Warnf("[orgrim] error encoding metadata %v, error: %s", metadata, err.Error())
 			http.Error(w, errToStr(err), 500)
 			return
 		}
-
-		p, o, err := publish(*dataTopic, encoded, producer)
+		_, _, err = mc.Write(encoded)
 		if err != nil {
-			log.Warnf("[orgrim] error producing in %s, metadata: %v, error: %s", *dataTopic, metadata, err.Error())
+			log.Warnf("[orgrim] error producing in %s, metadata: %v, error: %s", *metaTopic, metadata, err.Error())
 			http.Error(w, errToStr(err), 500)
+			// XXX: just panic, hope it will be restarted and pick another broker
 			return
 		}
 
@@ -97,29 +114,4 @@ func main() {
 	})
 	log.Infof("listening to %s", *bind)
 	log.Fatal(http.ListenAndServe(*bind, nil))
-}
-
-func initProducer(addr []string) (sarama.SyncProducer, error) {
-	sarama.Logger = log.StandardLogger()
-
-	config := sarama.NewConfig()
-	hostname, err := os.Hostname()
-	if err != nil {
-		return nil, err
-	}
-	config.ClientID = hostname
-	config.Producer.Retry.Max = 5
-	config.Producer.RequiredAcks = sarama.WaitForAll
-	config.Producer.Return.Successes = true
-
-	return sarama.NewSyncProducer(addr, config)
-}
-
-func publish(topic string, data []byte, producer sarama.SyncProducer) (partition int32, offset int64, err error) {
-	msg := &sarama.ProducerMessage{
-		Topic: topic,
-		Value: sarama.ByteEncoder(data),
-	}
-	partition, offset, err = producer.SendMessage(msg)
-	return
 }

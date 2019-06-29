@@ -6,6 +6,8 @@ message Metadata {
         map<string,string> tags = 1;
         string remoteAddr  = 2;
         int64 createdAtNs  = 3;
+        int32 partition = 4;
+        int64 offset = 5;
 }
 
 message Envelope {
