@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package spec;
+
+message Metadata {
+        map<string,string> tags = 1;
+        string remoteAddr  = 2;
+        int64 createdAtNs  = 3;
+}
+
+message Envelope {
+        Metadata metadata = 1;
+        bytes payload = 2;
+}

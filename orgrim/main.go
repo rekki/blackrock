@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io/ioutil"
 
+	"github.com/gogo/protobuf/proto"
 	log "github.com/sirupsen/logrus"
 
 	"net/http"
@@ -37,7 +38,6 @@ func errToStr(e error) string {
 
 func main() {
 	var dataTopic = flag.String("topic-data", "blackrock-data", "topic for the data")
-	var metaTopic = flag.String("topic-meta", "blackrock-meta", "topic for the metadata")
 	var kafkaServers = flag.String("kafka", "localhost:9092,localhost:9092", "kafka addrs")
 	var verbose = flag.Bool("verbose", false, "print info level logs to stdout")
 
@@ -70,36 +70,28 @@ func main() {
 				tags[k] = v
 			}
 		}
-		p, o, err := publish(*dataTopic, data, producer)
-		if err != nil {
-			log.Warnf("[orgrim] error producing in %s, error: %s", *dataTopic, err.Error())
-			http.Error(w, errToStr(err), 500)
-			return
-		}
-
-		metadata := &spec.EventMetadata{
+		metadata := &spec.Metadata{
 			Tags:        tags,
-			Topic:       *dataTopic,
 			RemoteAddr:  r.RemoteAddr,
 			CreatedAtNs: time.Now().UnixNano(),
-			Partition:   p,
-			Offset:      o,
 		}
 
-		encoded, err := json.Marshal(metadata)
+		envelope := &spec.Envelope{Metadata: metadata, Payload: data}
+		encoded, err := proto.Marshal(envelope)
 		if err != nil {
 			log.Warnf("[orgrim] error encoding metadata %v, error: %s", metadata, err.Error())
 			http.Error(w, errToStr(err), 500)
 			return
 		}
-		_, _, err = publish(*metaTopic, encoded, producer)
+
+		p, o, err := publish(*dataTopic, encoded, producer)
 		if err != nil {
-			log.Warnf("[orgrim] error producing in %s, metadata: %v, error: %s", *metaTopic, metadata, err.Error())
+			log.Warnf("[orgrim] error producing in %s, metadata: %v, error: %s", *dataTopic, metadata, err.Error())
 			http.Error(w, errToStr(err), 500)
 			return
 		}
 
-		log.Infof("[orgrim] [%s] [%d:%d] payload %d bytes, metadata: %v", *metaTopic, p, o, len(data), metadata)
+		log.Infof("[orgrim] [%d:%d] payload %d bytes, metadata: %v", p, o, len(data), metadata)
 
 		fmt.Fprintf(w, `{"success":true}`)
 	})
