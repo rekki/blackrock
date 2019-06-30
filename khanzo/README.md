@@ -12,6 +12,7 @@ the demon lord Archimonde.
 
 # searching
 
+```
 curl -d '{
   "partition": 1,
   "query": {
@@ -32,3 +33,4 @@ curl -d '{
   }
 }' localhost:9002/search
 
+```
