@@ -39,7 +39,7 @@ func main() {
 		Topic:        *dataTopic,
 		Balancer:     &kafka.LeastBytes{},
 		BatchTimeout: 1 * time.Second,
-		Async:        *sync,
+		Async:        !*sync,
 	})
 	defer kw.Close()
 
