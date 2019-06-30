@@ -13,7 +13,7 @@ the demon lord Archimonde.
 # searching
 
 ```
-curl -d '{
+% curl -d '{
   "partition": 1,
   "query": {
     "or": [
@@ -31,6 +31,44 @@ curl -d '{
       }
     ]
   }
-}' localhost:9002/search
+}' http://khanzo/search
 
+```
+
+
+
+# stats
+
+get all possible tag keys and total number of documents in the index
+
+```
+% curl http://khanzo/stat
+{
+  "tags": [
+    "_",
+    "open",
+    "type",
+    "year",
+    "year-month",
+    "year-month-day",
+    "year-month-day-hour",
+    "year-month-day-hour-minute"
+  ],
+  "total_documents": 8
+}
+
+```
+
+# introspect
+
+get all values per tag with their term count
+
+```
+% curl http://khanzo/introspect/:tag
+{
+  "values": {
+    "web": 8
+    "app": 20,
+  }
+}
 ```
