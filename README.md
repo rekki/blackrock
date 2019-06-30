@@ -36,12 +36,14 @@ Composed of the following characters:
 * [jubei](jubei/) - create indexes
 
 ```
-writing offset 91 at /j/blackrock/0/type/web.p
-writing offset 91 at /j/blackrock/0/open/true.p
-writing offset 91 at /j/blackrock/0/year/2019.p
-writing offset 91 at /j/blackrock/0/year-month/2019-06.p
-writing offset 91 at /j/blackrock/0/year-month-day/2019-06-30.p
-writing offset 91 at /j/blackrock/0/year-month-day-hour/2019-06-30-12.p
+writing kafka offset 0:108 as id 2
+writing document id 2 at /tmp/jubei/hello/type/web.p
+writing document id 2 at /tmp/jubei/hello/open/true.p
+writing document id 2 at /tmp/jubei/hello/_/_.p
+writing document id 2 at /tmp/jubei/hello/year/2019.p
+writing document id 2 at /tmp/jubei/hello/year-month/2019-06.p
+writing document id 2 at /tmp/jubei/hello/year-month-day/2019-06-30.p
+writing document id 2 at /tmp/jubei/hello/year-month-day-hour/2019-06-30-17.p
 
 ```
 * [khanzo](khanzo/) - search
