@@ -26,7 +26,7 @@ Composed of the following characters:
 
 ```
 
-% curl http://orgrim/push/raw?open=true&type=web
+% curl -d '{"hello":"world"}' http://orgrim/push/raw?open=true&type=web
 {
   "success": true
 }
