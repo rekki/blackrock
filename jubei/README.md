@@ -1,4 +1,4 @@
-* JUBEI'THOS blademaster : indexer
+# JUBEI'THOS blademaster : indexer
 
 ![jubei](../_/img/jubei.jpg)
 
