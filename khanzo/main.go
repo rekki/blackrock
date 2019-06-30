@@ -7,6 +7,7 @@ import (
 	"os"
 	"path"
 	"sort"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackdoe/blackrock/jubei/sanitize"
@@ -14,7 +15,7 @@ import (
 )
 
 func NewTermQuery(root string, topic string, tagKey, tagValue string) *Term {
-	dir, filename := sanitize.PathForTag(root, topic, tagKey, tagValue)
+	dir, filename := sanitize.PathForTag(root, topic, tagKey, tagValue) // sanitizes inside
 	fn := path.Join(dir, filename)
 
 	if _, err := os.Stat(fn); os.IsNotExist(err) {
@@ -65,6 +66,7 @@ func readForward(fd *os.File, did int64) (int32, int64, error) {
 	partition := int32(v >> 54)
 	return partition, offset, nil
 }
+
 func main() {
 	var root = flag.String("root", "/tmp/jubei", "root directory for the files (root/topic/partition)")
 	var dataTopic = flag.String("topic-data", "blackrock-data", "topic for the data")
@@ -85,6 +87,43 @@ func main() {
 	}
 
 	r := gin.Default()
+	r.GET("/inspect/:tag", func(c *gin.Context) {
+		files, err := ioutil.ReadDir(path.Join(*root, *dataTopic, sanitize.Cleanup(c.Param("tag"))))
+		if err != nil {
+			c.JSON(500, gin.H{"error": err.Error()})
+			return
+		}
+		values := map[string]int64{}
+		for _, fi := range files {
+			if !fi.IsDir() && strings.HasSuffix(fi.Name(), ".p") {
+				values[strings.TrimSuffix(fi.Name(), ".p")] = fi.Size() / 8
+			}
+		}
+
+		c.JSON(200, gin.H{"values": values})
+	})
+
+	r.GET("/stat", func(c *gin.Context) {
+		fi, err := forward.Stat()
+		if err != nil {
+			c.JSON(500, gin.H{"error": err.Error()})
+			return
+		}
+		tags := []string{}
+		files, err := ioutil.ReadDir(path.Join(*root, *dataTopic))
+		if err != nil {
+			c.JSON(500, gin.H{"error": err.Error()})
+			return
+		}
+		for _, fi := range files {
+			if fi.IsDir() {
+				tags = append(tags, fi.Name())
+			}
+		}
+		sort.Strings(tags)
+		c.JSON(200, gin.H{"total_documents": fi.Size() / 8, "tags": tags})
+	})
+
 	r.POST("/search", func(c *gin.Context) {
 		var qr QueryRequest
 		if err := c.ShouldBindJSON(&qr); err != nil {

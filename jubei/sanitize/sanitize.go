@@ -9,7 +9,6 @@ import (
 
 func PathForTag(root string, topic string, tagKey string, tagValue string) (string, string) {
 	dir := path.Join(root, topic, Cleanup(tagKey))
-
 	return dir, fmt.Sprintf("%s.p", Cleanup(tagValue))
 }
 
