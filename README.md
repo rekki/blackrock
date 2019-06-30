@@ -3,7 +3,7 @@
 ![blackrock](_/img/blackrock.jpg)
 
 
-# LORE https://wow.gamepedia.com/Blackrock_clan
+# [LORE](https://wow.gamepedia.com/Blackrock_clan)
 
 The Blackrock clan is a prominent orcish clan originally hailing from
 the caverns of Gorgrond. On Draenor, they were known for their strict

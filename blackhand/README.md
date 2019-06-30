@@ -2,7 +2,7 @@
 
 ![blackhand](../_/img/blackhand.jpg)
 
-# LORE https://wow.gamepedia.com/Blackhand
+# [LORE](https://wow.gamepedia.com/Blackhand)
 
 Blackhand was the chieftain of the mighty Blackrock clan and the first
 Warchief of the Old Horde[1] until he was killed by Orgrim Doomhammer

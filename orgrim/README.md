@@ -7,7 +7,7 @@
 >  more treachery. No more deceit and lies!”
 
 
-# LORE https://wow.gamepedia.com/Orgrim_Doomhammer
+# [LORE](https://wow.gamepedia.com/Orgrim_Doomhammer)
 
 Orgrim Doomhammer was the Warchief of the Old Horde and Chieftain of
 the Blackrock clan during the end of the First War and the entirety of

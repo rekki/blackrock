@@ -2,7 +2,7 @@
 
 ![jubei](../_/img/jubei.jpg)
 
-# LORE https://wow.gamepedia.com/Jubei%27Thos
+# [LORE](https://wow.gamepedia.com/Jubei%27Thos)
 
 Jubei'Thos and the Blackrock warlocks sensed that the second coming of
 the Burning Legion was at hand, and took steps to prepare. Jubei'Thos
