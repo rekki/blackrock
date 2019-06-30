@@ -68,14 +68,14 @@ func readForward(fd *os.File, did int64) (int32, int64, error) {
 }
 
 func main() {
-	var root = flag.String("root", "/tmp/jubei", "root directory for the files (root/topic/partition)")
+	var root = flag.String("root", "/blackrock", "root directory for the files (root/topic/partition)")
 	var dataTopic = flag.String("topic-data", "blackrock-data", "topic for the data")
 	var verbose = flag.Bool("verbose", false, "print info level logs to stdout")
 	var bind = flag.String("bind", ":9002", "bind to")
 	flag.Parse()
-
+	os.MkdirAll(path.Join(*root, *dataTopic), 0700)
 	filename := path.Join(*root, *dataTopic, "forward.bin")
-	forward, err := os.OpenFile(filename, os.O_RDONLY, 0600)
+	forward, err := os.OpenFile(filename, os.O_RDONLY|os.O_CREATE, 0600)
 	if err != nil {
 		log.Fatal(err)
 	}

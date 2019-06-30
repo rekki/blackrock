@@ -22,6 +22,7 @@ func main() {
 	var dataTopic = flag.String("topic-data", "blackrock-data", "topic for the data")
 	var kafkaServers = flag.String("kafka", "localhost:9092", "kafka addr")
 	var verbose = flag.Bool("verbose", false, "print info level logs to stdout")
+	var sync = flag.Bool("sync", false, "sync writer config")
 	var bind = flag.String("bind", ":9001", "bind to")
 	flag.Parse()
 
@@ -38,7 +39,7 @@ func main() {
 		Topic:        *dataTopic,
 		Balancer:     &kafka.LeastBytes{},
 		BatchTimeout: 1 * time.Second,
-		Async:        true,
+		Async:        *sync,
 	})
 	defer kw.Close()
 

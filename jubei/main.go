@@ -93,10 +93,10 @@ func (fw *FileWriter) appendTag(docId uint64, tagKey, tagValue string) error {
 
 	}
 	log.Infof("writing document id %d at %s", docId, filename)
-	off := make([]byte, 8)
+	data := make([]byte, 8)
 
-	binary.LittleEndian.PutUint64(off, docId)
-	_, err := f.Write(off)
+	binary.LittleEndian.PutUint64(data, docId)
+	_, err := f.Write(data)
 	if err != nil {
 		return err
 	}
@@ -127,7 +127,7 @@ func (fw *FileWriter) append(docId uint64, metadata *spec.Metadata) error {
 
 func main() {
 	var dataTopic = flag.String("topic-data", "blackrock-data", "topic for the data")
-	var root = flag.String("root", "/tmp/jubei", "root directory for the files")
+	var root = flag.String("root", "/blackrock", "root directory for the files")
 	var kafkaServers = flag.String("kafka", "localhost:9092,localhost:9092", "kafka addrs")
 	var verbose = flag.Bool("verbose", false, "print info level logs to stdout")
 	var maxDescriptors = flag.Int("max-descriptors", 1000, "max open descriptors")
