@@ -25,7 +25,6 @@ Composed of the following characters:
 * [orgrim ](orgrim/) - consume events
 
 ```
-
 % curl -d '{"hello":"world"}' http://orgrim/push/raw?open=true&type=web
 {
   "success": true
@@ -37,7 +36,6 @@ Composed of the following characters:
 * [jubei](jubei/) - create indexes
 
 ```
-
 writing offset 91 at /j/blackrock/0/type/web.p
 writing offset 91 at /j/blackrock/0/open/true.p
 writing offset 91 at /j/blackrock/0/year/2019.p
@@ -73,7 +71,6 @@ writing offset 91 at /j/blackrock/0/year-month-day-hour/2019-06-30-12.p
 returns lists of all objects matching the query, sorted by score
 
 ```
-
 {
   "hits": [
     {
