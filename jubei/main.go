@@ -85,7 +85,7 @@ func (fw *FileWriter) append(root string, topic string, partition int32, offset 
 	hour, minute, _ := t.Clock()
 	fw.appendTag(root, topic, partition, offset, ns, "_", "_")
 	fw.appendTag(root, topic, partition, offset, ns, "year", fmt.Sprintf("%d", year))
-	fw.appendTag(root, topic, partition, offset, ns, "year-month", fmt.Sprintf("%d-%d", year, month))
+	fw.appendTag(root, topic, partition, offset, ns, "year-month", fmt.Sprintf("%d-%02d", year, month))
 	fw.appendTag(root, topic, partition, offset, ns, "year-month-day", fmt.Sprintf("%d-%02d-%02d", year, month, day))
 	fw.appendTag(root, topic, partition, offset, ns, "year-month-day-hour", fmt.Sprintf("%d-%02d-%02d-%02d", year, month, day, hour))
 	fw.appendTag(root, topic, partition, offset, ns, "year-month-day-hour-minute", fmt.Sprintf("%d-%02d-%02d-%02d:%02d", year, month, day, hour, minute))

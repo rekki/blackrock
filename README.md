@@ -2,7 +2,6 @@
 
 ![blackrock](_/img/blackrock.jpg)
 
-
 # [LORE](https://wow.gamepedia.com/Blackrock_clan)
 
 The Blackrock clan is a prominent orcish clan originally hailing from
@@ -15,11 +14,94 @@ Blackhand and his deposer Orgrim Doomhammer — were both Blackrocks.
 
 # heroes
 
-this is simple proof of concept events index and search system, composed of the following characters:
+This is simple proof of concept events index and search system.
+
+It has only kafka as dependency, it abuses the fact that offsets are
+ordered within a partition, and builds inverted indexes that can be searched
+
+
+Composed of the following characters:
 
 * [orgrim ](orgrim/) - consume events
+
+```
+
+% curl http://orgrim/push/raw?open=true&type=web
+{
+  "success": true
+}
+
+```
+
+
 * [jubei](jubei/) - create indexes
+
+```
+
+writing offset 91 at /j/blackrock/0/type/web.p
+writing offset 91 at /j/blackrock/0/open/true.p
+writing offset 91 at /j/blackrock/0/year/2019.p
+writing offset 91 at /j/blackrock/0/year-month/2019-06.p
+writing offset 91 at /j/blackrock/0/year-month-day/2019-06-30.p
+writing offset 91 at /j/blackrock/0/year-month-day-hour/2019-06-30-12.p
+
+```
 * [khanzo](khanzo/) - search
+
+```
+% curl -d '{
+  "partition": 1,
+  "query": {
+    "or": [
+      {
+        "tag": {
+          "key": "type",
+          "value": "web"
+        }
+      },
+      {
+        "tag": {
+          "key": "open",
+          "value": "true"
+        }
+      }
+    ]
+  }
+}' http://khanzo/search
+```
+
+returns lists of all objects matching the query, sorted by score
+
+```
+
+{
+  "hits": [
+    {
+      "offset": 91,
+      "partition": 0,
+      "score": 2
+    },
+    {
+      "offset": 91,
+      "partition": 0,
+      "score": 1
+    },
+  ],
+  "size": 2
+}
+
+```
+
 * [blackhand](blackhand/) - fetch specific offset
+
+
+```
+% curl localhost:9003/get/0/92
+
+{"hello":"world"}
+```
+
+
+
 
 # do not use in production, it is 1 day old

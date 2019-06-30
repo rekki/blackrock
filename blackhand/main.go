@@ -20,7 +20,7 @@ func main() {
 	var dataTopic = flag.String("topic-data", "blackrock-data", "topic for the data")
 	var kafkaServers = flag.String("kafka", "localhost:9092", "kafka addr")
 	var verbose = flag.Bool("verbose", false, "print info level logs to stdout")
-	var bind = flag.String("bind", ":9002", "bind to")
+	var bind = flag.String("bind", ":9003", "bind to")
 	flag.Parse()
 
 	dc, err := balancer.NewKafkaBalancer(*dataTopic, strings.Split(*kafkaServers, ","))
