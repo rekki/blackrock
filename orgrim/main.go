@@ -2,21 +2,24 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"io/ioutil"
 	"math/rand"
+	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/gogo/protobuf/proto"
-	"github.com/jackdoe/blackrock/orgrim/balancer"
+	"github.com/jackdoe/blackrock/orgrim/spec"
+	"github.com/segmentio/kafka-go"
 	log "github.com/sirupsen/logrus"
 
 	"net/http"
 	"strings"
 	"time"
-
-	"./spec"
 )
 
 func dumpObj(src interface{}) string {
@@ -38,7 +41,6 @@ func errToStr(e error) string {
 
 func main() {
 	var dataTopic = flag.String("topic-data", "blackrock-data", "topic for the data")
-	var metaTopic = flag.String("topic-meta", "blackrock-metadata", "topic for the metadata")
 	var kafkaServers = flag.String("kafka", "localhost:9092", "kafka addr")
 	var verbose = flag.Bool("verbose", false, "print info level logs to stdout")
 	rand.Seed(time.Now().Unix())
@@ -52,14 +54,22 @@ func main() {
 	}
 
 	brokers := strings.Split(*kafkaServers, ",")
-	dc, err := balancer.NewKafkaBalancer(*dataTopic, brokers)
-	if err != nil {
-		log.Fatal(err)
-	}
-	mc, err := balancer.NewKafkaBalancer(*metaTopic, brokers)
-	if err != nil {
-		log.Fatal(err)
-	}
+	kw := kafka.NewWriter(kafka.WriterConfig{
+		Brokers:      brokers,
+		Topic:        *dataTopic,
+		Balancer:     &kafka.LeastBytes{},
+		BatchTimeout: 1 * time.Second,
+	})
+	defer kw.Close()
+
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		<-sigs
+		log.Warnf("closing the writer...")
+		kw.Close()
+		os.Exit(0)
+	}()
 
 	http.HandleFunc("/push/raw", func(w http.ResponseWriter, r *http.Request) {
 		body := r.Body
@@ -71,8 +81,6 @@ func main() {
 			http.Error(w, errToStr(err), 400)
 			return
 		}
-
-		p, o, err := dc.Write(data)
 
 		if err != nil {
 			log.Warnf("[orgrim] error producing in %s, data length: %s, error: %s", *dataTopic, len(data), err.Error())
@@ -86,29 +94,30 @@ func main() {
 				tags[k] = v
 			}
 		}
+
 		metadata := &spec.Metadata{
 			Tags:        tags,
 			RemoteAddr:  r.RemoteAddr,
 			CreatedAtNs: time.Now().UnixNano(),
-			Offset:      o,
-			Partition:   p,
 		}
-
-		encoded, err := proto.Marshal(metadata)
+		envelope := &spec.Envelope{Metadata: metadata, Payload: data}
+		encoded, err := proto.Marshal(envelope)
 		if err != nil {
 			log.Warnf("[orgrim] error encoding metadata %v, error: %s", metadata, err.Error())
 			http.Error(w, errToStr(err), 500)
 			return
 		}
-		_, _, err = mc.Write(encoded)
+		err = kw.WriteMessages(context.Background(), kafka.Message{
+			Value: encoded,
+		})
+
 		if err != nil {
-			log.Warnf("[orgrim] error producing in %s, metadata: %v, error: %s", *metaTopic, metadata, err.Error())
+			log.Warnf("[orgrim] error sending message, metadata %v, error: %s", metadata, err.Error())
 			http.Error(w, errToStr(err), 500)
-			// XXX: just panic, hope it will be restarted and pick another broker
 			return
 		}
 
-		log.Infof("[orgrim] [%d:%d] payload %d bytes, metadata: %v", p, o, len(data), metadata)
+		log.Infof("[orgrim] payload %d bytes, metadata: %v", len(data), metadata)
 
 		fmt.Fprintf(w, `{"success":true}`)
 	})
