@@ -23,13 +23,32 @@ import (
 type FileWriter struct {
 	descriptors        map[string]*os.File
 	maxOpenDescriptors int
+	forward            *os.File
+	root               string
+	topic              string
+	offset             uint64
 }
 
-func NewFileWriter(maxOpenDescriptors int) *FileWriter {
+func NewFileWriter(root string, topic string, maxOpenDescriptors int) (*FileWriter, error) {
+	os.MkdirAll(path.Join(root, topic), 0700)
+	filename := path.Join(root, topic, "forward.bin")
+	fd, err := os.OpenFile(filename, os.O_RDWR|os.O_CREATE, 0600)
+	if err != nil {
+		return nil, err
+	}
+	off, err := fd.Seek(0, os.SEEK_END)
+	if err != nil {
+		return nil, err
+	}
+	log.Infof("forward %s with %d entries", filename, off/8)
 	return &FileWriter{
 		maxOpenDescriptors: maxOpenDescriptors,
 		descriptors:        map[string]*os.File{},
-	}
+		root:               root,
+		topic:              topic,
+		forward:            fd,
+		offset:             uint64(off) / 8,
+	}, nil
 }
 
 func (fw *FileWriter) sync() {
@@ -37,9 +56,22 @@ func (fw *FileWriter) sync() {
 		f.Sync()
 	}
 }
+func (fw *FileWriter) appendForward(partition int32, offset int64) (uint64, error) {
+	current := fw.offset
+	log.Infof("writing kafka offset %d:%d as id %d", partition, offset, current)
+	fw.offset++
+	off := make([]byte, 8)
+	binary.LittleEndian.PutUint64(off, uint64(partition)<<54|uint64(offset))
+	_, err := fw.forward.WriteAt(off, int64(current*uint64(8)))
+	if err != nil {
+		return 0, err
+	}
 
-func (fw *FileWriter) appendTag(root string, topic string, partition int32, offset int64, ns int64, tagKey, tagValue string) error {
-	dir, fn := sanitize.PathForTag(root, topic, partition, tagKey, tagValue)
+	return current, nil
+}
+
+func (fw *FileWriter) appendTag(docId uint64, tagKey, tagValue string) error {
+	dir, fn := sanitize.PathForTag(fw.root, fw.topic, tagKey, tagValue)
 	filename := path.Join(dir, fn)
 	f, ok := fw.descriptors[filename]
 	if !ok {
@@ -60,9 +92,10 @@ func (fw *FileWriter) appendTag(root string, topic string, partition int32, offs
 		fw.descriptors[filename] = fd
 
 	}
-	log.Infof("writing offset %d at %s", offset, filename)
+	log.Infof("writing document id %d at %s", docId, filename)
 	off := make([]byte, 8)
-	binary.LittleEndian.PutUint64(off, uint64(offset))
+
+	binary.LittleEndian.PutUint64(off, docId)
 	_, err := f.Write(off)
 	if err != nil {
 		return err
@@ -70,10 +103,10 @@ func (fw *FileWriter) appendTag(root string, topic string, partition int32, offs
 	return nil
 }
 
-func (fw *FileWriter) append(root string, topic string, partition int32, offset int64, metadata *spec.Metadata) error {
+func (fw *FileWriter) append(docId uint64, metadata *spec.Metadata) error {
 	ns := metadata.CreatedAtNs
 	for k, v := range metadata.Tags {
-		err := fw.appendTag(root, topic, partition, offset, ns, k, v)
+		err := fw.appendTag(docId, k, v)
 		if err != nil {
 			return err
 		}
@@ -83,12 +116,12 @@ func (fw *FileWriter) append(root string, topic string, partition int32, offset 
 	t := time.Unix(second, 0)
 	year, month, day := t.Date()
 	hour, minute, _ := t.Clock()
-	fw.appendTag(root, topic, partition, offset, ns, "_", "_")
-	fw.appendTag(root, topic, partition, offset, ns, "year", fmt.Sprintf("%d", year))
-	fw.appendTag(root, topic, partition, offset, ns, "year-month", fmt.Sprintf("%d-%02d", year, month))
-	fw.appendTag(root, topic, partition, offset, ns, "year-month-day", fmt.Sprintf("%d-%02d-%02d", year, month, day))
-	fw.appendTag(root, topic, partition, offset, ns, "year-month-day-hour", fmt.Sprintf("%d-%02d-%02d-%02d", year, month, day, hour))
-	fw.appendTag(root, topic, partition, offset, ns, "year-month-day-hour-minute", fmt.Sprintf("%d-%02d-%02d-%02d:%02d", year, month, day, hour, minute))
+	fw.appendTag(docId, "_", "_")
+	fw.appendTag(docId, "year", fmt.Sprintf("%d", year))
+	fw.appendTag(docId, "year-month", fmt.Sprintf("%d-%02d", year, month))
+	fw.appendTag(docId, "year-month-day", fmt.Sprintf("%d-%02d-%02d", year, month, day))
+	fw.appendTag(docId, "year-month-day-hour", fmt.Sprintf("%d-%02d-%02d-%02d", year, month, day, hour))
+	fw.appendTag(docId, "year-month-day-hour-minute", fmt.Sprintf("%d-%02d-%02d-%02d:%02d", year, month, day, hour, minute))
 	return nil
 }
 
@@ -126,7 +159,11 @@ func main() {
 		os.Exit(0)
 	}()
 
-	fw := NewFileWriter(*maxDescriptors)
+	fw, err := NewFileWriter(*root, *dataTopic, *maxDescriptors)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	ctx := context.Background()
 	log.Warnf("waiting...")
 	for {
@@ -142,7 +179,12 @@ func main() {
 			log.Warnf("failed to unmarshal, data: %s, error: %s", string(m.Value), err.Error())
 			continue
 		}
-		err = fw.append(*root, m.Topic, int32(m.Partition), m.Offset, envelope.Metadata)
+		id, err := fw.appendForward(int32(m.Partition), m.Offset)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		err = fw.append(id, envelope.Metadata)
 		if err != nil {
 			log.Fatal(err)
 		}

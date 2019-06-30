@@ -27,8 +27,8 @@ against Kel'thuzad and Arthas.
 # building indexes by slashing
 
 consume events from the topic, for each tag K:V build append the
-offset(uint64) to `root/topic/partition/tag/value`
+offset(uint64) to `root/topic/forward.bin`, then gets this offset and
+builds inverted index in `root/topic/tagKey/tagValue.p` which is
+searched by [khanzo](../khanzo)
 
-since the offsets within a partition are ordered, this builds
-implicitly sorted postings list, which can be used b `khanzo` to search
 
