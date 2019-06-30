@@ -1,6 +1,6 @@
 # BLACKHAND the tyrant : get what you want
 
-![blackhand](_/img/blackhand.jpg)
+![blackhand](../_/img/blackhand.jpg)
 
 # LORE https://wow.gamepedia.com/Blackhand
 

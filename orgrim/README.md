@@ -1,6 +1,6 @@
 # ORGRIM DOOMHAMMER  warchief : leader
 
-![orgrim](_/img/orgrim.jpg)
+![orgrim](../_/img/orgrim.jpg)
 
 > “I rule the Horde now, Gul'dan. Not you, not your
 >  warlocks. Doomhammer alone. And there will be no more dishonor. No

@@ -69,6 +69,7 @@ func (fw *FileWriter) appendTag(root string, topic string, partition int32, offs
 	}
 	return nil
 }
+
 func (fw *FileWriter) append(root string, topic string, partition int32, offset int64, metadata *spec.Metadata) error {
 	ns := metadata.CreatedAtNs
 	for k, v := range metadata.Tags {

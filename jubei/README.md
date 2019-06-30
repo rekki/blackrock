@@ -1,6 +1,6 @@
 * JUBEI'THOS blademaster : indexer
 
-![jubei](_/img/jubei.jpg)
+![jubei](../_/img/jubei.jpg)
 
 # LORE https://wow.gamepedia.com/Jubei%27Thos
 
