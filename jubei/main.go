@@ -10,50 +10,15 @@ import (
 	"path"
 	"syscall"
 	"time"
-	"unicode"
 
 	"strings"
 
 	"github.com/gogo/protobuf/proto"
+	"github.com/jackdoe/blackrock/jubei/sanitize"
 	"github.com/jackdoe/blackrock/orgrim/spec"
 	"github.com/segmentio/kafka-go"
 	log "github.com/sirupsen/logrus"
 )
-
-func sanitize(s string) string {
-	return strings.Map(
-		func(r rune) rune {
-			if r > unicode.MaxLatin1 {
-				return -1
-			}
-
-			if '0' <= r && r <= '9' {
-				return r
-			}
-
-			if 'A' <= r && r <= 'Z' {
-				return r
-			}
-
-			if 'a' <= r && r <= 'z' {
-				return r
-			}
-
-			if r == ':' || r == '-' || r == '.' || r == '_' {
-				return r
-			}
-
-			return -1
-		},
-		s,
-	)
-}
-
-func pathForTag(root string, topic string, partition int32, tagKey string, tagValue string) (string, string) {
-	dir := path.Join(root, topic, fmt.Sprintf("%d", partition), sanitize(tagKey))
-
-	return dir, fmt.Sprintf("%s.p", sanitize(tagValue))
-}
 
 type FileWriter struct {
 	descriptors        map[string]*os.File
@@ -74,7 +39,7 @@ func (fw *FileWriter) sync() {
 }
 
 func (fw *FileWriter) appendTag(root string, topic string, partition int32, offset int64, ns int64, tagKey, tagValue string) error {
-	dir, fn := pathForTag(root, topic, partition, tagKey, tagValue)
+	dir, fn := sanitize.PathForTag(root, topic, partition, tagKey, tagValue)
 	filename := path.Join(dir, fn)
 	f, ok := fw.descriptors[filename]
 	if !ok {
@@ -128,7 +93,7 @@ func (fw *FileWriter) append(root string, topic string, partition int32, offset 
 
 func main() {
 	var dataTopic = flag.String("topic-data", "blackrock-data", "topic for the data")
-	var root = flag.String("root", "/tmp/junbei", "root directory for the files")
+	var root = flag.String("root", "/tmp/jubei", "root directory for the files")
 	var kafkaServers = flag.String("kafka", "localhost:9092,localhost:9092", "kafka addrs")
 	var verbose = flag.Bool("verbose", false, "print info level logs to stdout")
 	var maxDescriptors = flag.Int("max-descriptors", 1000, "max open descriptors")
@@ -145,7 +110,7 @@ func main() {
 	rd := kafka.NewReader(kafka.ReaderConfig{
 		Brokers:        brokers,
 		Topic:          *dataTopic,
-		GroupID:        "junbei_" + consumerId,
+		GroupID:        "jubei_" + consumerId,
 		CommitInterval: 1 * time.Second,
 		MaxWait:        1 * time.Second,
 	})

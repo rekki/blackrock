@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"sync"
 	"time"
 
 	"github.com/segmentio/kafka-go"
@@ -12,13 +13,31 @@ import (
 )
 
 type KafkaBalancer struct {
-	connections []*kafka.Conn
+	connections map[int]*kafka.Conn
+	sync.Mutex
 }
 
-func (k *KafkaBalancer) Write(data []byte) (int32, int64, error) {
-	conn := k.connections[rand.Int()%len(k.connections)]
-	_, p, o, _, err := conn.WriteCompressedMessagesAt(nil, kafka.Message{Value: data})
-	return p, o, err
+func (k *KafkaBalancer) ReadAt(partition int, offset int64) ([]byte, error) {
+	k.Lock()
+	defer k.Unlock()
+	p, ok := k.connections[partition]
+	if !ok {
+		return nil, errors.New(fmt.Sprintf("no such partition %d", partition))
+	}
+
+	newOffset, err := p.Seek(offset, kafka.SeekAbsolute)
+	if err != nil {
+		return nil, err
+	}
+	if newOffset != offset {
+		return nil, errors.New(fmt.Sprintf("offset mismatch, expected %d got %d", offset, newOffset))
+	}
+	m, err := p.ReadMessage(1024 * 1024) // 1mb
+
+	if err != nil {
+		return nil, err
+	}
+	return m.Value, nil
 }
 
 func (k *KafkaBalancer) Close() {
@@ -54,7 +73,7 @@ func NewKafkaBalancer(topic string, brokers []string) (*KafkaBalancer, error) {
 			conn.Close()
 			continue
 		}
-		out := &KafkaBalancer{connections: []*kafka.Conn{}}
+		out := &KafkaBalancer{connections: map[int]*kafka.Conn{}}
 
 		for _, p := range partitions {
 			c, err := kafka.DialLeader(context.Background(), "tcp", fmt.Sprintf("%s:%d", p.Leader.Host, p.Leader.Port), topic, p.ID)
@@ -63,7 +82,7 @@ func NewKafkaBalancer(topic string, brokers []string) (*KafkaBalancer, error) {
 				log.Warnf("failed to get leader for partition %v, error: %s", p, err.Error())
 				return nil, err
 			}
-			out.connections = append(out.connections, c)
+			out.connections[p.ID] = c
 		}
 		return out, nil
 	}
