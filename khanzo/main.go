@@ -2,8 +2,11 @@ package main
 
 import (
 	"encoding/binary"
+	"errors"
 	"flag"
 	"io/ioutil"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"path"
 	"sort"
@@ -14,16 +17,108 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-func NewTermQuery(root string, topic string, tagKey, tagValue string) *Term {
+/*
+
+{
+   and: [{"or": [{"tag":{"key":"b","value": "v"}}]}]
+}
+
+*/
+
+func fromJSON(input interface{}, makeTermQuery func(string, string) Query) (Query, error) {
+	mapped, ok := input.(map[string]interface{})
+	queries := []Query{}
+	if ok {
+		if v, ok := mapped["tag"]; ok && v != nil {
+			kv, ok := v.(map[string]interface{})
+			if !ok {
+				return nil, errors.New("[tag] must be map containing {key, value}")
+			}
+			added := false
+			if tk, ok := kv["key"]; ok && tk != nil {
+				if tv, ok := kv["value"]; ok && tv != nil {
+					sk, ok := tk.(string)
+					if !ok {
+						return nil, errors.New("[tag][key] must be string")
+					}
+					sv, ok := tv.(string)
+					if !ok {
+						return nil, errors.New("[tag][value] must be string")
+					}
+					queries = append(queries, makeTermQuery(sk, sv))
+					added = true
+				}
+			}
+			if !added {
+				return nil, errors.New("[tag] must be map containing {key, value}")
+			}
+		}
+		if v, ok := mapped["and"]; ok && v != nil {
+			list, ok := v.([]interface{})
+			if ok {
+				and := NewBoolAndQuery([]Query{}...)
+				for _, subQuery := range list {
+					q, err := fromJSON(subQuery, makeTermQuery)
+					if err != nil {
+						return nil, err
+					}
+					and.AddSubQuery(q)
+				}
+				queries = append(queries, and)
+			} else {
+				return nil, errors.New("[or] takes array of subqueries")
+			}
+		}
+
+		if v, ok := mapped["or"]; ok && v != nil {
+			list, ok := v.([]interface{})
+			if ok {
+				or := NewBoolOrQuery([]Query{}...)
+				for _, subQuery := range list {
+					q, err := fromJSON(subQuery, makeTermQuery)
+					if err != nil {
+						return nil, err
+					}
+					or.AddSubQuery(q)
+				}
+				queries = append(queries, or)
+			} else {
+				return nil, errors.New("[and] takes array of subqueries")
+			}
+		}
+	}
+
+	if len(queries) == 1 {
+		return queries[0], nil
+	}
+
+	return NewBoolAndQuery(queries...), nil
+}
+
+func NewTermQuery(maxDocuments int64, root string, topic string, tagKey, tagValue string) Query {
 	dir, filename := sanitize.PathForTag(root, topic, tagKey, tagValue) // sanitizes inside
 	fn := path.Join(dir, filename)
-
-	if _, err := os.Stat(fn); os.IsNotExist(err) {
+	file, err := os.OpenFile(fn, os.O_RDONLY, 0600)
+	if os.IsNotExist(err) {
 		log.Infof("missing file %s, returning empty", fn)
 		return NewTerm([]int64{})
 	}
-	log.Infof("reading %s", fn)
-	postings, err := ioutil.ReadFile(fn)
+	fi, err := file.Stat()
+	if err != nil {
+		log.Warnf("failed to read file stats: %s, error: %s", fn, err.Error())
+		return NewTerm([]int64{})
+	}
+
+	log.Infof("reading %s, size: %d", fn, fi.Size())
+	total := fi.Size() / int64(8)
+	seek := int64(0)
+	if maxDocuments > 0 && total > maxDocuments {
+		seek = (total - maxDocuments) * 8
+	}
+	file.Seek(seek, 0)
+	log.Infof("seek %d, total %d max requested: %d", seek, total, maxDocuments)
+
+	postings, err := ioutil.ReadAll(file)
 	if err != nil {
 		log.Warnf("failed to read file: %s, error: %s", fn, err.Error())
 		return NewTerm([]int64{})
@@ -40,8 +135,9 @@ func NewTermQuery(root string, topic string, tagKey, tagValue string) *Term {
 }
 
 type QueryRequest struct {
-	Query interface{} `json:"query"`
-	Size  int         `json:"size"`
+	Query            interface{} `json:"query"`
+	Size             int         `json:"size"`
+	ScanMaxDocuments int64       `json:"scan_max_documents"`
 }
 
 type Hit struct {
@@ -81,6 +177,9 @@ func main() {
 	var verbose = flag.Bool("verbose", false, "print info level logs to stdout")
 	var bind = flag.String("bind", ":9002", "bind to")
 	flag.Parse()
+	go func() {
+		log.Println(http.ListenAndServe("localhost:6060", nil))
+	}()
 	os.MkdirAll(path.Join(*root, *dataTopic), 0700)
 	filename := path.Join(*root, *dataTopic, "forward.bin")
 	forward, err := os.OpenFile(filename, os.O_RDONLY|os.O_CREATE, 0600)
@@ -139,7 +238,9 @@ func main() {
 			return
 		}
 
-		query, err := fromJSON(*root, *dataTopic, qr.Query)
+		query, err := fromJSON(qr.Query, func(k, v string) Query {
+			return NewTermQuery(qr.ScanMaxDocuments, *root, *dataTopic, k, v)
+		})
 		if err != nil {
 			c.JSON(400, gin.H{"error": err.Error()})
 			return

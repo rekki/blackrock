@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"math"
 )
 
@@ -118,8 +117,8 @@ func (q *BoolOrQuery) Score() float32 {
 		}
 	}
 	return float32(score)
-
 }
+
 func (q *BoolOrQuery) advance(target int64) int64 {
 	new_doc := NO_MORE
 	n := len(q.queries)
@@ -208,82 +207,4 @@ func (q *BoolAndQuery) Next() int64 {
 
 	// XXX: pick cheapest leading query
 	return q.nextAndedDoc(q.queries[0].Next())
-}
-
-/*
-
-{
-   and: [{"or": [{"tag":{"key":"b","value": "v"}}]}]
-}
-
-*/
-
-func fromJSON(root string, topic string, input interface{}) (Query, error) {
-	mapped, ok := input.(map[string]interface{})
-	queries := []Query{}
-	if ok {
-		if v, ok := mapped["tag"]; ok && v != nil {
-			kv, ok := v.(map[string]interface{})
-			if !ok {
-				return nil, errors.New("[tag] must be map containing {key, value}")
-			}
-			added := false
-			if tk, ok := kv["key"]; ok && tk != nil {
-				if tv, ok := kv["value"]; ok && tv != nil {
-					sk, ok := tk.(string)
-					if !ok {
-						return nil, errors.New("[tag][key] must be string")
-					}
-					sv, ok := tv.(string)
-					if !ok {
-						return nil, errors.New("[tag][value] must be string")
-					}
-					queries = append(queries, NewTermQuery(root, topic, sk, sv))
-					added = true
-				}
-			}
-			if !added {
-				return nil, errors.New("[tag] must be map containing {key, value}")
-			}
-		}
-		if v, ok := mapped["and"]; ok && v != nil {
-			list, ok := v.([]interface{})
-			if ok {
-				and := NewBoolAndQuery([]Query{}...)
-				for _, subQuery := range list {
-					q, err := fromJSON(root, topic, subQuery)
-					if err != nil {
-						return nil, err
-					}
-					and.AddSubQuery(q)
-				}
-				queries = append(queries, and)
-			} else {
-				return nil, errors.New("[or] takes array of subqueries")
-			}
-		}
-
-		if v, ok := mapped["or"]; ok && v != nil {
-			list, ok := v.([]interface{})
-			if ok {
-				or := NewBoolOrQuery([]Query{}...)
-				for _, subQuery := range list {
-					q, err := fromJSON(root, topic, subQuery)
-					if err != nil {
-						return nil, err
-					}
-					or.AddSubQuery(q)
-				}
-				queries = append(queries, or)
-			} else {
-				return nil, errors.New("[and] takes array of subqueries")
-			}
-		}
-	}
-
-	if len(queries) == 1 {
-		return queries[0], nil
-	}
-
-	return NewBoolAndQuery(queries...), nil
 }
