@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"flag"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"os/signal"
@@ -38,6 +39,7 @@ func main() {
 	var kafkaServers = flag.String("kafka", "localhost:9092", "kafka addr")
 	var verbose = flag.Bool("verbose", false, "print info level logs to stdout")
 	var statSleep = flag.Int("writer-stats", 60, "print writer stats every # seconds")
+
 	var bind = flag.String("bind", ":9001", "bind to")
 	flag.Parse()
 
@@ -67,15 +69,17 @@ func main() {
 		os.Exit(0)
 	}()
 
-	r := gin.Default()
-	r.Use(gin.Recovery())
 	go func() {
 		for {
 			s := kw.Stats()
-			log.Warnf("%s", dumpObj(s))
+			fmt.Printf("%s\n", dumpObj(s))
 			time.Sleep(time.Duration(*statSleep) * time.Second)
 		}
 	}()
+
+	r := gin.Default()
+	r.Use(gin.Recovery())
+
 	r.POST("/push/raw", func(c *gin.Context) {
 		body := c.Request.Body
 		defer body.Close()

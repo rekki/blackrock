@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gogo/protobuf/proto"
@@ -16,17 +17,24 @@ type GetRequest struct {
 	Offset    int64 `uri:"offset"`
 }
 
+func connectForever(topic string, brokers string) *balancer.KafkaBalancer {
+	for {
+		dc, err := balancer.NewKafkaBalancer(topic, strings.Split(brokers, ","))
+		if err != nil {
+			log.Warn(err)
+			time.Sleep(1 * time.Second)
+		}
+		return dc
+	}
+}
+
 func main() {
 	var dataTopic = flag.String("topic-data", "blackrock-data", "topic for the data")
 	var kafkaServers = flag.String("kafka", "localhost:9092", "kafka addr")
 	var verbose = flag.Bool("verbose", false, "print info level logs to stdout")
 	var bind = flag.String("bind", ":9003", "bind to")
 	flag.Parse()
-
-	dc, err := balancer.NewKafkaBalancer(*dataTopic, strings.Split(*kafkaServers, ","))
-	if err != nil {
-		log.Fatal(err)
-	}
+	dc := connectForever(*dataTopic, *kafkaServers)
 
 	if *verbose {
 		log.SetLevel(log.InfoLevel)

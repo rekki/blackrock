@@ -101,6 +101,4 @@ returns lists of all objects matching the query, sorted by score
 ```
 
 
-
-
 # do not use in production, it is 1 day old

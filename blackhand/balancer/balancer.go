@@ -59,7 +59,6 @@ func shuffledStrings(list []string) []string {
 func NewKafkaBalancer(topic string, brokers []string) (*KafkaBalancer, error) {
 	brokers = shuffledStrings(brokers)
 	for _, broker := range brokers {
-		log.Infof("connecting to %s", broker)
 		conn, err := kafka.Dial("tcp", broker)
 		if err != nil {
 			log.Warnf("failed to connect to broker %s, error: %s", broker, err.Error())
