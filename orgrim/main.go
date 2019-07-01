@@ -106,7 +106,6 @@ func main() {
 
 		metadata := &spec.Metadata{
 			Tags:        tags,
-			RemoteAddr:  c.Request.RemoteAddr,
 			CreatedAtNs: time.Now().UnixNano(),
 		}
 		envelope := &spec.Envelope{Metadata: metadata, Payload: data}

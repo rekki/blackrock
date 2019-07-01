@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"flag"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	_ "net/http/pprof"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackdoe/blackrock/jubei/sanitize"
+	"github.com/jackdoe/blackrock/khanzo/chart"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -171,6 +173,44 @@ func getScoredHit(forward *os.File, did int64, score float32) (Hit, error) {
 	return hit, nil
 }
 
+func tagStats(key string, dir string) (*TagKeyStats, error) {
+	files, err := ioutil.ReadDir(dir)
+	if err != nil {
+		return nil, err
+	}
+	out := &TagKeyStats{
+		Values: []TagValueStats{},
+		Key:    key,
+	}
+	for _, fi := range files {
+		if !fi.IsDir() && strings.HasSuffix(fi.Name(), ".p") {
+			n := fi.Size() / 8
+			out.Values = append(out.Values, TagValueStats{
+				V:     strings.TrimSuffix(fi.Name(), ".p"),
+				Count: n,
+			})
+			out.TotalCount += n
+		}
+	}
+
+	sort.Slice(out.Values, func(i, j int) bool {
+		return out.Values[j].Count < out.Values[i].Count
+	})
+
+	return out, nil
+}
+
+type TagValueStats struct {
+	V     string `json:"value"`
+	Count int64  `json:"count"`
+}
+
+type TagKeyStats struct {
+	Key        string          `json:"key"`
+	Values     []TagValueStats `json:"values"`
+	TotalCount int64           `json:"total"`
+}
+
 func main() {
 	var root = flag.String("root", "/blackrock", "root directory for the files (root/topic/partition)")
 	var dataTopic = flag.String("topic-data", "blackrock-data", "topic for the data")
@@ -194,23 +234,71 @@ func main() {
 	}
 
 	r := gin.Default()
-	r.GET("/inspect/:tag", func(c *gin.Context) {
-		files, err := ioutil.ReadDir(path.Join(*root, *dataTopic, sanitize.Cleanup(c.Param("tag"))))
+
+	r.GET("/debug", func(c *gin.Context) {
+		fi, err := forward.Stat()
 		if err != nil {
 			c.JSON(500, gin.H{"error": err.Error()})
 			return
 		}
-		values := map[string]int64{}
+		total := fi.Size() / 8
+		if total == 0 {
+			total = 1
+		}
+		files, err := ioutil.ReadDir(path.Join(*root, *dataTopic))
+		if err != nil {
+			c.JSON(500, gin.H{"error": err.Error()})
+			return
+		}
+		stats := []*TagKeyStats{}
+
 		for _, fi := range files {
-			if !fi.IsDir() && strings.HasSuffix(fi.Name(), ".p") {
-				values[strings.TrimSuffix(fi.Name(), ".p")] = fi.Size() / 8
+			if fi.IsDir() {
+				key := sanitize.Cleanup(fi.Name())
+				tv, err := tagStats(key, path.Join(*root, *dataTopic, key))
+				if err != nil {
+					c.JSON(500, gin.H{"error": err.Error()})
+					return
+				}
+
+				stats = append(stats, tv)
 			}
 		}
+		sort.Slice(stats, func(i, j int) bool {
+			return stats[j].TotalCount < stats[i].TotalCount
+		})
 
-		c.JSON(200, gin.H{"values": values})
+		out := []string{}
+		pad := "    "
+		width := 80 - len(pad)
+
+		for _, t := range stats {
+			x := []float64{}
+			y := []string{}
+			for _, v := range t.Values {
+				x = append(x, float64(v.Count))
+				y = append(y, v.V)
+			}
+			percent := float64(100) * float64(t.TotalCount) / float64(total)
+			out = append(out, fmt.Sprintf("« %s » total: %d, %.2f%%\n%s", t.Key, t.TotalCount, percent, chart.HorizontalBar(x, y, '▒', width, pad)))
+		}
+
+		out = append(out, fmt.Sprintf("\ntotal: %d\n", total))
+		c.String(200, strings.Join(out, "\n\n--------\n\n"))
 	})
 
-	r.GET("/stat", func(c *gin.Context) {
+	r.GET("/api/inspect/:tag", func(c *gin.Context) {
+		key := sanitize.Cleanup(c.Param("tag"))
+		v, err := tagStats(key, path.Join(*root, *dataTopic, key))
+		if err != nil {
+			c.JSON(500, gin.H{"error": err.Error()})
+			return
+		}
+
+		c.JSON(200, v)
+	})
+
+	r.GET("/api/stat", func(c *gin.Context) {
 		fi, err := forward.Stat()
 		if err != nil {
 			c.JSON(500, gin.H{"error": err.Error()})

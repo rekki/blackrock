@@ -116,7 +116,6 @@ func (fw *FileWriter) append(docId uint64, metadata *spec.Metadata) error {
 	t := time.Unix(second, 0)
 	year, month, day := t.Date()
 	hour, minute, _ := t.Clock()
-	fw.appendTag(docId, "_", "_")
 	fw.appendTag(docId, "year", fmt.Sprintf("%d", year))
 	fw.appendTag(docId, "year-month", fmt.Sprintf("%d-%02d", year, month))
 	fw.appendTag(docId, "year-month-day", fmt.Sprintf("%d-%02d-%02d", year, month, day))

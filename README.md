@@ -50,7 +50,7 @@ writing document id 2 at /tmp/jubei/hello/year-month-day-hour/2019-06-30-17.p
 
 ```
 % curl -d '{
-  "partition": 1,
+  "size": 2,
   "query": {
     "or": [
       {
@@ -70,7 +70,7 @@ writing document id 2 at /tmp/jubei/hello/year-month-day-hour/2019-06-30-17.p
 }' http://khanzo/search
 ```
 
-returns lists of all objects matching the query, sorted by score
+returns lists of top N objects matching the query, sorted by score
 
 ```
 {
