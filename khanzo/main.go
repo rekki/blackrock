@@ -41,7 +41,7 @@ func NewTermQuery(root string, topic string, tagKey, tagValue string) *Term {
 
 type QueryRequest struct {
 	Query interface{} `json:"query"`
-	Size  int64       `json:"size"`
+	Size  int         `json:"size"`
 }
 
 type Hit struct {
@@ -65,6 +65,14 @@ func readForward(fd *os.File, did int64) (int32, int64, error) {
 	offset := int64(v & 0xFFFFFFFFFFFF)
 	partition := int32(v >> 54)
 	return partition, offset, nil
+}
+func getScoredHit(forward *os.File, did int64, score float32) (Hit, error) {
+	partition, offset, err := readForward(forward, did)
+	if err != nil {
+		return Hit{}, err
+	}
+	hit := Hit{Offset: offset, Partition: partition, Score: score}
+	return hit, nil
 }
 
 func main() {
@@ -143,18 +151,42 @@ func main() {
 
 		for query.Next() != NO_MORE {
 			did := query.GetDocId()
-			partition, offset, err := readForward(forward, did)
-			if err != nil {
-				c.JSON(500, gin.H{"error": err.Error()})
-				return
-			}
-			hit := Hit{Offset: offset, Partition: partition, Score: query.Score()}
-			out.Hits = append(out.Hits, hit)
 			out.Total++
+			if qr.Size == 0 {
+				continue
+			}
+
+			score := query.Score()
+			doInsert := false
+			var hit Hit
+			if len(out.Hits) < qr.Size {
+				hit, err = getScoredHit(forward, did, score)
+				if err != nil {
+					c.JSON(500, gin.H{"error": err.Error()})
+					return
+				}
+				out.Hits = append(out.Hits, hit)
+				doInsert = true
+			} else if out.Hits[len(out.Hits)-1].Score < hit.Score {
+				doInsert = true
+				hit, err = getScoredHit(forward, did, score)
+				if err != nil {
+					c.JSON(500, gin.H{"error": err.Error()})
+					return
+				}
+			}
+			if doInsert {
+
+				for i := 0; i < len(out.Hits); i++ {
+					if out.Hits[i].Score < hit.Score {
+						copy(out.Hits[i+1:], out.Hits[i:])
+						out.Hits[i] = hit
+						break
+					}
+				}
+			}
+
 		}
-		sort.Slice(out.Hits, func(i, j int) bool {
-			return out.Hits[j].Score < out.Hits[i].Score
-		})
 		c.JSON(200, out)
 	})
 
