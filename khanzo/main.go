@@ -280,7 +280,7 @@ func main() {
 				y = append(y, v.V)
 			}
 			percent := float64(100) * float64(t.TotalCount) / float64(total)
-			out = append(out, fmt.Sprintf("« %s » total: %d, %.2f%%\n%s", t.Key, t.TotalCount, percent, chart.HorizontalBar(x, y, '▒', width, pad)))
+			out = append(out, fmt.Sprintf("« %s » total: %d, %.2f%%\n%s", t.Key, t.TotalCount, percent, chart.HorizontalBar(x, y, '▒', width, pad, 1)))
 		}
 
 		out = append(out, fmt.Sprintf("\ntotal: %d\n", total))

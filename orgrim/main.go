@@ -129,8 +129,17 @@ func main() {
 		defer body.Close()
 
 		var envelope spec.Envelope
-		//		err := proto.Unmarshal(data, &envelope)
-		err := jsonpb.Unmarshal(body, &envelope)
+		var err error
+		if c.Request.Header.Get("content-type") == "application/protobuf" {
+			var data []byte
+			data, err = ioutil.ReadAll(body)
+			if err == nil {
+				err = proto.Unmarshal(data, &envelope)
+			}
+		} else {
+			err = jsonpb.Unmarshal(body, &envelope)
+		}
+
 		if err != nil {
 			log.Warnf("[orgrim] error decoding envelope, error: %s", err.Error())
 			c.JSON(500, gin.H{"error": err.Error()})
@@ -141,7 +150,11 @@ func main() {
 			c.JSON(500, gin.H{"error": "need metadata key"})
 			return
 		}
-		envelope.Metadata.CreatedAtNs = time.Now().UnixNano()
+
+		if envelope.Metadata.CreatedAtNs == 0 {
+			envelope.Metadata.CreatedAtNs = time.Now().UnixNano()
+		}
+
 		encoded, err := proto.Marshal(&envelope)
 		if err != nil {
 			log.Warnf("[orgrim] error encoding metadata %v, error: %s", envelope.Metadata, err.Error())

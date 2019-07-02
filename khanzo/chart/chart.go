@@ -32,7 +32,7 @@ func fit(x float64) string {
 	return f
 }
 
-func HorizontalBar(x []float64, y []string, symbol rune, width int, prefix string) string {
+func HorizontalBar(x []float64, y []string, symbol rune, width int, prefix string, thresh float64) string {
 	max := float64(0)
 	maxLabelWidth := 0
 	sum := float64(0)
@@ -58,10 +58,11 @@ func HorizontalBar(x []float64, y []string, symbol rune, width int, prefix strin
 		value := int((v / max) * float64(width))
 
 		bar := makeBar(symbol, value)
-
-		line := fmt.Sprintf("%s%-"+pad+"v %8s %6s%% %s", prefix, label, fit(x[i]), fmt.Sprintf("%.2f", 100*(v/sum)), bar)
-
-		lines = append(lines, line)
+		percent := 100 * (v / sum)
+		if percent > thresh {
+			line := fmt.Sprintf("%s%-"+pad+"v %8s %6s%% %s", prefix, label, fit(x[i]), fmt.Sprintf("%.2f", percent), bar)
+			lines = append(lines, line)
+		}
 	}
 	return strings.Join(lines, "\n")
 }

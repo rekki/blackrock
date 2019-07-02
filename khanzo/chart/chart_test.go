@@ -39,7 +39,7 @@ d      4.0  40.00% ###########`},
 		name := fmt.Sprintf("%d", i)
 		t.Run(name, func(t *testing.T) {
 			c := cases[i]
-			actual := HorizontalBar(c.x, c.y, c.symbol, c.width, "")
+			actual := HorizontalBar(c.x, c.y, c.symbol, c.width, "", 0)
 			if actual != c.expected {
 				t.Errorf("Plot(%#v)", c)
 				t.Logf("expected:\n%s\n", c.expected)

@@ -77,7 +77,7 @@ func (fw *FileWriter) appendTag(docId uint64, tagKey, tagValue string) error {
 	f, ok := fw.descriptors[filename]
 	if !ok {
 		if len(fw.descriptors) > fw.maxOpenDescriptors {
-			log.Warnf("clearing descriptor cache len: %s", len(fw.descriptors))
+			log.Warnf("clearing descriptor cache len: %d", len(fw.descriptors))
 			for dk, fd := range fw.descriptors {
 				fd.Close()
 				delete(fw.descriptors, dk)

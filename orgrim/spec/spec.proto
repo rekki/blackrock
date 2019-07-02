@@ -2,27 +2,6 @@ syntax = "proto3";
 
 package spec;
 
-message Location {
-        float64 lat = 1;
-        float64 lng = 2;
-        float64 confidence = 3;
-}
-
-message Pointer struct {
-        uint64 document = 1;
-        uint64 count = 2;
-}
-
-message Counted struct {
-        map<string, AggregatedPointer> set = 1;
-}
-
-message MergedProjection {
-        map<string,Counted> tags = 1; 
-        map<string,Counted> properties = 2;
-        owner string = 3;
-}
-
 message Metadata {
         map<string,string> tags = 1; 
         map<string,string> properties = 2;

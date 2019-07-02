@@ -13,7 +13,7 @@ func PathForTag(root string, topic string, tagKey string, tagValue string) (stri
 }
 
 func Cleanup(s string) string {
-	return strings.Map(
+	clean := strings.Map(
 		func(r rune) rune {
 			if r > unicode.MaxLatin1 {
 				return -1
@@ -38,4 +38,8 @@ func Cleanup(s string) string {
 		},
 		s,
 	)
+	if len(clean) > 64 {
+		clean = clean[:64]
+	}
+	return clean
 }
