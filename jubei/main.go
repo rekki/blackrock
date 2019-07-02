@@ -56,6 +56,7 @@ func (fw *FileWriter) sync() {
 		f.Sync()
 	}
 }
+
 func (fw *FileWriter) appendForward(partition int32, offset int64) (uint64, error) {
 	current := fw.offset
 	log.Infof("writing kafka offset %d:%d as id %d", partition, offset, current)

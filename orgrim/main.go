@@ -12,6 +12,7 @@ import (
 	"syscall"
 
 	"github.com/gin-gonic/gin"
+	"github.com/gogo/protobuf/jsonpb"
 	"github.com/gogo/protobuf/proto"
 	"github.com/jackdoe/blackrock/orgrim/spec"
 	"github.com/segmentio/kafka-go"
@@ -91,12 +92,6 @@ func main() {
 			return
 		}
 
-		if err != nil {
-			log.Warnf("[orgrim] error producing in %s, data length: %s, error: %s", *dataTopic, len(data), err.Error())
-			c.JSON(500, gin.H{"error": err.Error()})
-			return
-		}
-
 		tags := map[string]string{}
 		for k, values := range c.Request.URL.Query() {
 			for _, v := range values {
@@ -122,6 +117,44 @@ func main() {
 
 		if err != nil {
 			log.Warnf("[orgrim] error sending message, metadata %v, error: %s", metadata, err.Error())
+			c.JSON(500, gin.H{"error": err.Error()})
+			return
+		}
+
+		c.JSON(200, gin.H{"success": true})
+	})
+
+	r.POST("/push/envelope", func(c *gin.Context) {
+		body := c.Request.Body
+		defer body.Close()
+
+		var envelope spec.Envelope
+		//		err := proto.Unmarshal(data, &envelope)
+		err := jsonpb.Unmarshal(body, &envelope)
+		if err != nil {
+			log.Warnf("[orgrim] error decoding envelope, error: %s", err.Error())
+			c.JSON(500, gin.H{"error": err.Error()})
+			return
+		}
+		if envelope.Metadata == nil {
+			log.Warnf("[orgrim] no metadata in envelope, rejecting")
+			c.JSON(500, gin.H{"error": "need metadata key"})
+			return
+		}
+		envelope.Metadata.CreatedAtNs = time.Now().UnixNano()
+		encoded, err := proto.Marshal(&envelope)
+		if err != nil {
+			log.Warnf("[orgrim] error encoding metadata %v, error: %s", envelope.Metadata, err.Error())
+			c.JSON(500, gin.H{"error": err.Error()})
+			return
+		}
+
+		err = kw.WriteMessages(context.Background(), kafka.Message{
+			Value: encoded,
+		})
+
+		if err != nil {
+			log.Warnf("[orgrim] error sending message, metadata %v, error: %s", envelope.Metadata, err.Error())
 			c.JSON(500, gin.H{"error": err.Error()})
 			return
 		}
