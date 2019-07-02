@@ -14,8 +14,10 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/gogo/protobuf/proto"
 	"github.com/jackdoe/blackrock/jubei/sanitize"
 	"github.com/jackdoe/blackrock/khanzo/chart"
+	"github.com/jackdoe/blackrock/orgrim/spec"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -103,12 +105,12 @@ func NewTermQuery(maxDocuments int64, root string, topic string, tagKey, tagValu
 	file, err := os.OpenFile(fn, os.O_RDONLY, 0600)
 	if os.IsNotExist(err) {
 		log.Infof("missing file %s, returning empty", fn)
-		return NewTerm([]int64{})
+		return NewTerm(fmt.Sprintf("%s:%s", tagKey, tagValue), []int64{})
 	}
 	fi, err := file.Stat()
 	if err != nil {
 		log.Warnf("failed to read file stats: %s, error: %s", fn, err.Error())
-		return NewTerm([]int64{})
+		return NewTerm(fmt.Sprintf("%s:%s", tagKey, tagValue), []int64{})
 	}
 
 	log.Infof("reading %s, size: %d", fn, fi.Size())
@@ -123,7 +125,7 @@ func NewTermQuery(maxDocuments int64, root string, topic string, tagKey, tagValu
 	postings, err := ioutil.ReadAll(file)
 	if err != nil {
 		log.Warnf("failed to read file: %s, error: %s", fn, err.Error())
-		return NewTerm([]int64{})
+		return NewTerm(fmt.Sprintf("%s:%s", tagKey, tagValue), []int64{})
 	}
 	n := len(postings) / 8
 	longed := make([]int64, n)
@@ -133,19 +135,32 @@ func NewTermQuery(maxDocuments int64, root string, topic string, tagKey, tagValu
 		j++
 	}
 
-	return NewTerm(longed)
+	return NewTerm(fmt.Sprintf("%s:%s", tagKey, tagValue), longed)
+}
+
+type ProjectionQuery struct {
+	Query interface{} `json:"query"`
+	Join  string      `json:"join"`
+}
+
+type ProjectorRequest struct {
+	Fx               string            `json:"fx"`
+	Sequence         []ProjectionQuery `json:"queries"`
+	ScanMaxDocuments int64             `json:"scan_max_documents"`
 }
 
 type QueryRequest struct {
 	Query            interface{} `json:"query"`
 	Size             int         `json:"size"`
+	Decode           bool        `json:"decode"`
 	ScanMaxDocuments int64       `json:"scan_max_documents"`
 }
 
 type Hit struct {
-	Score     float32 `json:"score"`
-	Offset    int64   `json:"offset"`
-	Partition int32   `json:"partition"`
+	Metadata  *spec.Metadata `json:"metadata,omitempty"`
+	Score     float32        `json:"score"`
+	Offset    int64          `json:"offset"`
+	Partition int32          `json:"partition"`
 }
 
 type QueryResponse struct {
@@ -153,23 +168,42 @@ type QueryResponse struct {
 	Hits  []Hit `json:"hits"`
 }
 
-func readForward(fd *os.File, did int64) (int32, int64, error) {
-	data := make([]byte, 8)
-	_, err := fd.ReadAt(data, did*8)
+func readForward(fd *os.File, did int64, decode bool) (int32, int64, *spec.Metadata, error) {
+	data := make([]byte, 12)
+	_, err := fd.ReadAt(data, did)
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, nil, err
 	}
-	v := binary.LittleEndian.Uint64(data)
-	offset := int64(v & 0xFFFFFFFFFFFF)
-	partition := int32(v >> 54)
-	return partition, offset, nil
+
+	kafka := binary.LittleEndian.Uint64(data[0:])
+	offset := int64(kafka & 0xFFFFFFFFFFFF)
+	partition := int32(kafka >> 54)
+	if !decode {
+		return partition, offset, nil, nil
+	}
+
+	metadataLen := binary.LittleEndian.Uint32(data[8:])
+	metadataBlob := make([]byte, int(metadataLen))
+	_, err = fd.ReadAt(metadataBlob, did+12)
+	if err != nil {
+		return 0, 0, nil, err
+	}
+
+	var meta spec.Metadata
+	err = proto.Unmarshal(metadataBlob, &meta)
+	if err != nil {
+		return 0, 0, nil, err
+	}
+
+	return partition, offset, &meta, nil
 }
-func getScoredHit(forward *os.File, did int64, score float32) (Hit, error) {
-	partition, offset, err := readForward(forward, did)
+
+func getScoredHit(forward *os.File, did int64, score float32, decode bool) (Hit, error) {
+	partition, offset, meta, err := readForward(forward, did, decode)
 	if err != nil {
 		return Hit{}, err
 	}
-	hit := Hit{Offset: offset, Partition: partition, Score: score}
+	hit := Hit{Offset: offset, Partition: partition, Score: score, Metadata: meta}
 	return hit, nil
 }
 
@@ -198,6 +232,34 @@ func tagStats(key string, dir string) (*TagKeyStats, error) {
 	})
 
 	return out, nil
+}
+
+type ProjectionResponse struct {
+	CountedProperties map[string]map[string]uint64 `json:"counted_properties"`
+	CountedTags       map[string]map[string]uint64 `json:"counted_tags"`
+	First             *Hit                         `json:"first"`
+	Last              *Hit                         `json:"last"`
+	Total             uint64                       `json:"total"`
+}
+
+func (p *ProjectionResponse) Add(h Hit) {
+	for k, v := range h.Metadata.Properties {
+		pp, ok := p.CountedProperties[k]
+		if !ok {
+			pp = map[string]uint64{}
+			p.CountedProperties[k] = pp
+		}
+		pp[v]++
+	}
+
+	for k, v := range h.Metadata.Tags {
+		pp, ok := p.CountedTags[k]
+		if !ok {
+			pp = map[string]uint64{}
+			p.CountedTags[k] = pp
+		}
+		pp[v]++
+	}
 }
 
 type TagValueStats struct {
@@ -280,7 +342,7 @@ func main() {
 				y = append(y, v.V)
 			}
 			percent := float64(100) * float64(t.TotalCount) / float64(total)
-			out = append(out, fmt.Sprintf("« %s » total: %d, %.2f%%\n%s", t.Key, t.TotalCount, percent, chart.HorizontalBar(x, y, '▒', width, pad, 1)))
+			out = append(out, fmt.Sprintf("« %s » total: %d, %.2f%%\n%s", t.Key, t.TotalCount, percent, chart.HorizontalBar(x, y, '▒', width, pad, 0.5)))
 		}
 
 		out = append(out, fmt.Sprintf("\ntotal: %d\n", total))
@@ -349,7 +411,7 @@ func main() {
 			doInsert := false
 			var hit Hit
 			if len(out.Hits) < qr.Size {
-				hit, err = getScoredHit(forward, did, score)
+				hit, err = getScoredHit(forward, did, score, qr.Decode)
 				if err != nil {
 					c.JSON(500, gin.H{"error": err.Error()})
 					return
@@ -358,14 +420,13 @@ func main() {
 				doInsert = true
 			} else if out.Hits[len(out.Hits)-1].Score < hit.Score {
 				doInsert = true
-				hit, err = getScoredHit(forward, did, score)
+				hit, err = getScoredHit(forward, did, score, qr.Decode)
 				if err != nil {
 					c.JSON(500, gin.H{"error": err.Error()})
 					return
 				}
 			}
 			if doInsert {
-
 				for i := 0; i < len(out.Hits); i++ {
 					if out.Hits[i].Score < hit.Score {
 						copy(out.Hits[i+1:], out.Hits[i:])
@@ -375,6 +436,81 @@ func main() {
 				}
 			}
 
+		}
+		c.JSON(200, out)
+	})
+
+	r.POST("/project", func(c *gin.Context) {
+		var pr ProjectorRequest
+		if err := c.ShouldBindJSON(&pr); err != nil {
+			c.JSON(400, gin.H{"error": err.Error()})
+			return
+		}
+
+		runQuery := func(query Query) (*ProjectionResponse, error) {
+			out := &ProjectionResponse{
+				CountedProperties: map[string]map[string]uint64{},
+				CountedTags:       map[string]map[string]uint64{},
+			}
+
+			log.Printf("%s", query.String())
+			for query.Next() != NO_MORE {
+				did := query.GetDocId()
+				out.Total++
+				hit, err := getScoredHit(forward, did, query.Score(), true)
+				if err != nil {
+					return nil, err
+				}
+				out.Add(hit)
+				if out.First == nil {
+					out.First = &hit
+				} else {
+					out.Last = &hit
+				}
+			}
+			return out, nil
+		}
+		var out *ProjectionResponse
+		for i, sequence := range pr.Sequence {
+			query, err := fromJSON(sequence.Query, func(k, v string) Query {
+				return NewTermQuery(pr.ScanMaxDocuments, *root, *dataTopic, k, v)
+			})
+			if err != nil {
+				c.JSON(400, gin.H{"error": err.Error()})
+				return
+			}
+
+			if i == 0 {
+				if sequence.Join != "" {
+					c.JSON(400, gin.H{"error": "first sequence can not have join"})
+					return
+				}
+				out, err = runQuery(query)
+				if err != nil {
+					c.JSON(400, gin.H{"error": err.Error()})
+				}
+			} else {
+				if sequence.Join == "" {
+					c.JSON(400, gin.H{"error": "sequences must have join"})
+					return
+				}
+
+				if agg, ok := out.CountedTags[sequence.Join]; ok {
+					for term, _ := range agg {
+						query.Reset()
+						tq := NewTermQuery(pr.ScanMaxDocuments, *root, *dataTopic, sequence.Join, term)
+						join := NewBoolAndQuery(tq, query)
+						out, err = runQuery(join)
+						if err != nil {
+							c.JSON(400, gin.H{"error": err.Error()})
+							return
+						}
+					}
+				} else {
+					out = &ProjectionResponse{}
+					break
+				}
+			}
 		}
 		c.JSON(200, out)
 	})

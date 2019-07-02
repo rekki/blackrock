@@ -2,6 +2,7 @@ package main
 
 import (
 	"math"
+	"strings"
 )
 
 const (
@@ -14,6 +15,8 @@ type Query interface {
 	Next() int64
 	GetDocId() int64
 	Score() float32
+	Reset()
+	String() string
 }
 
 type QueryBase struct {
@@ -27,17 +30,26 @@ func (q *QueryBase) GetDocId() int64 {
 type Term struct {
 	cursor   int
 	postings []int64
+	term     string
 	QueryBase
 }
 
-func NewTerm(postings []int64) *Term {
+func NewTerm(t string, postings []int64) *Term {
 	return &Term{
+		term:      t,
 		cursor:    -1,
 		postings:  postings,
 		QueryBase: QueryBase{NOT_READY},
 	}
-
 }
+func (t *Term) String() string {
+	return t.term
+}
+func (t *Term) Reset() {
+	t.cursor = -1
+	t.docId = NOT_READY
+}
+
 func (t *Term) Score() float32 {
 	return float32(1)
 }
@@ -106,6 +118,12 @@ func NewBoolOrQuery(queries ...Query) *BoolOrQuery {
 		QueryBase:     QueryBase{NOT_READY},
 	}
 }
+func (q *BoolOrQuery) Reset() {
+	q.docId = NOT_READY
+	for _, v := range q.queries {
+		v.Reset()
+	}
+}
 
 func (q *BoolOrQuery) Score() float32 {
 	score := 0
@@ -135,6 +153,13 @@ func (q *BoolOrQuery) advance(target int64) int64 {
 	}
 	q.docId = new_doc
 	return q.docId
+}
+func (q *BoolOrQuery) String() string {
+	out := []string{}
+	for _, v := range q.queries {
+		out = append(out, v.String())
+	}
+	return strings.Join(out, " OR ")
 }
 
 func (q *BoolOrQuery) Next() int64 {
@@ -188,6 +213,20 @@ func (q *BoolAndQuery) nextAndedDoc(target int64) int64 {
 	}
 	q.docId = target
 	return q.docId
+}
+func (q *BoolAndQuery) Reset() {
+	q.docId = NOT_READY
+	for _, v := range q.queries {
+		v.Reset()
+	}
+}
+
+func (q *BoolAndQuery) String() string {
+	out := []string{}
+	for _, v := range q.queries {
+		out = append(out, v.String())
+	}
+	return strings.Join(out, " AND ")
 }
 
 func (q *BoolAndQuery) advance(target int64) int64 {

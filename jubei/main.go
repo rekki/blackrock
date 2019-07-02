@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"path"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -57,13 +58,23 @@ func (fw *FileWriter) sync() {
 	}
 }
 
-func (fw *FileWriter) appendForward(partition int32, offset int64) (uint64, error) {
-	current := fw.offset
-	log.Infof("writing kafka offset %d:%d as id %d", partition, offset, current)
-	fw.offset++
-	off := make([]byte, 8)
-	binary.LittleEndian.PutUint64(off, uint64(partition)<<54|uint64(offset))
-	_, err := fw.forward.WriteAt(off, int64(current*uint64(8)))
+func (fw *FileWriter) appendForward(metadata *spec.Metadata, partition int32, offset int64) (uint64, error) {
+	encoded, err := proto.Marshal(metadata)
+	if err != nil {
+		return 0, err
+	}
+
+	blobSize := 8 + 4 + len(encoded)
+	blob := make([]byte, blobSize)
+	copy(blob[12:], encoded)
+
+	binary.LittleEndian.PutUint64(blob[0:], uint64(partition)<<54|uint64(offset))
+	binary.LittleEndian.PutUint32(blob[8:], uint32(len(encoded)))
+	current := atomic.AddUint64(&fw.offset, uint64(blobSize))
+	current -= uint64(blobSize)
+	log.Infof("writing kafka offset %d:%d as id %d, blobSize: %d", partition, offset, current, blobSize)
+
+	_, err = fw.forward.WriteAt(blob, int64(current))
 	if err != nil {
 		return 0, err
 	}
@@ -116,12 +127,11 @@ func (fw *FileWriter) append(docId uint64, metadata *spec.Metadata) error {
 	second := ns / 1000000000
 	t := time.Unix(second, 0)
 	year, month, day := t.Date()
-	hour, minute, _ := t.Clock()
+	hour, _, _ := t.Clock()
 	fw.appendTag(docId, "year", fmt.Sprintf("%d", year))
 	fw.appendTag(docId, "year-month", fmt.Sprintf("%d-%02d", year, month))
 	fw.appendTag(docId, "year-month-day", fmt.Sprintf("%d-%02d-%02d", year, month, day))
 	fw.appendTag(docId, "year-month-day-hour", fmt.Sprintf("%d-%02d-%02d-%02d", year, month, day, hour))
-	fw.appendTag(docId, "year-month-day-hour-minute", fmt.Sprintf("%d-%02d-%02d-%02d:%02d", year, month, day, hour, minute))
 	return nil
 }
 
@@ -144,7 +154,7 @@ func main() {
 	rd := kafka.NewReader(kafka.ReaderConfig{
 		Brokers:        brokers,
 		Topic:          *dataTopic,
-		GroupID:        "jubei_" + consumerId,
+		GroupID:        "jubei_" + sanitize.Cleanup(*root) + "_" + consumerId,
 		CommitInterval: 1 * time.Second,
 		MaxWait:        1 * time.Second,
 	})
@@ -179,7 +189,7 @@ func main() {
 			log.Warnf("failed to unmarshal, data: %s, error: %s", string(m.Value), err.Error())
 			continue
 		}
-		id, err := fw.appendForward(int32(m.Partition), m.Offset)
+		id, err := fw.appendForward(envelope.Metadata, int32(m.Partition), m.Offset)
 		if err != nil {
 			log.Fatal(err)
 		}

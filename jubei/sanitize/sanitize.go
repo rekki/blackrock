@@ -39,6 +39,7 @@ func Cleanup(s string) string {
 		s,
 	)
 	if len(clean) > 64 {
+		// FIXME(jackdoe): not good
 		clean = clean[:64]
 	}
 	return clean

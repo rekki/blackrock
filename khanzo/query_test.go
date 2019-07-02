@@ -39,7 +39,7 @@ func BenchmarkNext1000(b *testing.B) {
 
 	for n := 0; n < b.N; n++ {
 		sum := int64(0)
-		q := NewTerm(x)
+		q := NewTerm("", x)
 		for q.Next() != NO_MORE {
 			sum += q.GetDocId()
 		}
@@ -53,8 +53,8 @@ func BenchmarkOr1000(b *testing.B) {
 	for n := 0; n < b.N; n++ {
 		sum := int64(0)
 		q := NewBoolOrQuery(
-			NewTerm(x),
-			NewTerm(y),
+			NewTerm("x", x),
+			NewTerm("y", y),
 		)
 
 		for q.Next() != NO_MORE {
@@ -70,8 +70,8 @@ func BenchmarkAnd1000(b *testing.B) {
 	for n := 0; n < b.N; n++ {
 		sum := int64(0)
 		q := NewBoolAndQuery(
-			NewTerm(x),
-			NewTerm(y),
+			NewTerm("x", x),
+			NewTerm("y", y),
 		)
 
 		for q.Next() != NO_MORE {
@@ -87,68 +87,68 @@ func TestModify(t *testing.T) {
 	d := postingsList(100000)
 	e := postingsList(1000000)
 
-	eq(t, a, query(NewTerm(a)))
-	eq(t, b, query(NewTerm(b)))
-	eq(t, c, query(NewTerm(c)))
-	eq(t, d, query(NewTerm(d)))
-	eq(t, e, query(NewTerm(e)))
+	eq(t, a, query(NewTerm("x", a)))
+	eq(t, b, query(NewTerm("x", b)))
+	eq(t, c, query(NewTerm("x", c)))
+	eq(t, d, query(NewTerm("x", d)))
+	eq(t, e, query(NewTerm("x", e)))
 
 	eq(t, b, query(NewBoolOrQuery(
-		NewTerm(a),
-		NewTerm(b),
+		NewTerm("x", a),
+		NewTerm("x", b),
 	)))
 
 	eq(t, c, query(NewBoolOrQuery(
-		NewTerm(a),
-		NewTerm(b),
-		NewTerm(c),
+		NewTerm("x", a),
+		NewTerm("x", b),
+		NewTerm("x", c),
 	)))
 
 	eq(t, e, query(NewBoolOrQuery(
-		NewTerm(a),
-		NewTerm(b),
-		NewTerm(c),
-		NewTerm(d),
-		NewTerm(e),
+		NewTerm("x", a),
+		NewTerm("x", b),
+		NewTerm("x", c),
+		NewTerm("x", d),
+		NewTerm("x", e),
 	)))
 
 	eq(t, a, query(NewBoolAndQuery(
-		NewTerm(a),
-		NewTerm(b),
-		NewTerm(c),
-		NewTerm(d),
-		NewTerm(e),
+		NewTerm("x", a),
+		NewTerm("x", b),
+		NewTerm("x", c),
+		NewTerm("x", d),
+		NewTerm("x", e),
 	)))
 
 	eq(t, a, query(NewBoolAndQuery(
-		NewTerm(a),
-		NewTerm(b),
-		NewTerm(c),
-		NewTerm(d),
-		NewTerm(e),
+		NewTerm("x", a),
+		NewTerm("x", b),
+		NewTerm("x", c),
+		NewTerm("x", d),
+		NewTerm("x", e),
 	)))
 
 	eq(t, b, query(NewBoolAndQuery(
 		NewBoolOrQuery(
-			NewTerm(a),
-			NewTerm(b),
+			NewTerm("x", a),
+			NewTerm("x", b),
 		),
-		NewTerm(b),
-		NewTerm(c),
-		NewTerm(d),
-		NewTerm(e),
+		NewTerm("x", b),
+		NewTerm("x", c),
+		NewTerm("x", d),
+		NewTerm("x", e),
 	)))
 
 	eq(t, c, query(NewBoolAndQuery(
 		NewBoolOrQuery(
-			NewTerm(a),
-			NewTerm(b),
+			NewTerm("x", a),
+			NewTerm("x", b),
 			NewBoolAndQuery(
-				NewTerm(c),
-				NewTerm(d),
+				NewTerm("x", c),
+				NewTerm("x", d),
 			),
 		),
-		NewTerm(d),
-		NewTerm(e),
+		NewTerm("x", d),
+		NewTerm("x", e),
 	)))
 }
