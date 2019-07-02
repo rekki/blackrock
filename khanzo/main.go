@@ -21,6 +21,27 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+// FIXME(jackdoe): this is very bad
+func fromString(text string, makeTermQuery func(string, string) Query) (Query, error) {
+	top := []Query{}
+	for _, and := range strings.Split(text, " AND ") {
+		sub := []Query{}
+		for _, or := range strings.Split(and, " OR ") {
+			t := strings.Split(or, ":")
+			sub = append(sub, makeTermQuery(t[0], t[1]))
+		}
+		if len(sub) == 1 {
+			top = append(top, sub[0])
+		} else {
+			top = append(top, NewBoolOrQuery(sub...))
+		}
+	}
+	if (len(top)) == 1 {
+		return top[0], nil
+	}
+	return NewBoolAndQuery(top...), nil
+}
+
 /*
 
 {
@@ -29,7 +50,7 @@ import (
 
 */
 
-func fromJSON(input interface{}, makeTermQuery func(string, string) Query) (Query, error) {
+func fromJson(input interface{}, makeTermQuery func(string, string) Query) (Query, error) {
 	mapped, ok := input.(map[string]interface{})
 	queries := []Query{}
 	if ok {
@@ -62,7 +83,7 @@ func fromJSON(input interface{}, makeTermQuery func(string, string) Query) (Quer
 			if ok {
 				and := NewBoolAndQuery([]Query{}...)
 				for _, subQuery := range list {
-					q, err := fromJSON(subQuery, makeTermQuery)
+					q, err := fromJson(subQuery, makeTermQuery)
 					if err != nil {
 						return nil, err
 					}
@@ -79,7 +100,7 @@ func fromJSON(input interface{}, makeTermQuery func(string, string) Query) (Quer
 			if ok {
 				or := NewBoolOrQuery([]Query{}...)
 				for _, subQuery := range list {
-					q, err := fromJSON(subQuery, makeTermQuery)
+					q, err := fromJson(subQuery, makeTermQuery)
 					if err != nil {
 						return nil, err
 					}
@@ -143,8 +164,7 @@ type ProjectionQuery struct {
 	Join  string      `json:"join"`
 }
 
-type ProjectorRequest struct {
-	Fx               string            `json:"fx"`
+type ProjectionRequest struct {
 	Sequence         []ProjectionQuery `json:"queries"`
 	ScanMaxDocuments int64             `json:"scan_max_documents"`
 }
@@ -388,7 +408,7 @@ func main() {
 			return
 		}
 
-		query, err := fromJSON(qr.Query, func(k, v string) Query {
+		query, err := fromJson(qr.Query, func(k, v string) Query {
 			return NewTermQuery(qr.ScanMaxDocuments, *root, *dataTopic, k, v)
 		})
 		if err != nil {
@@ -441,25 +461,20 @@ func main() {
 	})
 
 	r.POST("/project", func(c *gin.Context) {
-		var pr ProjectorRequest
+		var pr ProjectionRequest
 		if err := c.ShouldBindJSON(&pr); err != nil {
 			c.JSON(400, gin.H{"error": err.Error()})
 			return
 		}
 
-		runQuery := func(query Query) (*ProjectionResponse, error) {
-			out := &ProjectionResponse{
-				CountedProperties: map[string]map[string]uint64{},
-				CountedTags:       map[string]map[string]uint64{},
-			}
-
+		runQuery := func(out *ProjectionResponse, query Query) error {
 			log.Printf("%s", query.String())
 			for query.Next() != NO_MORE {
 				did := query.GetDocId()
 				out.Total++
 				hit, err := getScoredHit(forward, did, query.Score(), true)
 				if err != nil {
-					return nil, err
+					return err
 				}
 				out.Add(hit)
 				if out.First == nil {
@@ -468,11 +483,16 @@ func main() {
 					out.Last = &hit
 				}
 			}
-			return out, nil
+			return nil
 		}
-		var out *ProjectionResponse
+
+		out := &ProjectionResponse{
+			CountedProperties: map[string]map[string]uint64{},
+			CountedTags:       map[string]map[string]uint64{},
+		}
+
 		for i, sequence := range pr.Sequence {
-			query, err := fromJSON(sequence.Query, func(k, v string) Query {
+			query, err := fromJson(sequence.Query, func(k, v string) Query {
 				return NewTermQuery(pr.ScanMaxDocuments, *root, *dataTopic, k, v)
 			})
 			if err != nil {
@@ -485,7 +505,7 @@ func main() {
 					c.JSON(400, gin.H{"error": "first sequence can not have join"})
 					return
 				}
-				out, err = runQuery(query)
+				err = runQuery(out, query)
 				if err != nil {
 					c.JSON(400, gin.H{"error": err.Error()})
 				}
@@ -494,13 +514,17 @@ func main() {
 					c.JSON(400, gin.H{"error": "sequences must have join"})
 					return
 				}
+				joined := &ProjectionResponse{
+					CountedProperties: map[string]map[string]uint64{},
+					CountedTags:       map[string]map[string]uint64{},
+				}
 
 				if agg, ok := out.CountedTags[sequence.Join]; ok {
 					for term, _ := range agg {
 						query.Reset()
 						tq := NewTermQuery(pr.ScanMaxDocuments, *root, *dataTopic, sequence.Join, term)
 						join := NewBoolAndQuery(tq, query)
-						out, err = runQuery(join)
+						err = runQuery(joined, join)
 						if err != nil {
 							c.JSON(400, gin.H{"error": err.Error()})
 							return
@@ -510,6 +534,7 @@ func main() {
 					out = &ProjectionResponse{}
 					break
 				}
+				out = joined
 			}
 		}
 		c.JSON(200, out)
