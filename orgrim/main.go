@@ -107,15 +107,25 @@ func main() {
 		}
 
 		tags := map[string]string{}
+		maker := "__nobody"
+		etype := "event"
 		for k, values := range c.Request.URL.Query() {
 			for _, v := range values {
-				tags[k] = v
+				if k == "maker" {
+					maker = v
+				} else if k == "type" {
+					etype = v
+				} else {
+					tags[k] = v
+				}
 			}
 		}
 
 		metadata := &spec.Metadata{
 			Tags:        tags,
 			CreatedAtNs: time.Now().UnixNano(),
+			Type:        etype,
+			Maker:       maker,
 		}
 		envelope := &spec.Envelope{Metadata: metadata, Payload: data}
 		encoded, err := proto.Marshal(envelope)
