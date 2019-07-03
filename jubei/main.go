@@ -151,6 +151,7 @@ func (fw *FileWriter) append(docId uint64, metadata *spec.Metadata) error {
 func main() {
 	var dataTopic = flag.String("topic-data", "blackrock-data", "topic for the data")
 	var root = flag.String("root", "/blackrock", "root directory for the files")
+	var pconsumerId = flag.String("consumer-id", "", "kafka consumer id")
 	var kafkaServers = flag.String("kafka", "localhost:9092,localhost:9092", "kafka addrs")
 	var verbose = flag.Bool("verbose", false, "print info level logs to stdout")
 	var maxDescriptors = flag.Int("max-descriptors", 1000, "max open descriptors")
@@ -162,12 +163,17 @@ func main() {
 	} else {
 		log.SetLevel(log.WarnLevel)
 	}
-	consumerId, _ := os.Hostname()
+	consumerId := *pconsumerId
+	if consumerId == "" {
+		hn, _ := os.Hostname()
+		consumerId = "jubei_" + sanitize.Cleanup(*root) + "_" + hn
+	}
+
 	brokers := strings.Split(*kafkaServers, ",")
 	rd := kafka.NewReader(kafka.ReaderConfig{
 		Brokers:        brokers,
 		Topic:          *dataTopic,
-		GroupID:        "jubei_" + sanitize.Cleanup(*root) + "_" + consumerId,
+		GroupID:        consumerId,
 		CommitInterval: 1 * time.Second,
 		MaxWait:        1 * time.Second,
 	})
