@@ -13,7 +13,7 @@ spec:
     spec:
       containers:
       - name: orgrim
-        image: "jackdoe/blackrock:0.5"
+        image: "jackdoe/blackrock:0.6"
         env:
           - name: BIND
             value: ":7000"

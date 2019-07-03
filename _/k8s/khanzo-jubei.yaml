@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
       - name: jubei
-        image: "jackdoe/blackrock:0.5"
+        image: "jackdoe/blackrock:0.6"
         env:
         - name: TOPIC
           value: "blackrock"
@@ -30,7 +30,7 @@ spec:
         command: ["/bin/jubei"]
         args: ["-topic-data","$(TOPIC)", "-kafka","$(BROKERS)","-verbose"]
       - name: khanzo
-        image: "jackdoe/blackrock:0.5"
+        image: "jackdoe/blackrock:0.6"
         env:
         - name: BIND
           value: ":7001"
