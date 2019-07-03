@@ -44,6 +44,10 @@ func main() {
 	}
 
 	r := gin.Default()
+	r.GET("/health", func(c *gin.Context) {
+		c.String(200, "OK")
+	})
+
 	r.GET("/get/:partition/:offset", func(c *gin.Context) {
 		var query GetRequest
 		if err := c.ShouldBindUri(&query); err != nil {

@@ -450,6 +450,9 @@ func main() {
 	}
 
 	r := gin.Default()
+	r.GET("/health", func(c *gin.Context) {
+		c.String(200, "OK")
+	})
 
 	r.GET("/debug", func(c *gin.Context) {
 		files, err := ioutil.ReadDir(path.Join(*root, *dataTopic))

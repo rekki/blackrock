@@ -81,6 +81,10 @@ func main() {
 	r := gin.Default()
 	r.Use(gin.Recovery())
 
+	r.GET("/health", func(c *gin.Context) {
+		c.String(200, "OK")
+	})
+
 	r.POST("/push/raw", func(c *gin.Context) {
 		body := c.Request.Body
 		defer body.Close()
