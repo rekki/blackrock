@@ -63,13 +63,17 @@ func (fw *FileWriter) appendForward(metadata *spec.Metadata, partition int32, of
 	if err != nil {
 		return 0, err
 	}
-
-	blobSize := 8 + 4 + len(encoded)
+	maker := []byte(metadata.Maker)
+	blobSize := 8 + 8 + len(encoded) + len(maker)
 	blob := make([]byte, blobSize)
-	copy(blob[12:], encoded)
+
+	copy(blob[16:], maker)
+	copy(blob[16+len(maker):], encoded)
 
 	binary.LittleEndian.PutUint64(blob[0:], uint64(partition)<<54|uint64(offset))
 	binary.LittleEndian.PutUint32(blob[8:], uint32(len(encoded)))
+	binary.LittleEndian.PutUint32(blob[12:], uint32(len(maker)))
+
 	current := atomic.AddUint64(&fw.offset, uint64(blobSize))
 	current -= uint64(blobSize)
 	log.Infof("writing kafka offset %d:%d as id %d, blobSize: %d", partition, offset, current, blobSize)
@@ -83,6 +87,9 @@ func (fw *FileWriter) appendForward(metadata *spec.Metadata, partition int32, of
 }
 
 func (fw *FileWriter) appendTag(docId uint64, tagKey, tagValue string) error {
+	if tagKey == "" || tagValue == "" {
+		return nil
+	}
 	dir, fn := sanitize.PathForTag(fw.root, fw.topic, tagKey, tagValue)
 	filename := path.Join(dir, fn)
 	f, ok := fw.descriptors[filename]
@@ -118,16 +125,22 @@ func (fw *FileWriter) appendTag(docId uint64, tagKey, tagValue string) error {
 func (fw *FileWriter) append(docId uint64, metadata *spec.Metadata) error {
 	ns := metadata.CreatedAtNs
 	for k, v := range metadata.Tags {
+		if k == "maker" || k == "type" {
+			continue
+		}
 		err := fw.appendTag(docId, k, v)
 		if err != nil {
 			return err
 		}
 	}
-
 	second := ns / 1000000000
 	t := time.Unix(second, 0)
 	year, month, day := t.Date()
 	hour, _, _ := t.Clock()
+
+	fw.appendTag(docId, "maker", metadata.Maker)
+	fw.appendTag(docId, "type", metadata.Type)
+
 	fw.appendTag(docId, "year", fmt.Sprintf("%d", year))
 	fw.appendTag(docId, "year-month", fmt.Sprintf("%d-%02d", year, month))
 	fw.appendTag(docId, "year-month-day", fmt.Sprintf("%d-%02d-%02d", year, month, day))
@@ -189,6 +202,11 @@ func main() {
 			log.Warnf("failed to unmarshal, data: %s, error: %s", string(m.Value), err.Error())
 			continue
 		}
+		envelope.Metadata.Maker = sanitize.Cleanup(envelope.Metadata.Maker)
+		if envelope.Metadata.CreatedAtNs == 0 {
+			envelope.Metadata.CreatedAtNs = time.Now().UnixNano()
+		}
+
 		id, err := fw.appendForward(envelope.Metadata, int32(m.Partition), m.Offset)
 		if err != nil {
 			log.Fatal(err)

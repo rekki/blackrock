@@ -32,17 +32,22 @@ func fit(x float64) string {
 	return f
 }
 
-func HorizontalBar(x []float64, y []string, symbol rune, width int, prefix string, thresh float64) string {
+func HorizontalBar(x []float64, y []string, symbol rune, width int, prefix string, size int) string {
 	max := float64(0)
 	maxLabelWidth := 0
 	sum := float64(0)
 	for _, v := range x {
-		if v > max {
-			max = v
-		}
 		sum += v
 	}
-
+	end := len(x)
+	if size > 0 && size < len(x) {
+		end = size
+	}
+	for i := 0; i < end; i++ {
+		if x[i] > max {
+			max = x[i]
+		}
+	}
 	for _, v := range y {
 		if len(v) > maxLabelWidth {
 			maxLabelWidth = len(v)
@@ -52,17 +57,19 @@ func HorizontalBar(x []float64, y []string, symbol rune, width int, prefix strin
 	width -= maxLabelWidth + 10 + 8
 	lines := []string{}
 	pad := fmt.Sprintf("%d", maxLabelWidth)
-	for i := 0; i < len(x); i++ {
+	for i := 0; i < end; i++ {
 		v := x[i]
 		label := y[i]
 		value := int((v / max) * float64(width))
 
 		bar := makeBar(symbol, value)
 		percent := 100 * (v / sum)
-		if percent > thresh {
-			line := fmt.Sprintf("%s%-"+pad+"v %8s %6s%% %s", prefix, label, fit(x[i]), fmt.Sprintf("%.2f", percent), bar)
-			lines = append(lines, line)
-		}
+		line := fmt.Sprintf("%s%-"+pad+"v %8s %6s%% %s", prefix, label, fit(x[i]), fmt.Sprintf("%.2f", percent), bar)
+		lines = append(lines, line)
+	}
+	if end < len(x) {
+		line := fmt.Sprintf("%s....... skipping %d", prefix, len(x)-end)
+		lines = append(lines, line)
 	}
 	return strings.Join(lines, "\n")
 }

@@ -151,6 +151,12 @@ func main() {
 			return
 		}
 
+		if envelope.Metadata.Type == "" {
+			log.Warnf("[orgrim] no type in metadata, rejecting")
+			c.JSON(500, gin.H{"error": "need type key in metadata"})
+			return
+		}
+
 		if envelope.Metadata.CreatedAtNs == 0 {
 			envelope.Metadata.CreatedAtNs = time.Now().UnixNano()
 		}

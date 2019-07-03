@@ -6,9 +6,11 @@ message Metadata {
         map<string,string> tags = 1; 
         map<string,string> properties = 2;
         int64 createdAtNs  = 5;
+        string maker = 6;
+        string type = 7;
 }
 
 message Envelope {
         Metadata metadata = 1;
         bytes payload = 2;
-}
+} 

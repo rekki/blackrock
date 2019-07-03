@@ -159,82 +159,95 @@ func NewTermQuery(maxDocuments int64, root string, topic string, tagKey, tagValu
 	return NewTerm(fmt.Sprintf("%s:%s", tagKey, tagValue), longed)
 }
 
-type ProjectionQuery struct {
-	Query interface{} `json:"query"`
-	Join  string      `json:"join"`
-}
-
-type ProjectionRequest struct {
-	Sequence         []ProjectionQuery `json:"queries"`
-	ScanMaxDocuments int64             `json:"scan_max_documents"`
-}
-
 type QueryRequest struct {
 	Query            interface{} `json:"query"`
 	Size             int         `json:"size"`
-	Decode           bool        `json:"decode"`
+	DecodeMetadata   bool        `json:"decode_metadata"`
+	DecodeMaker      bool        `json:"decode_maker"`
 	ScanMaxDocuments int64       `json:"scan_max_documents"`
 }
 
 type Hit struct {
 	Metadata  *spec.Metadata `json:"metadata,omitempty"`
+	Maker     string         `json:"maker"`
 	Score     float32        `json:"score"`
 	Offset    int64          `json:"offset"`
 	Partition int32          `json:"partition"`
 }
 
 type QueryResponse struct {
-	Total int64 `json:"size"`
+	Total int64 `json:"total"`
 	Hits  []Hit `json:"hits"`
 }
 
-func readForward(fd *os.File, did int64, decode bool) (int32, int64, *spec.Metadata, error) {
-	data := make([]byte, 12)
+func readForward(fd *os.File, did int64, decodeMaker bool, decodeMetadata bool) (int32, int64, string, *spec.Metadata, error) {
+	data := make([]byte, 16)
 	_, err := fd.ReadAt(data, did)
 	if err != nil {
-		return 0, 0, nil, err
+		log.Warnf("railed to read forward header, offset: %d, error: %s", did, err.Error())
+		return 0, 0, "", nil, err
 	}
 
 	kafka := binary.LittleEndian.Uint64(data[0:])
 	offset := int64(kafka & 0xFFFFFFFFFFFF)
 	partition := int32(kafka >> 54)
-	if !decode {
-		return partition, offset, nil, nil
+	if !decodeMaker && !decodeMetadata {
+		return partition, offset, "", nil, nil
 	}
 
 	metadataLen := binary.LittleEndian.Uint32(data[8:])
-	metadataBlob := make([]byte, int(metadataLen))
-	_, err = fd.ReadAt(metadataBlob, did+12)
-	if err != nil {
-		return 0, 0, nil, err
+	makerLen := binary.LittleEndian.Uint32(data[12:])
+	if makerLen > 128 || metadataLen > 1024*10 {
+		log.Warnf("possibly corrupt header, offset: %d, makerLen: %d, metadataLen %d", did, makerLen, metadataLen)
+		return 0, 0, "", nil, errors.New("corrupt header")
+	}
+	var readInto []byte
+	if decodeMetadata {
+		readInto = make([]byte, metadataLen+makerLen)
+	} else {
+		readInto = make([]byte, makerLen)
 	}
 
+	_, err = fd.ReadAt(readInto, did+16)
+	if err != nil {
+		log.Warnf("railed to read forward metadata, offset: %d, size: %d, error: %s", did+16, len(readInto), err.Error())
+		return 0, 0, "", nil, err
+	}
+	var maker string
 	var meta spec.Metadata
-	err = proto.Unmarshal(metadataBlob, &meta)
-	if err != nil {
-		return 0, 0, nil, err
+	if decodeMaker {
+		maker = string(readInto[:makerLen])
 	}
 
-	return partition, offset, &meta, nil
+	if decodeMetadata {
+		err = proto.Unmarshal(readInto[makerLen:], &meta)
+		if err != nil {
+			return 0, 0, "", nil, err
+		}
+	}
+
+	return partition, offset, maker, &meta, nil
 }
 
-func getScoredHit(forward *os.File, did int64, score float32, decode bool) (Hit, error) {
-	partition, offset, meta, err := readForward(forward, did, decode)
+func getScoredHit(forward *os.File, did int64, score float32, decodeMaker bool, decodeMetadata bool) (Hit, error) {
+	partition, offset, maker, meta, err := readForward(forward, did, decodeMaker, decodeMetadata)
 	if err != nil {
 		return Hit{}, err
 	}
-	hit := Hit{Offset: offset, Partition: partition, Score: score, Metadata: meta}
+	hit := Hit{Offset: offset, Partition: partition, Score: score, Metadata: meta, Maker: maker}
 	return hit, nil
 }
 
-func tagStats(key string, dir string) (*TagKeyStats, error) {
+func tagStats(out *TagKeyStats, key string, dir string) (*TagKeyStats, error) {
 	files, err := ioutil.ReadDir(dir)
 	if err != nil {
 		return nil, err
 	}
-	out := &TagKeyStats{
-		Values: []TagValueStats{},
-		Key:    key,
+	if out == nil {
+		out = &TagKeyStats{
+			Values: []TagValueStats{},
+			Key:    key,
+		}
 	}
 	for _, fi := range files {
 		if !fi.IsDir() && strings.HasSuffix(fi.Name(), ".p") {
@@ -247,22 +260,82 @@ func tagStats(key string, dir string) (*TagKeyStats, error) {
 		}
 	}
 
-	sort.Slice(out.Values, func(i, j int) bool {
-		return out.Values[j].Count < out.Values[i].Count
-	})
-
 	return out, nil
+}
+
+type TagValueStats struct {
+	V     string `json:"value"`
+	Count int64  `json:"count"`
+}
+
+type TagKeyStats struct {
+	Key        string          `json:"key"`
+	Values     []TagValueStats `json:"values"`
+	TotalCount int64           `json:"total"`
+}
+
+type CategoryStats struct {
+	Tags       []*TagKeyStats `json:"tags,omitempty"`
+	Properties []*TagKeyStats `json:"properties,omitempty"`
+	Types      *TagKeyStats   `json:"types,omitempty"`
+	Makers     *TagKeyStats   `json:"makers,omitempty"`
+}
+
+func NewCategoryStats() CategoryStats {
+	return CategoryStats{}
+}
+
+func StatsForMap(key string, values map[string]uint64) *TagKeyStats {
+	tk := &TagKeyStats{
+		Key: key,
+	}
+	for value, count := range values {
+		tk.TotalCount += int64(count)
+		tk.Values = append(tk.Values, TagValueStats{V: value, Count: int64(count)})
+	}
+	return tk
+}
+func StatsForMapMap(input map[string]map[string]uint64) []*TagKeyStats {
+	stats := []*TagKeyStats{}
+	for key, values := range input {
+		stats = append(stats, StatsForMap(key, values))
+	}
+	return stats
 }
 
 type ProjectionResponse struct {
 	CountedProperties map[string]map[string]uint64 `json:"counted_properties"`
 	CountedTags       map[string]map[string]uint64 `json:"counted_tags"`
+	CountedMaker      map[string]uint64            `json:"counted_makers"`
+	CountedType       map[string]uint64            `json:"counted_types"`
 	First             *Hit                         `json:"first"`
 	Last              *Hit                         `json:"last"`
 	Total             uint64                       `json:"total"`
 }
 
+func (p *ProjectionResponse) toCategoryStats() CategoryStats {
+	cs := NewCategoryStats()
+	cs.Properties = StatsForMapMap(p.CountedProperties)
+	cs.Tags = StatsForMapMap(p.CountedTags)
+	cs.Makers = StatsForMap("maker", p.CountedMaker)
+	cs.Types = StatsForMap("type", p.CountedType)
+	return cs
+}
+func NewProjectionResponse() *ProjectionResponse {
+	return &ProjectionResponse{
+		CountedProperties: map[string]map[string]uint64{},
+		CountedTags:       map[string]map[string]uint64{},
+		CountedMaker:      map[string]uint64{},
+		CountedType:       map[string]uint64{},
+	}
+}
 func (p *ProjectionResponse) Add(h Hit) {
+	p.CountedMaker[h.Maker]++
+	if h.Metadata == nil {
+		return
+	}
+
+	p.CountedType[h.Metadata.Type]++
 	for k, v := range h.Metadata.Properties {
 		pp, ok := p.CountedProperties[k]
 		if !ok {
@@ -282,17 +355,78 @@ func (p *ProjectionResponse) Add(h Hit) {
 	}
 }
 
-type TagValueStats struct {
-	V     string `json:"value"`
-	Count int64  `json:"count"`
+func banner(s string) string {
+	width := 80
+	out := "\n┌"
+	for i := 0; i < width-2; i++ {
+		out += "─"
+	}
+	out += "┐"
+	out += "\n"
+	out += "│"
+	out += " "
+	out += s
+
+	for i := 0; i < width-3-len(s); i++ {
+		out += " "
+	}
+	out += "│"
+	out += "\n"
+	out += "└"
+	for i := 0; i < width-2; i++ {
+		out += "─"
+	}
+	out += "┘"
+
+	out += "\n"
+	return out
 }
 
-type TagKeyStats struct {
-	Key        string          `json:"key"`
-	Values     []TagValueStats `json:"values"`
-	TotalCount int64           `json:"total"`
+func prettyCategoryStats(s CategoryStats) string {
+	makers := prettyStats([]*TagKeyStats{s.Makers})
+	types := prettyStats([]*TagKeyStats{s.Types})
+	properties := prettyStats(s.Properties)
+	tags := prettyStats(s.Tags)
+	out := fmt.Sprintf("%s%s%s%s%s%s", banner("MAKERS"), makers, banner("TYPES"), types, banner("TAGS"), tags)
+	if s.Properties != nil {
+		out = fmt.Sprintf("%s%s%s", out, banner("PROPERTIES"), properties)
+	}
+	out += "\n"
+	return out
 }
 
+func prettyStats(stats []*TagKeyStats) string {
+	sort.Slice(stats, func(i, j int) bool {
+		return stats[j].TotalCount < stats[i].TotalCount
+	})
+
+	out := []string{}
+	pad := "    "
+	width := 80 - len(pad)
+	total := int64(0)
+	for _, t := range stats {
+		for _, v := range t.Values {
+			total += v.Count
+		}
+	}
+
+	for _, t := range stats {
+		x := []float64{}
+		y := []string{}
+		sort.Slice(t.Values, func(i, j int) bool {
+			return t.Values[j].Count < t.Values[i].Count
+		})
+
+		for _, v := range t.Values {
+			x = append(x, float64(v.Count))
+			y = append(y, v.V)
+		}
+		percent := float64(100) * float64(t.TotalCount) / float64(total)
+		out = append(out, fmt.Sprintf("« %s » total: %d, %.2f%%\n%s", t.Key, t.TotalCount, percent, chart.HorizontalBar(x, y, '▒', width, pad, 50)))
+	}
+
+	return strings.Join(out, "\n\n--------\n\n")
+}
 func main() {
 	var root = flag.String("root", "/blackrock", "root directory for the files (root/topic/partition)")
 	var dataTopic = flag.String("topic-data", "blackrock-data", "topic for the data")
@@ -318,87 +452,48 @@ func main() {
 	r := gin.Default()
 
 	r.GET("/debug", func(c *gin.Context) {
-		fi, err := forward.Stat()
-		if err != nil {
-			c.JSON(500, gin.H{"error": err.Error()})
-			return
-		}
-		total := fi.Size() / 8
-		if total == 0 {
-			total = 1
-		}
 		files, err := ioutil.ReadDir(path.Join(*root, *dataTopic))
 		if err != nil {
 			c.JSON(500, gin.H{"error": err.Error()})
 			return
 		}
-		stats := []*TagKeyStats{}
+		categoryStats := NewCategoryStats()
 
 		for _, fi := range files {
 			if fi.IsDir() {
-				key := sanitize.Cleanup(fi.Name())
-				tv, err := tagStats(key, path.Join(*root, *dataTopic, key))
+				shards, err := ioutil.ReadDir(path.Join(*root, *dataTopic, fi.Name()))
 				if err != nil {
 					c.JSON(500, gin.H{"error": err.Error()})
 					return
 				}
-
-				stats = append(stats, tv)
+				if len(shards) == 0 {
+					continue
+				}
+				var tv *TagKeyStats
+				for _, shard := range shards {
+					tv, err = tagStats(tv, fi.Name(), path.Join(*root, *dataTopic, fi.Name(), shard.Name()))
+					if err != nil {
+						c.JSON(500, gin.H{"error": err.Error()})
+						return
+					}
+				}
+				if fi.Name() == "maker" {
+					categoryStats.Makers = tv
+				} else if fi.Name() == "type" {
+					categoryStats.Types = tv
+				} else {
+					categoryStats.Tags = append(categoryStats.Tags, tv)
+				}
 			}
 		}
-		sort.Slice(stats, func(i, j int) bool {
-			return stats[j].TotalCount < stats[i].TotalCount
-		})
 
-		out := []string{}
-		pad := "    "
-		width := 80 - len(pad)
-
-		for _, t := range stats {
-			x := []float64{}
-			y := []string{}
-			for _, v := range t.Values {
-				x = append(x, float64(v.Count))
-				y = append(y, v.V)
-			}
-			percent := float64(100) * float64(t.TotalCount) / float64(total)
-			out = append(out, fmt.Sprintf("« %s » total: %d, %.2f%%\n%s", t.Key, t.TotalCount, percent, chart.HorizontalBar(x, y, '▒', width, pad, 0.5)))
+		format := c.Query("format")
+		if format == "json" {
+			c.JSON(200, categoryStats)
+		} else {
+			pretty := prettyCategoryStats(categoryStats)
+			c.String(200, pretty)
 		}
-
-		out = append(out, fmt.Sprintf("\ntotal: %d\n", total))
-		c.String(200, strings.Join(out, "\n\n--------\n\n"))
-	})
-
-	r.GET("/api/inspect/:tag", func(c *gin.Context) {
-		key := sanitize.Cleanup(c.Param("tag"))
-		v, err := tagStats(key, path.Join(*root, *dataTopic, key))
-		if err != nil {
-			c.JSON(500, gin.H{"error": err.Error()})
-			return
-		}
-
-		c.JSON(200, v)
-	})
-
-	r.GET("/api/stat", func(c *gin.Context) {
-		fi, err := forward.Stat()
-		if err != nil {
-			c.JSON(500, gin.H{"error": err.Error()})
-			return
-		}
-		tags := []string{}
-		files, err := ioutil.ReadDir(path.Join(*root, *dataTopic))
-		if err != nil {
-			c.JSON(500, gin.H{"error": err.Error()})
-			return
-		}
-		for _, fi := range files {
-			if fi.IsDir() {
-				tags = append(tags, fi.Name())
-			}
-		}
-		sort.Strings(tags)
-		c.JSON(200, gin.H{"total_documents": fi.Size() / 8, "tags": tags})
 	})
 
 	r.POST("/search", func(c *gin.Context) {
@@ -431,19 +526,19 @@ func main() {
 			doInsert := false
 			var hit Hit
 			if len(out.Hits) < qr.Size {
-				hit, err = getScoredHit(forward, did, score, qr.Decode)
+				hit, err = getScoredHit(forward, did, score, qr.DecodeMetadata, qr.DecodeMetadata)
 				if err != nil {
-					c.JSON(500, gin.H{"error": err.Error()})
-					return
+					// possibly corrupt forward index, igore, error is already printed
+					continue
 				}
 				out.Hits = append(out.Hits, hit)
 				doInsert = true
 			} else if out.Hits[len(out.Hits)-1].Score < hit.Score {
 				doInsert = true
-				hit, err = getScoredHit(forward, did, score, qr.Decode)
+				hit, err = getScoredHit(forward, did, score, qr.DecodeMaker, qr.DecodeMetadata)
 				if err != nil {
-					c.JSON(500, gin.H{"error": err.Error()})
-					return
+					// possibly corrupt forward index, igore, error is already printed
+					continue
 				}
 			}
 			if doInsert {
@@ -455,27 +550,40 @@ func main() {
 					}
 				}
 			}
-
 		}
 		c.JSON(200, out)
 	})
 
-	r.POST("/project", func(c *gin.Context) {
-		var pr ProjectionRequest
-		if err := c.ShouldBindJSON(&pr); err != nil {
-			c.JSON(400, gin.H{"error": err.Error()})
-			return
+	r.GET("/project/*query", func(c *gin.Context) {
+		queries := []Query{}
+
+		queryPath := strings.Trim(c.Param("query"), "/")
+		format := c.Query("format")
+
+		makeTerm := func(k, v string) Query {
+			return NewTermQuery(0, *root, *dataTopic, k, v)
 		}
 
-		runQuery := func(out *ProjectionResponse, query Query) error {
-			log.Printf("%s", query.String())
+		for _, q := range strings.Split(queryPath, "^") {
+			query, err := fromString(strings.Replace(q, "+", " AND ", -1), makeTerm)
+			if err != nil {
+				c.JSON(400, gin.H{"error": err.Error()})
+				return
+			}
+			log.Warnf("adding %s", query.String())
+			queries = append(queries, query)
+		}
+
+		runQuery := func(out *ProjectionResponse, query Query, decodeMaker bool, decodeMetadata bool) error {
 			for query.Next() != NO_MORE {
 				did := query.GetDocId()
 				out.Total++
-				hit, err := getScoredHit(forward, did, query.Score(), true)
+				hit, err := getScoredHit(forward, did, query.Score(), decodeMaker, decodeMaker)
 				if err != nil {
-					return err
+					// possibly corrupt forward index, igore, error is already printed
+					continue
 				}
+
 				out.Add(hit)
 				if out.First == nil {
 					out.First = &hit
@@ -486,58 +594,59 @@ func main() {
 			return nil
 		}
 
-		out := &ProjectionResponse{
-			CountedProperties: map[string]map[string]uint64{},
-			CountedTags:       map[string]map[string]uint64{},
+		if len(queries) == 0 {
+			c.JSON(400, gin.H{"error": "expected query, try /project/type:web/city:london^type:convert"})
+			return
 		}
+		if len(queries) == 1 {
+			out := NewProjectionResponse()
 
-		for i, sequence := range pr.Sequence {
-			query, err := fromJson(sequence.Query, func(k, v string) Query {
-				return NewTermQuery(pr.ScanMaxDocuments, *root, *dataTopic, k, v)
-			})
+			err = runQuery(out, queries[0], true, true)
 			if err != nil {
 				c.JSON(400, gin.H{"error": err.Error()})
 				return
 			}
+			if format == "json" {
+				c.JSON(200, out.toCategoryStats())
+			} else {
+				c.String(200, prettyCategoryStats(out.toCategoryStats()))
+			}
+			return
+		}
 
-			if i == 0 {
-				if sequence.Join != "" {
-					c.JSON(400, gin.H{"error": "first sequence can not have join"})
-					return
-				}
-				err = runQuery(out, query)
+		out := NewProjectionResponse()
+		err = runQuery(out, queries[0], true, false)
+		if err != nil {
+			c.JSON(400, gin.H{"error": err.Error()})
+			return
+		}
+		log.Printf("%v", queries)
+		for i, q := range queries[1:] {
+			joined := NewProjectionResponse()
+			decodeMetadata := i == len(queries)-2 // start from 1
+			for maker, _ := range out.CountedMaker {
+				q.Reset()
+				tq := NewTermQuery(0, *root, *dataTopic, "maker", maker)
+				join := NewBoolAndQuery(tq, q)
+				err = runQuery(joined, join, true, decodeMetadata)
 				if err != nil {
 					c.JSON(400, gin.H{"error": err.Error()})
-				}
-			} else {
-				if sequence.Join == "" {
-					c.JSON(400, gin.H{"error": "sequences must have join"})
 					return
 				}
-				joined := &ProjectionResponse{
-					CountedProperties: map[string]map[string]uint64{},
-					CountedTags:       map[string]map[string]uint64{},
-				}
-
-				if agg, ok := out.CountedTags[sequence.Join]; ok {
-					for term, _ := range agg {
-						query.Reset()
-						tq := NewTermQuery(pr.ScanMaxDocuments, *root, *dataTopic, sequence.Join, term)
-						join := NewBoolAndQuery(tq, query)
-						err = runQuery(joined, join)
-						if err != nil {
-							c.JSON(400, gin.H{"error": err.Error()})
-							return
-						}
-					}
-				} else {
-					out = &ProjectionResponse{}
-					break
-				}
-				out = joined
 			}
+			if len(joined.CountedMaker) == 0 {
+				out = &ProjectionResponse{}
+				break
+			}
+
+			out = joined
 		}
-		c.JSON(200, out)
+
+		if format == "json" {
+			c.JSON(200, out.toCategoryStats())
+		} else {
+			c.String(200, prettyCategoryStats(out.toCategoryStats()))
+		}
 	})
 
 	log.Panic(r.Run(*bind))
