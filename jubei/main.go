@@ -15,7 +15,7 @@ import (
 	"strings"
 
 	"github.com/gogo/protobuf/proto"
-	"github.com/jackdoe/blackrock/jubei/sanitize"
+	"github.com/jackdoe/blackrock/depths"
 	"github.com/jackdoe/blackrock/orgrim/spec"
 	"github.com/segmentio/kafka-go"
 	log "github.com/sirupsen/logrus"
@@ -90,7 +90,7 @@ func (fw *FileWriter) appendTag(docId uint64, tagKey, tagValue string) error {
 	if tagKey == "" || tagValue == "" {
 		return nil
 	}
-	dir, fn := sanitize.PathForTag(fw.root, fw.topic, tagKey, tagValue)
+	dir, fn := depths.PathForTag(fw.root, fw.topic, tagKey, tagValue)
 	filename := path.Join(dir, fn)
 	f, ok := fw.descriptors[filename]
 	if !ok {
@@ -155,7 +155,6 @@ func main() {
 	var kafkaServers = flag.String("kafka", "localhost:9092,localhost:9092", "kafka addrs")
 	var verbose = flag.Bool("verbose", false, "print info level logs to stdout")
 	var maxDescriptors = flag.Int("max-descriptors", 1000, "max open descriptors")
-
 	flag.Parse()
 
 	if *verbose {
@@ -163,10 +162,14 @@ func main() {
 	} else {
 		log.SetLevel(log.WarnLevel)
 	}
+	err := depths.HealthCheckKafka(*kafkaServers, *dataTopic)
+	if err != nil {
+		log.Fatal(err)
+	}
 	consumerId := *pconsumerId
 	if consumerId == "" {
 		hn, _ := os.Hostname()
-		consumerId = "jubei_" + sanitize.Cleanup(*root) + "_" + hn
+		consumerId = "jubei_" + depths.Cleanup(*root) + "_" + hn
 	}
 
 	brokers := strings.Split(*kafkaServers, ",")
@@ -208,7 +211,7 @@ func main() {
 			log.Warnf("failed to unmarshal, data: %s, error: %s", string(m.Value), err.Error())
 			continue
 		}
-		envelope.Metadata.Maker = sanitize.Cleanup(envelope.Metadata.Maker)
+		envelope.Metadata.Maker = depths.Cleanup(envelope.Metadata.Maker)
 		if envelope.Metadata.CreatedAtNs == 0 {
 			envelope.Metadata.CreatedAtNs = time.Now().UnixNano()
 		}

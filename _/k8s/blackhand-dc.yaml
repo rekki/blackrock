@@ -1,0 +1,39 @@
+---
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  namespace: blackrock
+  name: blackhand-deployment
+spec:
+  replicas: 3
+  template:
+    metadata:
+      labels:
+        app: blackhand
+    spec:
+      containers:
+      - name: blackhand
+        image: "jackdoe/blackrock:0.5"
+        env:
+          - name: BIND
+            value: ":7002"
+          - name: TOPIC
+            value: "blackrock"
+          - name: BROKERS
+            value: "localhost:9092"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 7002
+          initialDelaySeconds: 1
+          periodSeconds: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 7002
+          initialDelaySeconds: 1
+          periodSeconds: 3
+        command: ["/bin/blackhand"]
+        args: ["-topic-data","$(TOPIC)", "-bind","$(BIND)", "-kafka","$(BROKERS)","-verbose"]
+        ports:
+        - containerPort: 7002

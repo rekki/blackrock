@@ -15,7 +15,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/gogo/protobuf/proto"
-	"github.com/jackdoe/blackrock/jubei/sanitize"
+	"github.com/jackdoe/blackrock/depths"
 	"github.com/jackdoe/blackrock/khanzo/chart"
 	"github.com/jackdoe/blackrock/orgrim/spec"
 	log "github.com/sirupsen/logrus"
@@ -121,7 +121,7 @@ func fromJson(input interface{}, makeTermQuery func(string, string) Query) (Quer
 }
 
 func NewTermQuery(maxDocuments int64, root string, topic string, tagKey, tagValue string) Query {
-	dir, filename := sanitize.PathForTag(root, topic, tagKey, tagValue) // sanitizes inside
+	dir, filename := depths.PathForTag(root, topic, tagKey, tagValue) // sanitizes inside
 	fn := path.Join(dir, filename)
 	file, err := os.OpenFile(fn, os.O_RDONLY, 0600)
 	if os.IsNotExist(err) {

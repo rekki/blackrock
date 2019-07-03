@@ -14,6 +14,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/gogo/protobuf/jsonpb"
 	"github.com/gogo/protobuf/proto"
+	"github.com/jackdoe/blackrock/depths"
 	"github.com/jackdoe/blackrock/orgrim/spec"
 	"github.com/segmentio/kafka-go"
 	log "github.com/sirupsen/logrus"
@@ -50,6 +51,10 @@ func main() {
 		gin.SetMode(gin.ReleaseMode)
 		log.SetLevel(log.WarnLevel)
 	}
+	err := depths.HealthCheckKafka(*kafkaServers, *dataTopic)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	brokers := strings.Split(*kafkaServers, ",")
 	kw := kafka.NewWriter(kafka.WriterConfig{
@@ -82,6 +87,11 @@ func main() {
 	r.Use(gin.Recovery())
 
 	r.GET("/health", func(c *gin.Context) {
+		err := depths.HealthCheckKafka(*kafkaServers, *dataTopic)
+		if err != nil {
+			c.String(400, "BAD")
+			return
+		}
 		c.String(200, "OK")
 	})
 
