@@ -23,6 +23,7 @@ func connectForever(topic string, brokers string) *balancer.KafkaBalancer {
 		if err != nil {
 			log.Warn(err)
 			time.Sleep(1 * time.Second)
+			continue
 		}
 		return dc
 	}
