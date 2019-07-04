@@ -193,6 +193,41 @@ type Hit struct {
 	Partition int32          `json:"partition"`
 }
 
+func (h Hit) String(link bool) string {
+	out := []string{}
+	m := h.Metadata
+	if !link {
+		out = append(out, fmt.Sprintf("%s %s", m.Maker, m.Type))
+	} else {
+		out = append(out, fmt.Sprintf("<a href='/project/+maker:%s?format=html'>%s</a>", m.Maker, m.Maker))
+		out = append(out, fmt.Sprintf("<a href='/project/+maker:%s+%s:%s?format=html'>%s</a>", m.Maker, "type", m.Type, m.Type))
+	}
+	keys := []string{}
+	for k, _ := range m.Tags {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		v := m.Tags[k]
+		if !link {
+			out = append(out, fmt.Sprintf("  %-30s: %s", k, v))
+		} else {
+			out = append(out, fmt.Sprintf("  %-30s: <a href='/project/+maker:%s+%s:%s?format=html'>%s</a>", k, m.Maker, k, v, v))
+		}
+	}
+	keys = []string{}
+	for k, _ := range m.Properties {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		v := m.Properties[k]
+		out = append(out, fmt.Sprintf("  %-30s: %s", k, v))
+	}
+
+	return strings.Join(out, "\n") + "\n\n"
+}
+
 type QueryResponse struct {
 	Total int64 `json:"total"`
 	Hits  []Hit `json:"hits"`
@@ -298,6 +333,7 @@ type CategoryStats struct {
 	Properties    []*TagKeyStats `json:"properties,omitempty"`
 	Types         *TagKeyStats   `json:"types,omitempty"`
 	Makers        *TagKeyStats   `json:"makers,omitempty"`
+	Sample        []Hit          `json:"sample,omitempty"`
 }
 
 func NewCategoryStats(s string) CategoryStats {
@@ -327,8 +363,7 @@ type ProjectionResponse struct {
 	CountedTags       map[string]map[string]uint64 `json:"counted_tags"`
 	CountedMaker      map[string]uint64            `json:"counted_makers"`
 	CountedType       map[string]uint64            `json:"counted_types"`
-	First             *Hit                         `json:"first"`
-	Last              *Hit                         `json:"last"`
+	Sample            []Hit                        `json:"sample"`
 	Total             uint64                       `json:"total"`
 }
 
@@ -338,6 +373,7 @@ func (p *ProjectionResponse) toCategoryStats(s string) CategoryStats {
 	cs.Tags = StatsForMapMap(p.CountedTags)
 	cs.Makers = StatsForMap("maker", p.CountedMaker)
 	cs.Types = StatsForMap("type", p.CountedType)
+	cs.Sample = p.Sample
 	return cs
 }
 func NewProjectionResponse() *ProjectionResponse {
@@ -346,6 +382,7 @@ func NewProjectionResponse() *ProjectionResponse {
 		CountedTags:       map[string]map[string]uint64{},
 		CountedMaker:      map[string]uint64{},
 		CountedType:       map[string]uint64{},
+		Sample:            []Hit{},
 	}
 }
 func (p *ProjectionResponse) Add(h Hit) {
@@ -372,6 +409,9 @@ func (p *ProjectionResponse) Add(h Hit) {
 		}
 		pp[v]++
 	}
+	if len(p.Sample) < 200 {
+		p.Sample = append(p.Sample, h)
+	}
 }
 
 func prettyCategoryStats(s CategoryStats, link bool) string {
@@ -385,7 +425,14 @@ func prettyCategoryStats(s CategoryStats, link bool) string {
 	}
 	properties := prettyStats("PROPERTIES", s.Properties, false, s.OriginalQuery)
 	tags := prettyStats("TAGS", s.Tags, link, s.OriginalQuery)
-	return fmt.Sprintf("%s%s%s%s\n", makers, properties, types, tags)
+	out := fmt.Sprintf("%s%s%s%s\n", makers, properties, types, tags)
+	if s.Sample != nil {
+		out += chart.Banner("SAMPLE")
+		for _, h := range s.Sample {
+			out += fmt.Sprintf("%s\n", h.String(link))
+		}
+	}
+	return out
 }
 
 func prettyStats(title string, stats []*TagKeyStats, link bool, appendToQuery string) string {
@@ -620,12 +667,6 @@ func main() {
 				}
 
 				out.Add(hit)
-
-				if out.First == nil {
-					out.First = &hit
-				} else {
-					out.Last = &hit
-				}
 			}
 			return nil
 		}
