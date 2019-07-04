@@ -33,7 +33,7 @@ func fromString(text string, makeTermQuery func(string, string) Query) (Query, e
 			if or == "" {
 				continue
 			}
-			t := strings.Split(or, ":")
+			t := strings.SplitN(or, ":", 2)
 			sub = append(sub, makeTermQuery(t[0], t[1]))
 		}
 		if len(sub) == 1 {
@@ -620,6 +620,7 @@ func main() {
 				}
 
 				out.Add(hit)
+
 				if out.First == nil {
 					out.First = &hit
 				} else {
