@@ -37,57 +37,13 @@ the demon lord Archimonde.
 
 
 
-# stats
-
-get all possible tag keys and total number of documents in the index
-
-```
-% curl -s localhost:9002/api/stat | pj
-{
-  "tags": [
-    "_",
-    "open",
-    "type",
-    "year",
-    "year-month",
-    "year-month-day",
-    "year-month-day-hour",
-    "year-month-day-hour-minute"
-  ],
-  "total_documents": 9482163
-}
-
-```
-
-# introspect
-
-get all values per tag with their term count
-
-```
-% curl -s localhost:9002/api/inspect/open | pj
-{
-  "key": "open",
-  "values": [
-    {
-      "value": "true",
-      "count": 4767864
-    },
-    {
-      "value": "false",
-      "count": 4714299
-    }
-  ],
-  "total": 9482163
-}
-```
-
 # debug
 
 show stats per tag per value
 
 
 ```
-% curl localhost:9002/debug
+% curl localhost:9002/debug/text
 « open » total: 9482163, 100.00%
     true   4767.9k  50.28% ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
     false  4714.3k  49.72% ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒

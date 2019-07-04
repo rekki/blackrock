@@ -8,7 +8,7 @@ import (
 func TestEverything(t *testing.T) {
 	cases := []struct {
 		x        []float64
-		y        []string
+		y        []Label
 		width    int
 		symbol   rune
 		expected string
@@ -16,7 +16,7 @@ func TestEverything(t *testing.T) {
 
 		{
 			[]float64{1, 2, 3, 4},
-			[]string{"a", "b", "c", "d"},
+			[]Label{Label{"a", 1}, Label{"b", 1}, Label{"c", 1}, Label{"d", 1}},
 			80,
 			'#',
 			`a      1.0  10.00% ###############
@@ -26,7 +26,7 @@ d      4.0  40.00% #############################################################
 
 		{
 			[]float64{1, 2, 3, 4},
-			[]string{"a", "b", "c", "d"},
+			[]Label{Label{"a", 1}, Label{"b", 1}, Label{"c", 1}, Label{"d", 1}},
 			30,
 			'#',
 			`a      1.0  10.00% ##

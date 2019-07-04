@@ -67,7 +67,7 @@ writing document id 2 at /tmp/jubei/hello/year-month-day-hour/2019-06-30-17.p
       }
     ]
   }
-}' http://khanzo/search
+}' http://khanzo/search/json
 ```
 
 returns lists of top N objects matching the query, sorted by score

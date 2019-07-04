@@ -41,14 +41,14 @@ func NewFileWriter(root string, topic string, maxOpenDescriptors int) (*FileWrit
 	if err != nil {
 		return nil, err
 	}
-	log.Infof("forward %s with %d entries", filename, off/8)
+	log.Infof("forward %s with %d size", filename, off)
 	return &FileWriter{
 		maxOpenDescriptors: maxOpenDescriptors,
 		descriptors:        map[string]*os.File{},
 		root:               root,
 		topic:              topic,
 		forward:            fd,
-		offset:             uint64(off) / 8,
+		offset:             uint64(off),
 	}, nil
 }
 

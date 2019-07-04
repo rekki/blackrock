@@ -26,7 +26,13 @@ func fromString(text string, makeTermQuery func(string, string) Query) (Query, e
 	top := []Query{}
 	for _, and := range strings.Split(text, " AND ") {
 		sub := []Query{}
+		if and == "" {
+			continue
+		}
 		for _, or := range strings.Split(and, " OR ") {
+			if or == "" {
+				continue
+			}
 			t := strings.Split(or, ":")
 			sub = append(sub, makeTermQuery(t[0], t[1]))
 		}
@@ -77,6 +83,18 @@ func fromJson(input interface{}, makeTermQuery func(string, string) Query) (Quer
 			if !added {
 				return nil, errors.New("[tag] must be map containing {key, value}")
 			}
+		}
+		if v, ok := mapped["text"]; ok && v != nil {
+			sk, ok := v.(string)
+			if !ok {
+				return nil, errors.New("[text] must be string")
+			}
+
+			q, err := fromString(sk, makeTermQuery)
+			if err != nil {
+				return nil, err
+			}
+			queries = append(queries, q)
 		}
 		if v, ok := mapped["and"]; ok && v != nil {
 			list, ok := v.([]interface{})
@@ -264,7 +282,7 @@ func tagStats(out *TagKeyStats, key string, dir string) (*TagKeyStats, error) {
 }
 
 type TagValueStats struct {
-	V     string `json:"value"`
+	V     string `json:"value" yaml:"value"`
 	Count int64  `json:"count"`
 }
 
@@ -275,14 +293,15 @@ type TagKeyStats struct {
 }
 
 type CategoryStats struct {
-	Tags       []*TagKeyStats `json:"tags,omitempty"`
-	Properties []*TagKeyStats `json:"properties,omitempty"`
-	Types      *TagKeyStats   `json:"types,omitempty"`
-	Makers     *TagKeyStats   `json:"makers,omitempty"`
+	OriginalQuery string         `json:"original_query,omitempty"`
+	Tags          []*TagKeyStats `json:"tags,omitempty"`
+	Properties    []*TagKeyStats `json:"properties,omitempty"`
+	Types         *TagKeyStats   `json:"types,omitempty"`
+	Makers        *TagKeyStats   `json:"makers,omitempty"`
 }
 
-func NewCategoryStats() CategoryStats {
-	return CategoryStats{}
+func NewCategoryStats(s string) CategoryStats {
+	return CategoryStats{OriginalQuery: s}
 }
 
 func StatsForMap(key string, values map[string]uint64) *TagKeyStats {
@@ -313,8 +332,8 @@ type ProjectionResponse struct {
 	Total             uint64                       `json:"total"`
 }
 
-func (p *ProjectionResponse) toCategoryStats() CategoryStats {
-	cs := NewCategoryStats()
+func (p *ProjectionResponse) toCategoryStats(s string) CategoryStats {
+	cs := NewCategoryStats(s)
 	cs.Properties = StatsForMapMap(p.CountedProperties)
 	cs.Tags = StatsForMapMap(p.CountedTags)
 	cs.Makers = StatsForMap("maker", p.CountedMaker)
@@ -355,47 +374,25 @@ func (p *ProjectionResponse) Add(h Hit) {
 	}
 }
 
-func banner(s string) string {
-	width := 80
-	out := "\n┌"
-	for i := 0; i < width-2; i++ {
-		out += "─"
+func prettyCategoryStats(s CategoryStats, link bool) string {
+	makers := ""
+	if s.Makers != nil {
+		makers = prettyStats("MAKERS", []*TagKeyStats{s.Makers}, link, s.OriginalQuery)
 	}
-	out += "┐"
-	out += "\n"
-	out += "│"
-	out += " "
-	out += s
-
-	for i := 0; i < width-3-len(s); i++ {
-		out += " "
+	types := ""
+	if s.Types != nil {
+		types = prettyStats("TYPES", []*TagKeyStats{s.Types}, link, s.OriginalQuery)
 	}
-	out += "│"
-	out += "\n"
-	out += "└"
-	for i := 0; i < width-2; i++ {
-		out += "─"
-	}
-	out += "┘"
-
-	out += "\n"
-	return out
+	properties := prettyStats("PROPERTIES", s.Properties, false, s.OriginalQuery)
+	tags := prettyStats("TAGS", s.Tags, link, s.OriginalQuery)
+	return fmt.Sprintf("%s%s%s%s\n", makers, properties, types, tags)
 }
 
-func prettyCategoryStats(s CategoryStats) string {
-	makers := prettyStats([]*TagKeyStats{s.Makers})
-	types := prettyStats([]*TagKeyStats{s.Types})
-	properties := prettyStats(s.Properties)
-	tags := prettyStats(s.Tags)
-	out := fmt.Sprintf("%s%s%s%s%s%s", banner("MAKERS"), makers, banner("TYPES"), types, banner("TAGS"), tags)
-	if s.Properties != nil {
-		out = fmt.Sprintf("%s%s%s", out, banner("PROPERTIES"), properties)
+func prettyStats(title string, stats []*TagKeyStats, link bool, appendToQuery string) string {
+	if stats == nil {
+		return ""
 	}
-	out += "\n"
-	return out
-}
 
-func prettyStats(stats []*TagKeyStats) string {
 	sort.Slice(stats, func(i, j int) bool {
 		return stats[j].TotalCount < stats[i].TotalCount
 	})
@@ -411,22 +408,31 @@ func prettyStats(stats []*TagKeyStats) string {
 	}
 
 	for _, t := range stats {
+		if t == nil {
+			continue
+		}
 		x := []float64{}
-		y := []string{}
+		y := []chart.Label{}
 		sort.Slice(t.Values, func(i, j int) bool {
 			return t.Values[j].Count < t.Values[i].Count
 		})
 
 		for _, v := range t.Values {
 			x = append(x, float64(v.Count))
-			y = append(y, v.V)
+			linkified := v.V
+			if link {
+				linkified = fmt.Sprintf("<a href='/project/%s+%s:%s?format=html'>%s</a>", appendToQuery, t.Key, v.V, v.V)
+			}
+
+			y = append(y, chart.Label{Display: linkified, Len: len(v.V)})
 		}
 		percent := float64(100) * float64(t.TotalCount) / float64(total)
 		out = append(out, fmt.Sprintf("« %s » total: %d, %.2f%%\n%s", t.Key, t.TotalCount, percent, chart.HorizontalBar(x, y, '▒', width, pad, 50)))
 	}
 
-	return strings.Join(out, "\n\n--------\n\n")
+	return fmt.Sprintf("%s%s", chart.Banner(title), strings.Join(out, "\n\n--------\n\n"))
 }
+
 func main() {
 	var root = flag.String("root", "/blackrock", "root directory for the files (root/topic/partition)")
 	var dataTopic = flag.String("topic-data", "blackrock-data", "topic for the data")
@@ -454,66 +460,40 @@ func main() {
 		c.String(200, "OK")
 	})
 
-	r.GET("/debug", func(c *gin.Context) {
-		files, err := ioutil.ReadDir(path.Join(*root, *dataTopic))
-		if err != nil {
-			c.JSON(500, gin.H{"error": err.Error()})
-			return
+	render := func(c *gin.Context, x interface{}, text func(string) string) {
+		format := c.Param("format")
+		if format == "" {
+			format = c.Query("format")
 		}
-		categoryStats := NewCategoryStats()
-
-		for _, fi := range files {
-			if fi.IsDir() {
-				shards, err := ioutil.ReadDir(path.Join(*root, *dataTopic, fi.Name()))
-				if err != nil {
-					c.JSON(500, gin.H{"error": err.Error()})
-					return
-				}
-				if len(shards) == 0 {
-					continue
-				}
-				var tv *TagKeyStats
-				for _, shard := range shards {
-					tv, err = tagStats(tv, fi.Name(), path.Join(*root, *dataTopic, fi.Name(), shard.Name()))
-					if err != nil {
-						c.JSON(500, gin.H{"error": err.Error()})
-						return
-					}
-				}
-				if fi.Name() == "maker" {
-					categoryStats.Makers = tv
-				} else if fi.Name() == "type" {
-					categoryStats.Types = tv
-				} else {
-					categoryStats.Tags = append(categoryStats.Tags, tv)
-				}
+		if format == "json" {
+			c.JSON(200, x)
+		} else if format == "yaml" {
+			c.YAML(200, x)
+		} else if format == "html" {
+			t := text("html")
+			if t == "" {
+				c.YAML(200, x)
+			} else {
+				c.Data(200, "text/html; charset=utf8", []byte(fmt.Sprintf("<pre>%s</pre>", t)))
+			}
+		} else {
+			t := text("text")
+			if t == "" {
+				c.YAML(200, x)
+			} else {
+				c.String(200, t)
 			}
 		}
+	}
 
-		format := c.Query("format")
-		if format == "json" {
-			c.JSON(200, categoryStats)
-		} else {
-			pretty := prettyCategoryStats(categoryStats)
-			c.String(200, pretty)
-		}
-	})
-
-	r.POST("/search", func(c *gin.Context) {
-		var qr QueryRequest
-		if err := c.ShouldBindJSON(&qr); err != nil {
-			c.JSON(400, gin.H{"error": err.Error()})
-			return
-		}
-
+	search := func(qr QueryRequest) (*QueryResponse, error) {
 		query, err := fromJson(qr.Query, func(k, v string) Query {
 			return NewTermQuery(qr.ScanMaxDocuments, *root, *dataTopic, k, v)
 		})
 		if err != nil {
-			c.JSON(400, gin.H{"error": err.Error()})
-			return
+			return nil, err
 		}
-		out := QueryResponse{
+		out := &QueryResponse{
 			Hits:  []Hit{},
 			Total: 0,
 		}
@@ -554,14 +534,66 @@ func main() {
 				}
 			}
 		}
-		c.JSON(200, out)
+		return out, nil
+	}
+
+	r.POST("/search/:format", func(c *gin.Context) {
+		var qr QueryRequest
+		if err := c.ShouldBindJSON(&qr); err != nil {
+			c.JSON(400, gin.H{"error": err.Error()})
+			return
+		}
+
+		out, err := search(qr)
+		if err != nil {
+			c.JSON(400, gin.H{"error": err.Error()})
+			return
+		}
+		render(c, out, func(s string) string { return "" })
+	})
+
+	r.GET("/debug/:format/*tag", func(c *gin.Context) {
+		files, err := ioutil.ReadDir(path.Join(*root, *dataTopic))
+		if err != nil {
+			c.JSON(500, gin.H{"error": err.Error()})
+			return
+		}
+		categoryStats := NewCategoryStats("")
+		selected := strings.Trim(c.Param("tag"), "/")
+		for _, fi := range files {
+			if fi.IsDir() && (selected == "" || selected == fi.Name()) {
+				shards, err := ioutil.ReadDir(path.Join(*root, *dataTopic, fi.Name()))
+				if err != nil {
+					c.JSON(500, gin.H{"error": err.Error()})
+					return
+				}
+				if len(shards) == 0 {
+					continue
+				}
+				var tv *TagKeyStats
+				for _, shard := range shards {
+					tv, err = tagStats(tv, fi.Name(), path.Join(*root, *dataTopic, fi.Name(), shard.Name()))
+					if err != nil {
+						c.JSON(500, gin.H{"error": err.Error()})
+						return
+					}
+				}
+				if fi.Name() == "maker" {
+					categoryStats.Makers = tv
+				} else if fi.Name() == "type" {
+					categoryStats.Types = tv
+				} else {
+					categoryStats.Tags = append(categoryStats.Tags, tv)
+				}
+			}
+		}
+		render(c, categoryStats, func(s string) string { return prettyCategoryStats(categoryStats, s == "html") })
 	})
 
 	r.GET("/project/*query", func(c *gin.Context) {
 		queries := []Query{}
 
 		queryPath := strings.Trim(c.Param("query"), "/")
-		format := c.Query("format")
 
 		makeTerm := func(k, v string) Query {
 			return NewTermQuery(0, *root, *dataTopic, k, v)
@@ -609,11 +641,8 @@ func main() {
 				c.JSON(400, gin.H{"error": err.Error()})
 				return
 			}
-			if format == "json" {
-				c.JSON(200, out.toCategoryStats())
-			} else {
-				c.String(200, prettyCategoryStats(out.toCategoryStats()))
-			}
+			cs := out.toCategoryStats(queryPath)
+			render(c, cs, func(s string) string { return prettyCategoryStats(cs, s == "html") })
 			return
 		}
 
@@ -645,11 +674,8 @@ func main() {
 			out = joined
 		}
 
-		if format == "json" {
-			c.JSON(200, out.toCategoryStats())
-		} else {
-			c.String(200, prettyCategoryStats(out.toCategoryStats()))
-		}
+		cs := out.toCategoryStats(queryPath)
+		render(c, cs, func(s string) string { return prettyCategoryStats(cs, s == "html") })
 	})
 
 	log.Panic(r.Run(*bind))

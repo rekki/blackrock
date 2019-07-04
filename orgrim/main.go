@@ -95,7 +95,7 @@ func main() {
 		c.String(200, "OK")
 	})
 
-	r.POST("/push/raw", func(c *gin.Context) {
+	r.POST("/push/raw/:type/:maker", func(c *gin.Context) {
 		body := c.Request.Body
 		defer body.Close()
 
@@ -107,10 +107,13 @@ func main() {
 		}
 
 		tags := map[string]string{}
-		maker := "__nobody"
-		etype := "event"
+		maker := c.Param("maker")
+		etype := c.Param("type")
 		for k, values := range c.Request.URL.Query() {
 			for _, v := range values {
+				if v == "" {
+					continue
+				}
 				if k == "maker" {
 					maker = v
 				} else if k == "type" {
@@ -120,7 +123,12 @@ func main() {
 				}
 			}
 		}
-
+		if maker == "" {
+			maker = "__nobody"
+		}
+		if etype == "" {
+			etype = "event"
+		}
 		metadata := &spec.Metadata{
 			Tags:        tags,
 			CreatedAtNs: time.Now().UnixNano(),
