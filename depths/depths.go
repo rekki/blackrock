@@ -38,7 +38,7 @@ func HealthCheckKafka(brokers string, topic string) error {
 }
 
 func PathForTag(root string, topic string, tagKey string, tagValue string) (string, string) {
-	dir := path.Join(root, topic, Cleanup(tagKey), fmt.Sprintf("metro_32_%d", Hashs(tagKey)%32))
+	dir := path.Join(root, topic, Cleanup(tagKey), fmt.Sprintf("metro_32_%d", Hashs(tagValue)%32))
 	return dir, fmt.Sprintf("%s.p", Cleanup(tagValue))
 }
 
