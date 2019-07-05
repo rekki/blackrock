@@ -18,6 +18,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/gogo/protobuf/proto"
 	"github.com/jackdoe/blackrock/depths"
+	"github.com/jackdoe/blackrock/jubei/disk"
 	"github.com/jackdoe/blackrock/khanzo/chart"
 	"github.com/jackdoe/blackrock/orgrim/spec"
 	log "github.com/sirupsen/logrus"
@@ -237,9 +238,8 @@ type QueryResponse struct {
 	Hits  []Hit `json:"hits"`
 }
 
-func readForward(fd *os.File, did int64, decodeMaker bool, decodeMetadata bool) (int32, int64, string, *spec.Metadata, error) {
-	data := make([]byte, 16)
-	_, err := fd.ReadAt(data, did)
+func readForward(forward *disk.CachedFile, did int64, decodeMaker bool, decodeMetadata bool) (int32, int64, string, *spec.Metadata, error) {
+	data, err := forward.Get(did, 16)
 	if err != nil {
 		log.Warnf("railed to read forward header, offset: %d, error: %s", did, err.Error())
 		return 0, 0, "", nil, err
@@ -258,14 +258,11 @@ func readForward(fd *os.File, did int64, decodeMaker bool, decodeMetadata bool) 
 		log.Warnf("possibly corrupt header, offset: %d, makerLen: %d, metadataLen %d", did, makerLen, metadataLen)
 		return 0, 0, "", nil, errors.New("corrupt header")
 	}
-	var readInto []byte
+	readLen := makerLen
 	if decodeMetadata {
-		readInto = make([]byte, metadataLen+makerLen)
-	} else {
-		readInto = make([]byte, makerLen)
+		readLen = metadataLen + makerLen
 	}
-
-	_, err = fd.ReadAt(readInto, did+16)
+	readInto, err := forward.Get(did+16, int64(readLen))
 	if err != nil {
 		log.Warnf("railed to read forward metadata, offset: %d, size: %d, error: %s", did+16, len(readInto), err.Error())
 		return 0, 0, "", nil, err
@@ -286,7 +283,7 @@ func readForward(fd *os.File, did int64, decodeMaker bool, decodeMetadata bool) 
 	return partition, offset, maker, &meta, nil
 }
 
-func getScoredHit(forward *os.File, did int64, score float32, decodeMaker bool, decodeMetadata bool) (Hit, error) {
+func getScoredHit(forward *disk.CachedFile, did int64, score float32, decodeMaker bool, decodeMetadata bool) (Hit, error) {
 	partition, offset, maker, meta, err := readForward(forward, did, decodeMaker, decodeMetadata)
 	if err != nil {
 		return Hit{}, err
@@ -445,6 +442,9 @@ func prettyStats(title string, stats []*TagKeyStats, link bool, appendToQuery st
 	}
 
 	sort.Slice(stats, func(i, j int) bool {
+		if stats[j].TotalCount == stats[i].TotalCount {
+			return stats[i].Key < stats[j].Key
+		}
 		return stats[j].TotalCount < stats[i].TotalCount
 	})
 
@@ -465,6 +465,9 @@ func prettyStats(title string, stats []*TagKeyStats, link bool, appendToQuery st
 		x := []float64{}
 		y := []chart.Label{}
 		sort.Slice(t.Values, func(i, j int) bool {
+			if t.Values[j].Count == t.Values[i].Count {
+				return t.Values[i].V < t.Values[j].V
+			}
 			return t.Values[j].Count < t.Values[i].Count
 		})
 
@@ -488,6 +491,7 @@ func main() {
 	var root = flag.String("root", "/blackrock", "root directory for the files (root/topic/partition)")
 	var dataTopic = flag.String("topic-data", "blackrock-data", "topic for the data")
 	var verbose = flag.Bool("verbose", false, "print info level logs to stdout")
+	var cacheSize = flag.Int("cache", 10000000, "cache size for forward index reads, because ebs is slow")
 	var bind = flag.String("bind", ":9002", "bind to")
 	flag.Parse()
 	go func() {
@@ -495,10 +499,11 @@ func main() {
 	}()
 	os.MkdirAll(path.Join(*root, *dataTopic), 0700)
 	filename := path.Join(*root, *dataTopic, "forward.bin")
-	forward, err := os.OpenFile(filename, os.O_RDONLY|os.O_CREATE, 0600)
+	forward, err := disk.NewCachedFile(filename, *cacheSize)
 	if err != nil {
 		log.Fatal(err)
 	}
+
 	if *verbose {
 		log.SetLevel(log.InfoLevel)
 	} else {
@@ -643,7 +648,9 @@ func main() {
 
 	r.GET("/project/*query", func(c *gin.Context) {
 		queries := []Query{}
-
+		defer func() {
+			log.Printf("cache size: %d", forward.Size())
+		}()
 		queryPath := strings.Trim(c.Param("query"), "/")
 		maxScan := int64(100000)
 		limit := c.Query("limit")
@@ -726,6 +733,7 @@ func main() {
 		}
 
 		cs := out.toCategoryStats(queryPath)
+
 		render(c, cs, func(s string) string { return prettyCategoryStats(cs, s == "html") })
 	})
 
