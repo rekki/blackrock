@@ -13,6 +13,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gogo/protobuf/proto"
@@ -197,11 +198,13 @@ type Hit struct {
 func (h Hit) String(link bool) string {
 	out := []string{}
 	m := h.Metadata
+	t := time.Unix(m.CreatedAtNs/1000000000, 0)
 	if !link {
-		out = append(out, fmt.Sprintf("%s %s", m.Maker, m.Type))
+		out = append(out, fmt.Sprintf("%s\n%s\n%s", m.Maker, m.Type, t.Format(time.UnixDate)))
 	} else {
 		out = append(out, fmt.Sprintf("<a href='/project/+maker:%s?format=html'>%s</a>", m.Maker, m.Maker))
 		out = append(out, fmt.Sprintf("<a href='/project/+maker:%s+%s:%s?format=html'>%s</a>", m.Maker, "type", m.Type, m.Type))
+		out = append(out, "%s", t.Format(time.UnixDate))
 	}
 	keys := []string{}
 	for k, _ := range m.Tags {
@@ -700,7 +703,7 @@ func main() {
 			c.JSON(400, gin.H{"error": err.Error()})
 			return
 		}
-		log.Printf("%v", queries)
+
 		for i, q := range queries[1:] {
 			joined := NewProjectionResponse()
 			decodeMetadata := i == len(queries)-2 // start from 1
