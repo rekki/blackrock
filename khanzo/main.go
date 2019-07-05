@@ -11,6 +11,7 @@ import (
 	"os"
 	"path"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -641,9 +642,14 @@ func main() {
 		queries := []Query{}
 
 		queryPath := strings.Trim(c.Param("query"), "/")
+		maxScan := int64(100000)
+		limit := c.Query("limit")
+		if limit != "" {
+			maxScan, _ = strconv.ParseInt(limit, 10, 64)
+		}
 
 		makeTerm := func(k, v string) Query {
-			return NewTermQuery(0, *root, *dataTopic, k, v)
+			return NewTermQuery(maxScan, *root, *dataTopic, k, v)
 		}
 
 		for _, q := range strings.Split(queryPath, "^") {
