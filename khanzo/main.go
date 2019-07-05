@@ -204,7 +204,7 @@ func (h Hit) String(link bool) string {
 	} else {
 		out = append(out, fmt.Sprintf("<a href='/project/+maker:%s?format=html'>%s</a>", m.Maker, m.Maker))
 		out = append(out, fmt.Sprintf("<a href='/project/+maker:%s+%s:%s?format=html'>%s</a>", m.Maker, "type", m.Type, m.Type))
-		out = append(out, "%s", t.Format(time.UnixDate))
+		out = append(out, fmt.Sprintf("%s", t.Format(time.UnixDate)))
 	}
 	keys := []string{}
 	for k, _ := range m.Tags {
