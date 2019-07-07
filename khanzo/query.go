@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"math"
 	"strings"
 )
@@ -9,6 +10,123 @@ const (
 	NO_MORE   = int64(math.MaxInt64)
 	NOT_READY = int64(-1)
 )
+
+// FIXME(jackdoe): this is very bad
+func fromString(text string, makeTermQuery func(string, string) Query) (Query, error) {
+	top := []Query{}
+	for _, and := range strings.Split(text, " AND ") {
+		sub := []Query{}
+		if and == "" {
+			continue
+		}
+		for _, or := range strings.Split(and, " OR ") {
+			if or == "" {
+				continue
+			}
+			t := strings.SplitN(or, ":", 2)
+			sub = append(sub, makeTermQuery(t[0], t[1]))
+		}
+		if len(sub) == 1 {
+			top = append(top, sub[0])
+		} else {
+			top = append(top, NewBoolOrQuery(sub...))
+		}
+	}
+	if (len(top)) == 1 {
+		return top[0], nil
+	}
+	return NewBoolAndQuery(top...), nil
+}
+
+/*
+
+{
+   and: [{"or": [{"tag":{"key":"b","value": "v"}}]}]
+}
+
+*/
+
+func fromJson(input interface{}, makeTermQuery func(string, string) Query) (Query, error) {
+	mapped, ok := input.(map[string]interface{})
+	queries := []Query{}
+	if ok {
+		if v, ok := mapped["tag"]; ok && v != nil {
+			kv, ok := v.(map[string]interface{})
+			if !ok {
+				return nil, errors.New("[tag] must be map containing {key, value}")
+			}
+			added := false
+			if tk, ok := kv["key"]; ok && tk != nil {
+				if tv, ok := kv["value"]; ok && tv != nil {
+					sk, ok := tk.(string)
+					if !ok {
+						return nil, errors.New("[tag][key] must be string")
+					}
+					sv, ok := tv.(string)
+					if !ok {
+						return nil, errors.New("[tag][value] must be string")
+					}
+					queries = append(queries, makeTermQuery(sk, sv))
+					added = true
+				}
+			}
+			if !added {
+				return nil, errors.New("[tag] must be map containing {key, value}")
+			}
+		}
+		if v, ok := mapped["text"]; ok && v != nil {
+			sk, ok := v.(string)
+			if !ok {
+				return nil, errors.New("[text] must be string")
+			}
+
+			q, err := fromString(sk, makeTermQuery)
+			if err != nil {
+				return nil, err
+			}
+			queries = append(queries, q)
+		}
+		if v, ok := mapped["and"]; ok && v != nil {
+			list, ok := v.([]interface{})
+			if ok {
+				and := NewBoolAndQuery([]Query{}...)
+				for _, subQuery := range list {
+					q, err := fromJson(subQuery, makeTermQuery)
+					if err != nil {
+						return nil, err
+					}
+					and.AddSubQuery(q)
+				}
+				queries = append(queries, and)
+			} else {
+				return nil, errors.New("[or] takes array of subqueries")
+			}
+		}
+
+		if v, ok := mapped["or"]; ok && v != nil {
+			list, ok := v.([]interface{})
+			if ok {
+				or := NewBoolOrQuery([]Query{}...)
+				for _, subQuery := range list {
+					q, err := fromJson(subQuery, makeTermQuery)
+					if err != nil {
+						return nil, err
+					}
+					or.AddSubQuery(q)
+				}
+				queries = append(queries, or)
+			} else {
+				return nil, errors.New("[and] takes array of subqueries")
+			}
+		}
+	}
+
+	if len(queries) == 1 {
+		return queries[0], nil
+	}
+
+	return NewBoolAndQuery(queries...), nil
+}
 
 type Query interface {
 	advance(int64) int64

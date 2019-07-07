@@ -15,6 +15,7 @@ the demon lord Archimonde.
 ```
 % curl -d '{
   "size": 1,
+  "decode_medatada": truem
   "query": {
     "or": [
       {
@@ -31,7 +32,7 @@ the demon lord Archimonde.
       }
     ]
   }
-}' http://localhost:9002/search
+}' http://localhost:9002/search/json/
 
 ```
 
@@ -43,7 +44,7 @@ show stats per tag per value
 
 
 ```
-% curl localhost:9002/debug/text
+% curl localhost:9002/scan/text/
 « open » total: 9482163, 100.00%
     true   4767.9k  50.28% ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
     false  4714.3k  49.72% ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒

@@ -149,36 +149,137 @@ func (m *Envelope) GetPayload() []byte {
 	return nil
 }
 
+type PersistedMetadata struct {
+	Tags        map[uint64]string `protobuf:"bytes,1,rep,name=tags,proto3" json:"tags,omitempty" protobuf_key:"varint,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
+	Properties  map[uint64]string `protobuf:"bytes,2,rep,name=properties,proto3" json:"properties,omitempty" protobuf_key:"varint,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
+	CreatedAtNs int64             `protobuf:"varint,5,opt,name=createdAtNs,proto3" json:"createdAtNs,omitempty"`
+	Type        uint64            `protobuf:"varint,7,opt,name=type,proto3" json:"type,omitempty"`
+	Offset      uint64            `protobuf:"varint,8,opt,name=offset,proto3" json:"offset,omitempty"`
+	Partition   uint32            `protobuf:"varint,9,opt,name=partition,proto3" json:"partition,omitempty"`
+	Parent      uint64            `protobuf:"varint,10,opt,name=parent,proto3" json:"parent,omitempty"`
+}
+
+func (m *PersistedMetadata) Reset()         { *m = PersistedMetadata{} }
+func (m *PersistedMetadata) String() string { return proto.CompactTextString(m) }
+func (*PersistedMetadata) ProtoMessage()    {}
+func (*PersistedMetadata) Descriptor() ([]byte, []int) {
+	return fileDescriptor_423806180556987f, []int{2}
+}
+func (m *PersistedMetadata) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *PersistedMetadata) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_PersistedMetadata.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalTo(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *PersistedMetadata) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_PersistedMetadata.Merge(m, src)
+}
+func (m *PersistedMetadata) XXX_Size() int {
+	return m.Size()
+}
+func (m *PersistedMetadata) XXX_DiscardUnknown() {
+	xxx_messageInfo_PersistedMetadata.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_PersistedMetadata proto.InternalMessageInfo
+
+func (m *PersistedMetadata) GetTags() map[uint64]string {
+	if m != nil {
+		return m.Tags
+	}
+	return nil
+}
+
+func (m *PersistedMetadata) GetProperties() map[uint64]string {
+	if m != nil {
+		return m.Properties
+	}
+	return nil
+}
+
+func (m *PersistedMetadata) GetCreatedAtNs() int64 {
+	if m != nil {
+		return m.CreatedAtNs
+	}
+	return 0
+}
+
+func (m *PersistedMetadata) GetType() uint64 {
+	if m != nil {
+		return m.Type
+	}
+	return 0
+}
+
+func (m *PersistedMetadata) GetOffset() uint64 {
+	if m != nil {
+		return m.Offset
+	}
+	return 0
+}
+
+func (m *PersistedMetadata) GetPartition() uint32 {
+	if m != nil {
+		return m.Partition
+	}
+	return 0
+}
+
+func (m *PersistedMetadata) GetParent() uint64 {
+	if m != nil {
+		return m.Parent
+	}
+	return 0
+}
+
 func init() {
 	proto.RegisterType((*Metadata)(nil), "spec.Metadata")
 	proto.RegisterMapType((map[string]string)(nil), "spec.Metadata.PropertiesEntry")
 	proto.RegisterMapType((map[string]string)(nil), "spec.Metadata.TagsEntry")
 	proto.RegisterType((*Envelope)(nil), "spec.Envelope")
+	proto.RegisterType((*PersistedMetadata)(nil), "spec.PersistedMetadata")
+	proto.RegisterMapType((map[uint64]string)(nil), "spec.PersistedMetadata.PropertiesEntry")
+	proto.RegisterMapType((map[uint64]string)(nil), "spec.PersistedMetadata.TagsEntry")
 }
 
 func init() { proto.RegisterFile("spec.proto", fileDescriptor_423806180556987f) }
 
 var fileDescriptor_423806180556987f = []byte{
-	// 292 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x94, 0x91, 0x41, 0x4a, 0xc3, 0x40,
-	0x14, 0x86, 0x33, 0x49, 0xda, 0xa6, 0x2f, 0xa2, 0x32, 0xb8, 0x18, 0xba, 0x18, 0x42, 0x57, 0x41,
-	0x24, 0x8b, 0xba, 0x50, 0x04, 0x05, 0x85, 0x2e, 0x95, 0x12, 0xbc, 0xc0, 0xd8, 0x3c, 0x8a, 0x34,
-	0x6d, 0x86, 0x99, 0xb1, 0x90, 0x5b, 0x78, 0x20, 0x0f, 0xe0, 0xb2, 0x4b, 0x97, 0x92, 0x5c, 0x44,
-	0x32, 0xb1, 0xa1, 0x76, 0xe7, 0xee, 0xfd, 0xef, 0xff, 0xbf, 0x9f, 0x97, 0x0c, 0x80, 0x96, 0x38,
-	0x4f, 0xa4, 0x2a, 0x4c, 0x41, 0xfd, 0x66, 0x1e, 0x7f, 0xb8, 0x10, 0x3c, 0xa2, 0x11, 0x99, 0x30,
-	0x82, 0x5e, 0x80, 0x6f, 0xc4, 0x42, 0x33, 0x12, 0x79, 0x71, 0x38, 0x61, 0x89, 0x4d, 0xef, 0xdc,
-	0xe4, 0x59, 0x2c, 0xf4, 0x74, 0x6d, 0x54, 0x99, 0xda, 0x14, 0xbd, 0x03, 0x90, 0xaa, 0x90, 0xa8,
-	0xcc, 0x2b, 0x6a, 0xe6, 0x5a, 0x86, 0x1f, 0x30, 0xb3, 0x2e, 0xd0, 0x92, 0x7b, 0x04, 0x8d, 0x20,
-	0x9c, 0x2b, 0x14, 0x06, 0xb3, 0x7b, 0xf3, 0xa4, 0x59, 0x2f, 0x22, 0xb1, 0x97, 0xee, 0xaf, 0xe8,
-	0x19, 0xf4, 0x56, 0x62, 0x89, 0x8a, 0xf5, 0x23, 0x12, 0x0f, 0xd3, 0x56, 0x50, 0x0a, 0xbe, 0x29,
-	0x25, 0xb2, 0x81, 0x5d, 0xda, 0x79, 0x74, 0x05, 0xc3, 0xee, 0x3c, 0x7a, 0x0a, 0xde, 0x12, 0x4b,
-	0x46, 0xac, 0xdf, 0x8c, 0x4d, 0xd1, 0x46, 0xe4, 0x6f, 0xc8, 0xdc, 0xb6, 0xc8, 0x8a, 0x1b, 0xf7,
-	0x9a, 0x8c, 0x6e, 0xe1, 0xe4, 0xe0, 0xc6, 0xff, 0xe0, 0xe3, 0x19, 0x04, 0xd3, 0xf5, 0x06, 0xf3,
-	0x42, 0x22, 0x3d, 0x87, 0x60, 0xf5, 0xfb, 0xdd, 0x16, 0x0e, 0x27, 0xc7, 0x7f, 0xff, 0x46, 0xda,
-	0xf9, 0x94, 0xc1, 0x40, 0x8a, 0x32, 0x2f, 0x44, 0x66, 0x3b, 0x8f, 0xd2, 0x9d, 0x7c, 0x60, 0x9f,
-	0x15, 0x27, 0xdb, 0x8a, 0x93, 0xef, 0x8a, 0x93, 0xf7, 0x9a, 0x3b, 0xdb, 0x9a, 0x3b, 0x5f, 0x35,
-	0x77, 0x5e, 0xfa, 0xf6, 0xdd, 0x2e, 0x7f, 0x02, 0x00, 0x00, 0xff, 0xff, 0x7a, 0x04, 0x59, 0xa4,
-	0xc5, 0x01, 0x00, 0x00,
+	// 386 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xa4, 0x93, 0xdd, 0x8a, 0xda, 0x40,
+	0x14, 0xc7, 0x9d, 0x24, 0x6a, 0x72, 0xec, 0xe7, 0x50, 0xca, 0x20, 0x25, 0xa4, 0xde, 0x34, 0x94,
+	0xe2, 0x85, 0xa5, 0xb4, 0x14, 0x5a, 0x68, 0x41, 0x7a, 0xd5, 0x22, 0xa1, 0x2f, 0x30, 0x6b, 0x8e,
+	0x12, 0xd4, 0x64, 0x98, 0x99, 0x15, 0xf2, 0x14, 0xbb, 0x0f, 0xb4, 0x0f, 0xb0, 0x97, 0x5e, 0xee,
+	0xe5, 0xa2, 0x2f, 0xb2, 0x64, 0xa2, 0x59, 0x3f, 0x56, 0x96, 0xc5, 0xbb, 0xf3, 0x3f, 0xe7, 0xfc,
+	0x0e, 0xa3, 0x3f, 0x02, 0xa0, 0x04, 0x0e, 0xbb, 0x42, 0x66, 0x3a, 0xa3, 0x4e, 0x51, 0x77, 0xae,
+	0x2c, 0x70, 0xff, 0xa2, 0xe6, 0x31, 0xd7, 0x9c, 0x7e, 0x02, 0x47, 0xf3, 0xb1, 0x62, 0x24, 0xb0,
+	0xc3, 0x56, 0x8f, 0x75, 0xcd, 0xf6, 0x66, 0xda, 0xfd, 0xcf, 0xc7, 0xaa, 0x9f, 0x6a, 0x99, 0x47,
+	0x66, 0x8b, 0xfe, 0x04, 0x10, 0x32, 0x13, 0x28, 0x75, 0x82, 0x8a, 0x59, 0x86, 0xf1, 0xf7, 0x98,
+	0x41, 0xb5, 0x50, 0x92, 0x5b, 0x04, 0x0d, 0xa0, 0x35, 0x94, 0xc8, 0x35, 0xc6, 0xbf, 0xf4, 0x3f,
+	0xc5, 0xea, 0x01, 0x09, 0xed, 0x68, 0xbb, 0x45, 0xdf, 0x40, 0x7d, 0xc6, 0x27, 0x28, 0x59, 0x23,
+	0x20, 0xa1, 0x17, 0x95, 0x81, 0x52, 0x70, 0x74, 0x2e, 0x90, 0x35, 0x4d, 0xd3, 0xd4, 0xed, 0xaf,
+	0xe0, 0x55, 0xcf, 0xa3, 0xaf, 0xc0, 0x9e, 0x60, 0xce, 0x88, 0x99, 0x17, 0x65, 0x71, 0x68, 0xce,
+	0xa7, 0xe7, 0xc8, 0xac, 0xf2, 0x90, 0x09, 0xdf, 0xad, 0x6f, 0xa4, 0xfd, 0x03, 0x5e, 0xee, 0xbd,
+	0xf1, 0x29, 0x78, 0x67, 0x00, 0x6e, 0x3f, 0x9d, 0xe3, 0x34, 0x13, 0x48, 0x3f, 0x82, 0x3b, 0x5b,
+	0xff, 0x6e, 0x03, 0xb7, 0x7a, 0x2f, 0x76, 0xff, 0x8d, 0xa8, 0x9a, 0x53, 0x06, 0x4d, 0xc1, 0xf3,
+	0x69, 0xc6, 0x63, 0x73, 0xf3, 0x59, 0xb4, 0x89, 0x9d, 0x0b, 0x1b, 0x5e, 0x0f, 0x50, 0xaa, 0x44,
+	0x69, 0x8c, 0x2b, 0x33, 0x5f, 0x76, 0xcc, 0xbc, 0x2f, 0xef, 0x1e, 0xac, 0x1d, 0x28, 0xfa, 0xf3,
+	0x80, 0xa2, 0x0f, 0xc7, 0xe0, 0xd3, 0x5c, 0x6d, 0x5b, 0x71, 0x4a, 0x2b, 0xf4, 0x2d, 0x34, 0xb2,
+	0xd1, 0x48, 0xa1, 0x66, 0xae, 0xe9, 0xae, 0x13, 0x7d, 0x07, 0x9e, 0xe0, 0x52, 0x27, 0x3a, 0xc9,
+	0x52, 0xe6, 0x05, 0x24, 0x7c, 0x1e, 0xdd, 0x37, 0x0a, 0x4a, 0x70, 0x89, 0xa9, 0x66, 0x50, 0x52,
+	0x65, 0x3a, 0xea, 0xd8, 0x39, 0xcd, 0xf1, 0x63, 0xf8, 0x6f, 0x76, 0xbd, 0xf4, 0xc9, 0x62, 0xe9,
+	0x93, 0xdb, 0xa5, 0x4f, 0x2e, 0x57, 0x7e, 0x6d, 0xb1, 0xf2, 0x6b, 0x37, 0x2b, 0xbf, 0x76, 0xd6,
+	0x30, 0x5f, 0xd2, 0xe7, 0xbb, 0x00, 0x00, 0x00, 0xff, 0xff, 0x7e, 0xd1, 0x92, 0xa6, 0x57, 0x03,
+	0x00, 0x00,
 }
 
 func (m *Metadata) Marshal() (dAtA []byte, err error) {
@@ -284,6 +385,81 @@ func (m *Envelope) MarshalTo(dAtA []byte) (int, error) {
 	return i, nil
 }
 
+func (m *PersistedMetadata) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalTo(dAtA)
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *PersistedMetadata) MarshalTo(dAtA []byte) (int, error) {
+	var i int
+	_ = i
+	var l int
+	_ = l
+	if len(m.Tags) > 0 {
+		for k, _ := range m.Tags {
+			dAtA[i] = 0xa
+			i++
+			v := m.Tags[k]
+			mapSize := 1 + sovSpec(uint64(k)) + 1 + len(v) + sovSpec(uint64(len(v)))
+			i = encodeVarintSpec(dAtA, i, uint64(mapSize))
+			dAtA[i] = 0x8
+			i++
+			i = encodeVarintSpec(dAtA, i, uint64(k))
+			dAtA[i] = 0x12
+			i++
+			i = encodeVarintSpec(dAtA, i, uint64(len(v)))
+			i += copy(dAtA[i:], v)
+		}
+	}
+	if len(m.Properties) > 0 {
+		for k, _ := range m.Properties {
+			dAtA[i] = 0x12
+			i++
+			v := m.Properties[k]
+			mapSize := 1 + sovSpec(uint64(k)) + 1 + len(v) + sovSpec(uint64(len(v)))
+			i = encodeVarintSpec(dAtA, i, uint64(mapSize))
+			dAtA[i] = 0x8
+			i++
+			i = encodeVarintSpec(dAtA, i, uint64(k))
+			dAtA[i] = 0x12
+			i++
+			i = encodeVarintSpec(dAtA, i, uint64(len(v)))
+			i += copy(dAtA[i:], v)
+		}
+	}
+	if m.CreatedAtNs != 0 {
+		dAtA[i] = 0x28
+		i++
+		i = encodeVarintSpec(dAtA, i, uint64(m.CreatedAtNs))
+	}
+	if m.Type != 0 {
+		dAtA[i] = 0x38
+		i++
+		i = encodeVarintSpec(dAtA, i, uint64(m.Type))
+	}
+	if m.Offset != 0 {
+		dAtA[i] = 0x40
+		i++
+		i = encodeVarintSpec(dAtA, i, uint64(m.Offset))
+	}
+	if m.Partition != 0 {
+		dAtA[i] = 0x48
+		i++
+		i = encodeVarintSpec(dAtA, i, uint64(m.Partition))
+	}
+	if m.Parent != 0 {
+		dAtA[i] = 0x50
+		i++
+		i = encodeVarintSpec(dAtA, i, uint64(m.Parent))
+	}
+	return i, nil
+}
+
 func encodeVarintSpec(dAtA []byte, offset int, v uint64) int {
 	for v >= 1<<7 {
 		dAtA[offset] = uint8(v&0x7f | 0x80)
@@ -342,6 +518,46 @@ func (m *Envelope) Size() (n int) {
 	l = len(m.Payload)
 	if l > 0 {
 		n += 1 + l + sovSpec(uint64(l))
+	}
+	return n
+}
+
+func (m *PersistedMetadata) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if len(m.Tags) > 0 {
+		for k, v := range m.Tags {
+			_ = k
+			_ = v
+			mapEntrySize := 1 + sovSpec(uint64(k)) + 1 + len(v) + sovSpec(uint64(len(v)))
+			n += mapEntrySize + 1 + sovSpec(uint64(mapEntrySize))
+		}
+	}
+	if len(m.Properties) > 0 {
+		for k, v := range m.Properties {
+			_ = k
+			_ = v
+			mapEntrySize := 1 + sovSpec(uint64(k)) + 1 + len(v) + sovSpec(uint64(len(v)))
+			n += mapEntrySize + 1 + sovSpec(uint64(mapEntrySize))
+		}
+	}
+	if m.CreatedAtNs != 0 {
+		n += 1 + sovSpec(uint64(m.CreatedAtNs))
+	}
+	if m.Type != 0 {
+		n += 1 + sovSpec(uint64(m.Type))
+	}
+	if m.Offset != 0 {
+		n += 1 + sovSpec(uint64(m.Offset))
+	}
+	if m.Partition != 0 {
+		n += 1 + sovSpec(uint64(m.Partition))
+	}
+	if m.Parent != 0 {
+		n += 1 + sovSpec(uint64(m.Parent))
 	}
 	return n
 }
@@ -815,6 +1031,365 @@ func (m *Envelope) Unmarshal(dAtA []byte) error {
 				m.Payload = []byte{}
 			}
 			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipSpec(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthSpec
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *PersistedMetadata) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowSpec
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= (uint64(b) & 0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: PersistedMetadata: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: PersistedMetadata: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Tags", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowSpec
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= (int(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthSpec
+			}
+			postIndex := iNdEx + msglen
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.Tags == nil {
+				m.Tags = make(map[uint64]string)
+			}
+			var mapkey uint64
+			var mapvalue string
+			for iNdEx < postIndex {
+				entryPreIndex := iNdEx
+				var wire uint64
+				for shift := uint(0); ; shift += 7 {
+					if shift >= 64 {
+						return ErrIntOverflowSpec
+					}
+					if iNdEx >= l {
+						return io.ErrUnexpectedEOF
+					}
+					b := dAtA[iNdEx]
+					iNdEx++
+					wire |= (uint64(b) & 0x7F) << shift
+					if b < 0x80 {
+						break
+					}
+				}
+				fieldNum := int32(wire >> 3)
+				if fieldNum == 1 {
+					for shift := uint(0); ; shift += 7 {
+						if shift >= 64 {
+							return ErrIntOverflowSpec
+						}
+						if iNdEx >= l {
+							return io.ErrUnexpectedEOF
+						}
+						b := dAtA[iNdEx]
+						iNdEx++
+						mapkey |= (uint64(b) & 0x7F) << shift
+						if b < 0x80 {
+							break
+						}
+					}
+				} else if fieldNum == 2 {
+					var stringLenmapvalue uint64
+					for shift := uint(0); ; shift += 7 {
+						if shift >= 64 {
+							return ErrIntOverflowSpec
+						}
+						if iNdEx >= l {
+							return io.ErrUnexpectedEOF
+						}
+						b := dAtA[iNdEx]
+						iNdEx++
+						stringLenmapvalue |= (uint64(b) & 0x7F) << shift
+						if b < 0x80 {
+							break
+						}
+					}
+					intStringLenmapvalue := int(stringLenmapvalue)
+					if intStringLenmapvalue < 0 {
+						return ErrInvalidLengthSpec
+					}
+					postStringIndexmapvalue := iNdEx + intStringLenmapvalue
+					if postStringIndexmapvalue > l {
+						return io.ErrUnexpectedEOF
+					}
+					mapvalue = string(dAtA[iNdEx:postStringIndexmapvalue])
+					iNdEx = postStringIndexmapvalue
+				} else {
+					iNdEx = entryPreIndex
+					skippy, err := skipSpec(dAtA[iNdEx:])
+					if err != nil {
+						return err
+					}
+					if skippy < 0 {
+						return ErrInvalidLengthSpec
+					}
+					if (iNdEx + skippy) > postIndex {
+						return io.ErrUnexpectedEOF
+					}
+					iNdEx += skippy
+				}
+			}
+			m.Tags[mapkey] = mapvalue
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Properties", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowSpec
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= (int(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthSpec
+			}
+			postIndex := iNdEx + msglen
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.Properties == nil {
+				m.Properties = make(map[uint64]string)
+			}
+			var mapkey uint64
+			var mapvalue string
+			for iNdEx < postIndex {
+				entryPreIndex := iNdEx
+				var wire uint64
+				for shift := uint(0); ; shift += 7 {
+					if shift >= 64 {
+						return ErrIntOverflowSpec
+					}
+					if iNdEx >= l {
+						return io.ErrUnexpectedEOF
+					}
+					b := dAtA[iNdEx]
+					iNdEx++
+					wire |= (uint64(b) & 0x7F) << shift
+					if b < 0x80 {
+						break
+					}
+				}
+				fieldNum := int32(wire >> 3)
+				if fieldNum == 1 {
+					for shift := uint(0); ; shift += 7 {
+						if shift >= 64 {
+							return ErrIntOverflowSpec
+						}
+						if iNdEx >= l {
+							return io.ErrUnexpectedEOF
+						}
+						b := dAtA[iNdEx]
+						iNdEx++
+						mapkey |= (uint64(b) & 0x7F) << shift
+						if b < 0x80 {
+							break
+						}
+					}
+				} else if fieldNum == 2 {
+					var stringLenmapvalue uint64
+					for shift := uint(0); ; shift += 7 {
+						if shift >= 64 {
+							return ErrIntOverflowSpec
+						}
+						if iNdEx >= l {
+							return io.ErrUnexpectedEOF
+						}
+						b := dAtA[iNdEx]
+						iNdEx++
+						stringLenmapvalue |= (uint64(b) & 0x7F) << shift
+						if b < 0x80 {
+							break
+						}
+					}
+					intStringLenmapvalue := int(stringLenmapvalue)
+					if intStringLenmapvalue < 0 {
+						return ErrInvalidLengthSpec
+					}
+					postStringIndexmapvalue := iNdEx + intStringLenmapvalue
+					if postStringIndexmapvalue > l {
+						return io.ErrUnexpectedEOF
+					}
+					mapvalue = string(dAtA[iNdEx:postStringIndexmapvalue])
+					iNdEx = postStringIndexmapvalue
+				} else {
+					iNdEx = entryPreIndex
+					skippy, err := skipSpec(dAtA[iNdEx:])
+					if err != nil {
+						return err
+					}
+					if skippy < 0 {
+						return ErrInvalidLengthSpec
+					}
+					if (iNdEx + skippy) > postIndex {
+						return io.ErrUnexpectedEOF
+					}
+					iNdEx += skippy
+				}
+			}
+			m.Properties[mapkey] = mapvalue
+			iNdEx = postIndex
+		case 5:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field CreatedAtNs", wireType)
+			}
+			m.CreatedAtNs = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowSpec
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.CreatedAtNs |= (int64(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 7:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Type", wireType)
+			}
+			m.Type = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowSpec
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Type |= (uint64(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 8:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Offset", wireType)
+			}
+			m.Offset = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowSpec
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Offset |= (uint64(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 9:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Partition", wireType)
+			}
+			m.Partition = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowSpec
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Partition |= (uint32(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 10:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Parent", wireType)
+			}
+			m.Parent = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowSpec
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Parent |= (uint64(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
 		default:
 			iNdEx = preIndex
 			skippy, err := skipSpec(dAtA[iNdEx:])

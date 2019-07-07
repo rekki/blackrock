@@ -13,4 +13,15 @@ message Metadata {
 message Envelope {
         Metadata metadata = 1;
         bytes payload = 2;
-} 
+}
+
+
+message PersistedMetadata {
+        map<uint64,string> tags = 1; 
+        map<uint64,string> properties = 2;
+        int64 createdAtNs  = 5;
+        uint64 type = 7;
+        uint64 offset = 8;
+        uint32 partition = 9;
+        uint64 parent = 10;
+}

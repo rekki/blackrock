@@ -37,8 +37,9 @@ func HealthCheckKafka(brokers string, topic string) error {
 	return errors.New("failed to dial leader for partition 0, assuming we cant reach kafka")
 }
 
-func PathForTag(root string, topic string, tagKey string, tagValue string) (string, string) {
-	dir := path.Join(root, topic, Cleanup(tagKey), fmt.Sprintf("metro_32_%d", Hashs(tagValue)%32))
+func PathForTag(root string, tagKey uint64, tagValue string) (string, string) {
+	h := Hashs(tagValue)
+	dir := path.Join(root, fmt.Sprintf("%d", tagKey), fmt.Sprintf("shard_%d", h%255))
 	return dir, fmt.Sprintf("%s.p", Cleanup(tagValue))
 }
 
