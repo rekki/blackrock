@@ -17,6 +17,7 @@ import (
 	"github.com/jackdoe/blackrock/jubei/disk"
 	"github.com/jackdoe/blackrock/khanzo/chart"
 	"github.com/jackdoe/blackrock/orgrim/spec"
+	auth "github.com/jackdoe/gin-basic-auth-dynamic"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -362,6 +363,7 @@ func prettyStats(title string, stats []*PerKey, link bool, base string) string {
 func main() {
 	var proot = flag.String("root", "/blackrock", "root directory for the files (root/topic/partition)")
 	var dataTopic = flag.String("topic-data", "blackrock-data", "topic for the data")
+	var basicAuth = flag.String("basic-auth", "blackrock:orgrim", "basic user and password, leave empty for no auth")
 	var verbose = flag.Bool("verbose", false, "print info level logs to stdout")
 	var bind = flag.String("bind", ":9002", "bind to")
 	flag.Parse()
@@ -398,7 +400,20 @@ func main() {
 	r.GET("/health", func(c *gin.Context) {
 		c.String(200, "OK")
 	})
+	if *basicAuth != "" {
+		splitted := strings.Split(*basicAuth, ":")
+		if len(splitted) != 2 {
+			log.Fatalf("expected -basic-auth user:pass, got %s", *basicAuth)
+		}
+		u := splitted[0]
+		p := splitted[1]
 
+		r.Use(auth.BasicAuth(func(context *gin.Context, realm, user, pass string) auth.AuthResult {
+			ok := user == u && pass == p
+			return auth.AuthResult{Success: ok, Text: "not authorized"}
+		}))
+
+	}
 	go func() {
 		for {
 			tmp, err := disk.NewPersistedDictionary(root)
