@@ -270,7 +270,7 @@ func (cr *CountedResult) HTML(c *gin.Context) {
 	for i := 0; i < len(splitted[3:]); i++ {
 		v := splitted[i+3]
 		p := strings.Join(splitted[:i+3], "/")
-		crumbs = append(crumbs, fmt.Sprintf(`<a href="/scan/html/%s/%s">%s</a> <a href="/scan/html/%s">=</a>`, p, v, v, v))
+		crumbs = append(crumbs, fmt.Sprintf(`<a href="%s/%s">%s</a> <a href="/scan/html/%s">=</a>`, p, v, v, v))
 	}
 	cs := strings.Join(crumbs, ", ")
 	c.Data(200, "text/html; charset=utf8", []byte(fmt.Sprintf("<pre>%s\n%s</pre>", cs, t)))
@@ -298,6 +298,9 @@ func statsForMap(key string, values map[string]uint32) *PerKey {
 		tk.Values = append(tk.Values, PerValue{Value: value, Count: int64(count)})
 	}
 	sort.Slice(tk.Values, func(i, j int) bool {
+		if tk.Values[j].Count == tk.Values[i].Count {
+			return tk.Values[i].Value < tk.Values[j].Value
+		}
 		return tk.Values[j].Count < tk.Values[i].Count
 	})
 
@@ -310,6 +313,10 @@ func statsForMapMap(pd *disk.PersistedDictionary, input map[uint64]map[string]ui
 		out = append(out, statsForMap(pd.ReverseResolve(key), values))
 	}
 	sort.Slice(out, func(i, j int) bool {
+		if out[j].TotalCount == out[i].TotalCount {
+			return out[i].Key < out[j].Key
+		}
+
 		return out[j].TotalCount < out[i].TotalCount
 	})
 	return out
