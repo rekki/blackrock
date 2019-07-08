@@ -260,8 +260,19 @@ func (cr *CountedResult) String(c *gin.Context) {
 }
 
 func (cr *CountedResult) HTML(c *gin.Context) {
-	t := cr.prettyCategoryStats(true, strings.TrimRight(c.Request.URL.Path, "/"))
-	c.Data(200, "text/html; charset=utf8", []byte(fmt.Sprintf("<pre>%s</pre>", t)))
+	url := strings.TrimRight(c.Request.URL.Path, "/")
+	t := cr.prettyCategoryStats(true, url)
+	splitted := strings.Split(url, "/")
+
+	crumbs := []string{`<a href="/scan/html/">/</a>`}
+
+	for i := 0; i < len(splitted[3:]); i++ {
+		v := splitted[i+3]
+		p := strings.Join(splitted[:i+3], "/")
+		crumbs = append(crumbs, fmt.Sprintf(`%s[<a href="/scan/html/%s">@</a> <a href="%s/%s">=</a>]`, v, v, p, v))
+	}
+	cs := strings.Join(crumbs, ", ")
+	c.Data(200, "text/html; charset=utf8", []byte(fmt.Sprintf("<pre>%s\n%s</pre>", cs, t)))
 }
 
 func (cr CountedResult) prettyCategoryStats(link bool, base string) string {
