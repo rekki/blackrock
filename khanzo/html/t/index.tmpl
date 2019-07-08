@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>
+      blackrock
+    </title>
+    <style>
+      @font-face {
+      font-family: '3270-medium';
+      src:  url('/public/html/font/3270Medium.ttf') format('truetype'),
+      url('/public/html/font/3270Medium.woff') format('woff');
+      }
+
+      html,body {
+      margin: 5px;
+      background-color: white;
+      font-family: "3270-medium";
+      font-size: 20px;
+      color: white;
+      background-color: black;
+      }
+
+      pre {
+      font-family: "3270-medium";
+      }
+
+      a {
+      color: #acacac;
+      text-decoration: none;
+      }
+    </style>
+  </head>
+  <body>
+    <pre>
+      {{ .Crumbs | safeHTML }}
+      {{ .Body | safeHTML }}
+    </pre>
+  </body>
+</html>
