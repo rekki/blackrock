@@ -11,6 +11,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/gogo/protobuf/jsonpb"
 	"github.com/gogo/protobuf/proto"
@@ -85,6 +86,7 @@ func main() {
 
 	r := gin.Default()
 	r.Use(gin.Recovery())
+	r.Use(cors.Default())
 
 	r.GET("/health", func(c *gin.Context) {
 		err := depths.HealthCheckKafka(*kafkaServers, *dataTopic)
