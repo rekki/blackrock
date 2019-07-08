@@ -46,8 +46,8 @@ func (h Hit) String(link bool) string {
 	if !link {
 		out = append(out, fmt.Sprintf("%s\n%s\n%s", m.Maker, m.Type, t.Format(time.UnixDate)))
 	} else {
-		out = append(out, fmt.Sprintf("<a href='/query/html/maker:%s'>%s</a>", m.Maker, m.Maker))
-		out = append(out, fmt.Sprintf("<a href='/query/html/maker:%s/%s:%s'>%s</a>", m.Maker, "type", m.Type, m.Type))
+		out = append(out, fmt.Sprintf("<a href='/scan/html/maker:%s'>%s</a>", m.Maker, m.Maker))
+		out = append(out, fmt.Sprintf("<a href='/scan/html/maker:%s/%s:%s'>%s</a>", m.Maker, "type", m.Type, m.Type))
 		out = append(out, fmt.Sprintf("%s", t.Format(time.UnixDate)))
 	}
 	keys := []string{}
@@ -60,7 +60,7 @@ func (h Hit) String(link bool) string {
 		if !link {
 			out = append(out, fmt.Sprintf("  %-30s: %s", k, v))
 		} else {
-			out = append(out, fmt.Sprintf("  %-30s: <a href='/query/html/maker:%s/%s:%s'>%s</a>", k, m.Maker, k, v, v))
+			out = append(out, fmt.Sprintf("  %-30s: <a href='/scan/html/maker:%s/%s:%s'>%s</a>", k, m.Maker, k, v, v))
 		}
 	}
 	keys = []string{}
