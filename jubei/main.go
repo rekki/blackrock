@@ -49,7 +49,7 @@ func main() {
 	cidb, err := ioutil.ReadFile(path.Join(root, "consumer_id"))
 	var consumerId string
 	if err != nil {
-		log.Printf("error reading consumer id, generating new one, error: %s", err)
+		log.Warnf("error reading consumer id, generating new one, error: %s", err)
 		hostname, err := os.Hostname()
 		suffix := time.Now().UnixNano()
 		if err == nil {
@@ -65,7 +65,7 @@ func main() {
 	} else {
 		consumerId = string(cidb)
 	}
-	log.Printf("connecting as consumer %s", consumerId)
+	log.Warnf("connecting as consumer %s", consumerId)
 	brokers := strings.Split(*kafkaServers, ",")
 	rd := kafka.NewReader(kafka.ReaderConfig{
 		Brokers:        brokers,
