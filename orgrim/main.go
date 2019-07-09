@@ -37,12 +37,13 @@ func dumpObj(src interface{}) string {
 	return string(out.Bytes())
 }
 
-type JsonMetadata struct {
+type JsonFrame struct {
 	Tags        map[string]interface{} `json:"tags"`
 	Properties  map[string]interface{} `json:"properties"`
 	CreatedAtNs int64                  `json:"created_at_ns"`
 	Maker       string                 `json:"maker"`
 	Type        string                 `json:"type"`
+	Payload     interface{}            `json:"payload"`
 }
 
 func main() {
@@ -227,7 +228,7 @@ func main() {
 		body := c.Request.Body
 		defer body.Close()
 
-		var metadata JsonMetadata
+		var metadata JsonFrame
 		data, err := ioutil.ReadAll(body)
 		if err != nil {
 			c.JSON(500, gin.H{"error": err.Error()})
@@ -270,7 +271,6 @@ func main() {
 				return
 			}
 		}
-
 		converted := spec.Envelope{
 			Metadata: &spec.Metadata{
 				Tags:        tags,
@@ -279,6 +279,15 @@ func main() {
 				Type:        metadata.Type,
 				Maker:       metadata.Maker,
 			},
+		}
+		if metadata.Payload != nil {
+			payload, err := json.Marshal(&metadata.Payload)
+			if err != nil {
+				log.Warnf("[orgrim] unable to marshal payload, error: %s", err.Error())
+				c.JSON(500, gin.H{"error": err.Error()})
+				return
+			}
+			converted.Payload = payload
 		}
 
 		encoded, err := proto.Marshal(&converted)
