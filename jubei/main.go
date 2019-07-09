@@ -129,11 +129,14 @@ func main() {
 		}
 
 		meta := envelope.Metadata
-		maker, err := dictionary.GetUniqueTerm(depths.Cleanup(meta.Maker))
+		smaker := depths.Cleanup(strings.ToLower(meta.Maker))
+		maker, err := dictionary.GetUniqueTerm(smaker)
 		if err != nil {
 			log.Fatal("failed to get dictionary value for %v", meta)
 		}
-		etype, err := dictionary.GetUniqueTerm(depths.Cleanup(meta.Type))
+
+		stype := depths.Cleanup(strings.ToLower(meta.Type))
+		etype, err := dictionary.GetUniqueTerm(stype)
 		if err != nil {
 			log.Fatal("failed to get dictionary value for %v", meta)
 		}
@@ -172,8 +175,8 @@ func main() {
 			log.Fatal(err)
 		}
 
-		inverted.Append(int64(id), makerKey, meta.Maker)
-		inverted.Append(int64(id), typeKey, meta.Type)
+		inverted.Append(int64(id), makerKey, smaker)
+		inverted.Append(int64(id), typeKey, stype)
 		for k, v := range persisted.Tags {
 			inverted.Append(int64(id), k, v)
 		}
