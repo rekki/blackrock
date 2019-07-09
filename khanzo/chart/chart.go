@@ -87,7 +87,7 @@ func Banner(s string) string {
 	width := 80
 	out := "\n┌"
 	for i := 0; i < width-2; i++ {
-		out += "─"
+		out += " "
 	}
 	out += "┐"
 	out += "\n"
@@ -96,13 +96,13 @@ func Banner(s string) string {
 	out += s
 
 	for i := 0; i < width-3-len(s); i++ {
-		out += " "
+		out += "."
 	}
 	out += "│"
 	out += "\n"
 	out += "└"
 	for i := 0; i < width-2; i++ {
-		out += "─"
+		out += " "
 	}
 	out += "┘"
 
