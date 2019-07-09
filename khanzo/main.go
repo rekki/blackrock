@@ -458,7 +458,7 @@ func main() {
 
 	search := func(qr QueryRequest) (*QueryResponse, error) {
 		query, err := fromJson(qr.Query, func(k, v string) Query {
-			return NewTermQuery(inverted, dictionary, qr.ScanMaxDocuments, k, v)
+			return NewTermQuery(inverted, dictionary, qr.ScanMaxDocuments, k, strings.ToLower(v))
 		})
 
 		if err != nil {
@@ -536,7 +536,7 @@ func main() {
 
 		if queryPath != "" {
 			query, err := fromString(strings.Replace(queryPath, "/", " AND ", -1), func(k, v string) Query {
-				return NewTermQuery(inverted, dictionary, 100000, k, v)
+				return NewTermQuery(inverted, dictionary, 100000, k, strings.ToLower(v))
 			})
 			if err != nil {
 				c.JSON(400, gin.H{"error": err.Error()})
