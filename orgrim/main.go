@@ -37,6 +37,14 @@ func dumpObj(src interface{}) string {
 	return string(out.Bytes())
 }
 
+type JsonMetadata struct {
+	Tags        map[string]interface{} `json:"tags"`
+	Properties  map[string]interface{} `json:"properties"`
+	CreatedAtNs int64                  `json:"created_at_ns"`
+	Maker       string                 `json:"maker"`
+	Type        string                 `json:"type"`
+}
+
 func main() {
 	var dataTopic = flag.String("topic-data", "blackrock-data", "topic for the data")
 	var kafkaServers = flag.String("kafka", "localhost:9092", "kafka addr")
@@ -208,6 +216,84 @@ func main() {
 
 		if err != nil {
 			log.Warnf("[orgrim] error sending message, metadata %v, error: %s", envelope.Metadata, err.Error())
+			c.JSON(500, gin.H{"error": err.Error()})
+			return
+		}
+
+		c.JSON(200, gin.H{"success": true})
+	})
+
+	r.POST("/push/flatten", func(c *gin.Context) {
+		body := c.Request.Body
+		defer body.Close()
+
+		var metadata JsonMetadata
+		data, err := ioutil.ReadAll(body)
+		if err != nil {
+			c.JSON(500, gin.H{"error": err.Error()})
+			return
+		}
+
+		err = json.Unmarshal(data, &metadata)
+		if err != nil {
+			log.Warnf("[orgrim] error decoding metadata, error: %s", err.Error())
+			c.JSON(500, gin.H{"error": err.Error()})
+			return
+		}
+
+		if metadata.Type == "" {
+			log.Warnf("[orgrim] no type in metadata, rejecting")
+			c.JSON(500, gin.H{"error": "need type key in metadata"})
+			return
+		}
+
+		if metadata.CreatedAtNs == 0 {
+			metadata.CreatedAtNs = time.Now().UnixNano()
+		}
+
+		tags := map[string]string{}
+		if metadata.Tags != nil {
+			tags, err = depths.Flatten(metadata.Tags, "", depths.DotStyle)
+			if err != nil {
+				log.Warnf("[orgrim] unable to flatten tags error: %s", err.Error())
+				c.JSON(500, gin.H{"error": "unable to flatten"})
+				return
+			}
+		}
+
+		properties := map[string]string{}
+		if metadata.Properties != nil {
+			properties, err = depths.Flatten(metadata.Properties, "", depths.DotStyle)
+			if err != nil {
+				log.Warnf("[orgrim] unable to flatten properties error: %s", err.Error())
+				c.JSON(500, gin.H{"error": "unable to flatten"})
+				return
+			}
+		}
+
+		converted := spec.Envelope{
+			Metadata: &spec.Metadata{
+				Tags:        tags,
+				Properties:  properties,
+				CreatedAtNs: metadata.CreatedAtNs,
+				Type:        metadata.Type,
+				Maker:       metadata.Maker,
+			},
+		}
+
+		encoded, err := proto.Marshal(&converted)
+		if err != nil {
+			log.Warnf("[orgrim] error encoding metadata %v, error: %s", converted.Metadata, err.Error())
+			c.JSON(500, gin.H{"error": err.Error()})
+			return
+		}
+
+		err = kw.WriteMessages(context.Background(), kafka.Message{
+			Value: encoded,
+		})
+
+		if err != nil {
+			log.Warnf("[orgrim] error sending message, metadata %v, error: %s", metadata, err.Error())
 			c.JSON(500, gin.H{"error": err.Error()})
 			return
 		}

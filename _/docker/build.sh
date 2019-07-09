@@ -1,3 +1,3 @@
-VERSION=0.16
+VERSION=0.17
 sudo docker build -t jackdoe/blackrock:$VERSION . --no-cache
 sudo docker push jackdoe/blackrock:$VERSION
