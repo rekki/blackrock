@@ -157,10 +157,10 @@ func transform(m map[string]interface{}, expand bool) ([]*spec.KV, error) {
 
 func main() {
 	var dataTopic = flag.String("topic-data", "blackrock-data", "topic for the data")
+	var contextTopic = flag.String("topic-context", "blackrock-context", "topic for the context")
 	var kafkaServers = flag.String("kafka", "localhost:9092", "kafka addr")
 	var verbose = flag.Bool("verbose", false, "print info level logs to stdout")
 	var statSleep = flag.Int("writer-stats", 60, "print writer stats every # seconds")
-
 	var bind = flag.String("bind", ":9001", "bind to")
 	flag.Parse()
 
@@ -175,6 +175,11 @@ func main() {
 		log.Fatal(err)
 	}
 
+	err = depths.HealthCheckKafka(*kafkaServers, *contextTopic)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	brokers := strings.Split(*kafkaServers, ",")
 	kw := kafka.NewWriter(kafka.WriterConfig{
 		Brokers:      brokers,
@@ -185,12 +190,22 @@ func main() {
 	})
 	defer kw.Close()
 
+	cw := kafka.NewWriter(kafka.WriterConfig{
+		Brokers:      brokers,
+		Topic:        *contextTopic,
+		Balancer:     &kafka.LeastBytes{},
+		BatchTimeout: 1 * time.Second,
+		Async:        true,
+	})
+	defer cw.Close()
+
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
 		<-sigs
 		log.Warnf("closing the writer...")
 		kw.Close()
+		cw.Close()
 		os.Exit(0)
 	}()
 
@@ -198,6 +213,10 @@ func main() {
 		for {
 			s := kw.Stats()
 			fmt.Printf("%s\n", dumpObj(s))
+
+			s = cw.Stats()
+			fmt.Printf("%s\n", dumpObj(s))
+
 			time.Sleep(time.Duration(*statSleep) * time.Second)
 		}
 	}()
@@ -265,6 +284,63 @@ func main() {
 
 		if err != nil {
 			log.Warnf("[orgrim] error sending message, metadata %v, error: %s", envelope.Metadata, err.Error())
+			c.JSON(500, gin.H{"error": err.Error()})
+			return
+		}
+
+		c.JSON(200, gin.H{"success": true})
+	})
+
+	r.POST("/push/context", func(c *gin.Context) {
+		body := c.Request.Body
+		defer body.Close()
+
+		var ctx spec.Context
+		var err error
+		if c.Request.Header.Get("content-type") == "application/protobuf" {
+			var data []byte
+			data, err = ioutil.ReadAll(body)
+			if err == nil {
+				err = proto.Unmarshal(data, &ctx)
+			}
+		} else {
+			err = jsonpb.Unmarshal(body, &ctx)
+		}
+
+		if err != nil {
+			log.Warnf("[orgrim] error decoding ctx, error: %s", err.Error())
+			c.JSON(500, gin.H{"error": err.Error()})
+			return
+		}
+		if ctx.Id == "" {
+			log.Warnf("[orgrim] no id in ctx, rejecting")
+			c.JSON(500, gin.H{"error": "need id key"})
+			return
+		}
+
+		if ctx.Type == "" {
+			log.Warnf("[orgrim] no type in metadata, rejecting")
+			c.JSON(500, gin.H{"error": "need type key in context"})
+			return
+		}
+
+		if ctx.CreatedAtNs == 0 {
+			ctx.CreatedAtNs = time.Now().UnixNano()
+		}
+
+		encoded, err := proto.Marshal(&ctx)
+		if err != nil {
+			log.Warnf("[orgrim] error encoding context %v, error: %s", ctx, err.Error())
+			c.JSON(500, gin.H{"error": err.Error()})
+			return
+		}
+
+		err = cw.WriteMessages(context.Background(), kafka.Message{
+			Value: encoded,
+		})
+
+		if err != nil {
+			log.Warnf("[orgrim] error sending message, context %v, error: %s", ctx, err.Error())
 			c.JSON(500, gin.H{"error": err.Error()})
 			return
 		}

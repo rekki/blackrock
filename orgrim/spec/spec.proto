@@ -5,6 +5,7 @@ package spec;
 message KV {
         string key = 1;
         string value = 2;
+        uint64 context = 3;
 }
 
 message Metadata {
@@ -15,11 +16,17 @@ message Metadata {
         string type = 7;
 }
 
+message Context {
+        repeated KV properties = 2;
+        int64 createdAtNs  = 5;
+        string id = 6;
+        string type = 7;
+}
+
 message Envelope {
         Metadata metadata = 1;
         bytes payload = 2;
 }
-
 
 message PersistedMetadata {
         repeated uint64 tagKeys = 1; 

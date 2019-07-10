@@ -208,6 +208,6 @@ func main() {
 			inverted.Append(int64(id), persisted.TagKeys[i], persisted.TagValues[i])
 		}
 
-		log.Infof("message at topic/partition/offset %v/%v/%v: %s\n", m.Topic, m.Partition, m.Offset, envelope.Metadata.String())
+		log.Infof("message at topic/partition/offset %v/%v/%v: %v\n", m.Topic, m.Partition, m.Offset, envelope.Metadata)
 	}
 }

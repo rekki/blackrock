@@ -32,6 +32,8 @@ Composed of the following characters:
 
 ```
 
+* [rend](rend/) - create context
+
 
 * [jubei](jubei/) - create indexes
 
