@@ -410,14 +410,13 @@ func main() {
 	}
 
 	r := gin.Default()
-	r.StaticFS("/public/", Assets)
 
 	t, err := loadTemplate()
 	if err != nil {
 		log.Panic(err)
 	}
 	r.SetHTMLTemplate(t)
-
+	r.StaticFS("/public/", Assets)
 	r.GET("/health", func(c *gin.Context) {
 		c.String(200, "OK")
 	})
