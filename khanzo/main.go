@@ -607,7 +607,7 @@ func dumpObj(src interface{}) string {
 func loadTemplate() (*template.Template, error) {
 	t := template.New("").Funcs(template.FuncMap{
 		"banner": func(b string) string {
-			return chart.Banner(b)
+			return chart.BannerLeft(b)
 		},
 		"time": func(b int64) string {
 			t := time.Unix(b/1000000000, 0)
@@ -616,9 +616,14 @@ func loadTemplate() (*template.Template, error) {
 		"pretty": func(b interface{}) string {
 			return dumpObj(b)
 		},
-		"format": func(value float64) string {
-			return fmt.Sprintf("%.2f", value)
+		"format": func(value int64) string {
+			return fmt.Sprintf("%8s", chart.Fit(float64(value)))
 		},
+
+		"minus": func(a, b int) int {
+			return a - b
+		},
+
 		"percent": func(value ...interface{}) string {
 			a := float64(value[0].(int64))
 			b := float64(value[1].(int64))

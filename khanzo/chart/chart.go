@@ -16,11 +16,11 @@ func makeBar(symbol rune, value int) string {
 
 var multipliers = []string{"", "k", "M", "G", "T", "P"}
 
-func fit(x float64) string {
+func Fit(x float64) string {
 	div := float64(1)
 	var f string
 	for _, m := range multipliers {
-		f = fmt.Sprintf("%s%s", strconv.FormatFloat(x, 'f', 1, 64), m)
+		f = fmt.Sprintf("%s%s", strconv.FormatFloat(x, 'f', 0, 64), m)
 		if len(f) < 8 {
 			return f
 		}
@@ -73,7 +73,7 @@ func HorizontalBar(x []float64, y []Label, symbol rune, width int, prefix string
 		bar := makeBar(symbol, value)
 		percent := 100 * (v / sum)
 
-		line := fmt.Sprintf("%s%s %8s %6s%% %s", prefix, label, fit(x[i]), fmt.Sprintf("%.2f", percent), bar)
+		line := fmt.Sprintf("%s%s %8s %6s%% %s", prefix, label, Fit(x[i]), fmt.Sprintf("%.2f", percent), bar)
 		lines = append(lines, line)
 	}
 	if end < len(x) {
@@ -105,6 +105,26 @@ func Banner(s string) string {
 		out += " "
 	}
 	out += "┘"
+
+	out += "\n"
+	return out
+}
+
+func BannerLeft(s string) string {
+	width := 80
+	out := "\n┌"
+	for i := 0; i < width-2; i++ {
+		out += " "
+	}
+	out += "\n"
+	out += "│"
+	out += " "
+	out += s
+	out += "\n"
+	out += "└"
+	for i := 0; i < width-2; i++ {
+		out += " "
+	}
 
 	out += "\n"
 	return out

@@ -11,13 +11,15 @@
            url('/public/html/font/hack.woff2') format('woff2');
       }
 
-      html,body {
+      body {
       margin: 5px;
       font-family: "blackrock";
-      font-size: 18px;
-      line-height: 24px;
       background-color: white;
       color: #3f3f3f;
+      max-width: 50rem;
+      padding: 1rem;
+      font-size: 14px;
+      margin: auto;
       }
 
       pre {
@@ -31,17 +33,20 @@
       background-color: gray;
       }
       .left {
-      width: 30ch;
+      width: 30%;
       word-break: break-all
       }
       .right {
-      width: 50ch;
+      width: 30%;
       word-break: break-all
       }
       table {
-      width: 80ch;
+      width: 100%;
       }
-
+      .banner {
+      background-color: gray;
+      color: white;
+      }
     </style>
   </head>
   <body>
@@ -52,19 +57,19 @@
     {{ $total := .Stats.TotalCount }}
     {{ $base := .BaseUrl }}
     <table border=0>
-      <tr><td colspan=2><pre>{{ banner "makers"}}</pre></td></tr>
+      <tr><td colspan=2><pre class="banner">{{ banner "makers"}}</pre></td></tr>
       {{ template "/html/t/chart.tmpl" dict "Data" .Stats.Makers "GlobalTotal" $total "BaseUrl" $base}}
-      <tr><td colspan=2><pre>{{ banner "types"}}</pre></td></tr>
+      <tr><td colspan=2><pre class="banner">{{ banner "types"}}</pre></td></tr>
       {{ template "/html/t/chart.tmpl" dict "Data" .Stats.Types "GlobalTotal" $total  "BaseUrl" $base}}
-      <tr><td colspan=2><pre>{{ banner "tags"}}</pre></td></tr>
+      <tr><td colspan=2><pre class="banner">{{ banner "tags"}}</pre></td></tr>
       {{ range .Stats.Tags }}
       {{ template "/html/t/chart.tmpl" dict "Data" . "GlobalTotal" $total  "BaseUrl" $base}}
       {{ end }}
-      <tr><td colspan=2><pre>{{ banner "properties"}}</pre></td></tr>
+      <tr><td colspan=2><pre class="banner">{{ banner "properties"}}</pre></td></tr>
       {{ range .Stats.Properties }}
       {{ template "/html/t/chart.tmpl" dict "Data" . "GlobalTotal" $total  "BaseUrl" $base}}
       {{ end }}
-      <tr><td colspan=2><pre>{{ banner "sample"}}</pre></td></tr>
+      <tr><td colspan=2><pre class="banner">{{ banner "sample"}}</pre></td></tr>
       {{ range .Stats.Sample }}
       {{ template "/html/t/hit.tmpl" . }}
       {{ end  }}
