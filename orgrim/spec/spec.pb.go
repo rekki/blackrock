@@ -21,19 +21,71 @@ var _ = math.Inf
 // proto package needs to be updated.
 const _ = proto.GoGoProtoPackageIsVersion2 // please upgrade the proto package
 
+type KV struct {
+	Key   string `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
+	Value string `protobuf:"bytes,2,opt,name=value,proto3" json:"value,omitempty"`
+}
+
+func (m *KV) Reset()         { *m = KV{} }
+func (m *KV) String() string { return proto.CompactTextString(m) }
+func (*KV) ProtoMessage()    {}
+func (*KV) Descriptor() ([]byte, []int) {
+	return fileDescriptor_423806180556987f, []int{0}
+}
+func (m *KV) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *KV) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_KV.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalTo(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *KV) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_KV.Merge(m, src)
+}
+func (m *KV) XXX_Size() int {
+	return m.Size()
+}
+func (m *KV) XXX_DiscardUnknown() {
+	xxx_messageInfo_KV.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_KV proto.InternalMessageInfo
+
+func (m *KV) GetKey() string {
+	if m != nil {
+		return m.Key
+	}
+	return ""
+}
+
+func (m *KV) GetValue() string {
+	if m != nil {
+		return m.Value
+	}
+	return ""
+}
+
 type Metadata struct {
-	Tags        map[string]string `protobuf:"bytes,1,rep,name=tags,proto3" json:"tags,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
-	Properties  map[string]string `protobuf:"bytes,2,rep,name=properties,proto3" json:"properties,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
-	CreatedAtNs int64             `protobuf:"varint,5,opt,name=createdAtNs,proto3" json:"createdAtNs,omitempty"`
-	Maker       string            `protobuf:"bytes,6,opt,name=maker,proto3" json:"maker,omitempty"`
-	Type        string            `protobuf:"bytes,7,opt,name=type,proto3" json:"type,omitempty"`
+	Tags        []*KV  `protobuf:"bytes,1,rep,name=tags,proto3" json:"tags,omitempty"`
+	Properties  []*KV  `protobuf:"bytes,2,rep,name=properties,proto3" json:"properties,omitempty"`
+	CreatedAtNs int64  `protobuf:"varint,5,opt,name=createdAtNs,proto3" json:"createdAtNs,omitempty"`
+	Maker       string `protobuf:"bytes,6,opt,name=maker,proto3" json:"maker,omitempty"`
+	Type        string `protobuf:"bytes,7,opt,name=type,proto3" json:"type,omitempty"`
 }
 
 func (m *Metadata) Reset()         { *m = Metadata{} }
 func (m *Metadata) String() string { return proto.CompactTextString(m) }
 func (*Metadata) ProtoMessage()    {}
 func (*Metadata) Descriptor() ([]byte, []int) {
-	return fileDescriptor_423806180556987f, []int{0}
+	return fileDescriptor_423806180556987f, []int{1}
 }
 func (m *Metadata) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -62,14 +114,14 @@ func (m *Metadata) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_Metadata proto.InternalMessageInfo
 
-func (m *Metadata) GetTags() map[string]string {
+func (m *Metadata) GetTags() []*KV {
 	if m != nil {
 		return m.Tags
 	}
 	return nil
 }
 
-func (m *Metadata) GetProperties() map[string]string {
+func (m *Metadata) GetProperties() []*KV {
 	if m != nil {
 		return m.Properties
 	}
@@ -106,7 +158,7 @@ func (m *Envelope) Reset()         { *m = Envelope{} }
 func (m *Envelope) String() string { return proto.CompactTextString(m) }
 func (*Envelope) ProtoMessage()    {}
 func (*Envelope) Descriptor() ([]byte, []int) {
-	return fileDescriptor_423806180556987f, []int{1}
+	return fileDescriptor_423806180556987f, []int{2}
 }
 func (m *Envelope) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -150,20 +202,23 @@ func (m *Envelope) GetPayload() []byte {
 }
 
 type PersistedMetadata struct {
-	Tags        map[uint64]string `protobuf:"bytes,1,rep,name=tags,proto3" json:"tags,omitempty" protobuf_key:"varint,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
-	Properties  map[uint64]string `protobuf:"bytes,2,rep,name=properties,proto3" json:"properties,omitempty" protobuf_key:"varint,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
-	CreatedAtNs int64             `protobuf:"varint,5,opt,name=createdAtNs,proto3" json:"createdAtNs,omitempty"`
-	Type        uint64            `protobuf:"varint,7,opt,name=type,proto3" json:"type,omitempty"`
-	Offset      uint64            `protobuf:"varint,8,opt,name=offset,proto3" json:"offset,omitempty"`
-	Partition   uint32            `protobuf:"varint,9,opt,name=partition,proto3" json:"partition,omitempty"`
-	Parent      uint64            `protobuf:"varint,10,opt,name=parent,proto3" json:"parent,omitempty"`
+	TagKeys        []uint64 `protobuf:"varint,1,rep,packed,name=tagKeys,proto3" json:"tagKeys,omitempty"`
+	TagValues      []string `protobuf:"bytes,2,rep,name=tagValues,proto3" json:"tagValues,omitempty"`
+	PropertyKeys   []uint64 `protobuf:"varint,3,rep,packed,name=propertyKeys,proto3" json:"propertyKeys,omitempty"`
+	PropertyValues []string `protobuf:"bytes,4,rep,name=propertyValues,proto3" json:"propertyValues,omitempty"`
+	CreatedAtNs    int64    `protobuf:"varint,5,opt,name=createdAtNs,proto3" json:"createdAtNs,omitempty"`
+	Type           uint64   `protobuf:"varint,7,opt,name=type,proto3" json:"type,omitempty"`
+	Offset         uint64   `protobuf:"varint,8,opt,name=offset,proto3" json:"offset,omitempty"`
+	Partition      uint32   `protobuf:"varint,9,opt,name=partition,proto3" json:"partition,omitempty"`
+	Parent         uint64   `protobuf:"varint,10,opt,name=parent,proto3" json:"parent,omitempty"`
+	Payload        uint64   `protobuf:"varint,11,opt,name=payload,proto3" json:"payload,omitempty"`
 }
 
 func (m *PersistedMetadata) Reset()         { *m = PersistedMetadata{} }
 func (m *PersistedMetadata) String() string { return proto.CompactTextString(m) }
 func (*PersistedMetadata) ProtoMessage()    {}
 func (*PersistedMetadata) Descriptor() ([]byte, []int) {
-	return fileDescriptor_423806180556987f, []int{2}
+	return fileDescriptor_423806180556987f, []int{3}
 }
 func (m *PersistedMetadata) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -192,16 +247,30 @@ func (m *PersistedMetadata) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_PersistedMetadata proto.InternalMessageInfo
 
-func (m *PersistedMetadata) GetTags() map[uint64]string {
+func (m *PersistedMetadata) GetTagKeys() []uint64 {
 	if m != nil {
-		return m.Tags
+		return m.TagKeys
 	}
 	return nil
 }
 
-func (m *PersistedMetadata) GetProperties() map[uint64]string {
+func (m *PersistedMetadata) GetTagValues() []string {
 	if m != nil {
-		return m.Properties
+		return m.TagValues
+	}
+	return nil
+}
+
+func (m *PersistedMetadata) GetPropertyKeys() []uint64 {
+	if m != nil {
+		return m.PropertyKeys
+	}
+	return nil
+}
+
+func (m *PersistedMetadata) GetPropertyValues() []string {
+	if m != nil {
+		return m.PropertyValues
 	}
 	return nil
 }
@@ -241,45 +310,78 @@ func (m *PersistedMetadata) GetParent() uint64 {
 	return 0
 }
 
+func (m *PersistedMetadata) GetPayload() uint64 {
+	if m != nil {
+		return m.Payload
+	}
+	return 0
+}
+
 func init() {
+	proto.RegisterType((*KV)(nil), "spec.KV")
 	proto.RegisterType((*Metadata)(nil), "spec.Metadata")
-	proto.RegisterMapType((map[string]string)(nil), "spec.Metadata.PropertiesEntry")
-	proto.RegisterMapType((map[string]string)(nil), "spec.Metadata.TagsEntry")
 	proto.RegisterType((*Envelope)(nil), "spec.Envelope")
 	proto.RegisterType((*PersistedMetadata)(nil), "spec.PersistedMetadata")
-	proto.RegisterMapType((map[uint64]string)(nil), "spec.PersistedMetadata.PropertiesEntry")
-	proto.RegisterMapType((map[uint64]string)(nil), "spec.PersistedMetadata.TagsEntry")
 }
 
 func init() { proto.RegisterFile("spec.proto", fileDescriptor_423806180556987f) }
 
 var fileDescriptor_423806180556987f = []byte{
-	// 386 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xa4, 0x93, 0xdd, 0x8a, 0xda, 0x40,
-	0x14, 0xc7, 0x9d, 0x24, 0x6a, 0x72, 0xec, 0xe7, 0x50, 0xca, 0x20, 0x25, 0xa4, 0xde, 0x34, 0x94,
-	0xe2, 0x85, 0xa5, 0xb4, 0x14, 0x5a, 0x68, 0x41, 0x7a, 0xd5, 0x22, 0xa1, 0x2f, 0x30, 0x6b, 0x8e,
-	0x12, 0xd4, 0x64, 0x98, 0x99, 0x15, 0xf2, 0x14, 0xbb, 0x0f, 0xb4, 0x0f, 0xb0, 0x97, 0x5e, 0xee,
-	0xe5, 0xa2, 0x2f, 0xb2, 0x64, 0xa2, 0x59, 0x3f, 0x56, 0x96, 0xc5, 0xbb, 0xf3, 0x3f, 0xe7, 0xfc,
-	0x0e, 0xa3, 0x3f, 0x02, 0xa0, 0x04, 0x0e, 0xbb, 0x42, 0x66, 0x3a, 0xa3, 0x4e, 0x51, 0x77, 0xae,
-	0x2c, 0x70, 0xff, 0xa2, 0xe6, 0x31, 0xd7, 0x9c, 0x7e, 0x02, 0x47, 0xf3, 0xb1, 0x62, 0x24, 0xb0,
-	0xc3, 0x56, 0x8f, 0x75, 0xcd, 0xf6, 0x66, 0xda, 0xfd, 0xcf, 0xc7, 0xaa, 0x9f, 0x6a, 0x99, 0x47,
-	0x66, 0x8b, 0xfe, 0x04, 0x10, 0x32, 0x13, 0x28, 0x75, 0x82, 0x8a, 0x59, 0x86, 0xf1, 0xf7, 0x98,
-	0x41, 0xb5, 0x50, 0x92, 0x5b, 0x04, 0x0d, 0xa0, 0x35, 0x94, 0xc8, 0x35, 0xc6, 0xbf, 0xf4, 0x3f,
-	0xc5, 0xea, 0x01, 0x09, 0xed, 0x68, 0xbb, 0x45, 0xdf, 0x40, 0x7d, 0xc6, 0x27, 0x28, 0x59, 0x23,
-	0x20, 0xa1, 0x17, 0x95, 0x81, 0x52, 0x70, 0x74, 0x2e, 0x90, 0x35, 0x4d, 0xd3, 0xd4, 0xed, 0xaf,
-	0xe0, 0x55, 0xcf, 0xa3, 0xaf, 0xc0, 0x9e, 0x60, 0xce, 0x88, 0x99, 0x17, 0x65, 0x71, 0x68, 0xce,
-	0xa7, 0xe7, 0xc8, 0xac, 0xf2, 0x90, 0x09, 0xdf, 0xad, 0x6f, 0xa4, 0xfd, 0x03, 0x5e, 0xee, 0xbd,
-	0xf1, 0x29, 0x78, 0x67, 0x00, 0x6e, 0x3f, 0x9d, 0xe3, 0x34, 0x13, 0x48, 0x3f, 0x82, 0x3b, 0x5b,
-	0xff, 0x6e, 0x03, 0xb7, 0x7a, 0x2f, 0x76, 0xff, 0x8d, 0xa8, 0x9a, 0x53, 0x06, 0x4d, 0xc1, 0xf3,
-	0x69, 0xc6, 0x63, 0x73, 0xf3, 0x59, 0xb4, 0x89, 0x9d, 0x0b, 0x1b, 0x5e, 0x0f, 0x50, 0xaa, 0x44,
-	0x69, 0x8c, 0x2b, 0x33, 0x5f, 0x76, 0xcc, 0xbc, 0x2f, 0xef, 0x1e, 0xac, 0x1d, 0x28, 0xfa, 0xf3,
-	0x80, 0xa2, 0x0f, 0xc7, 0xe0, 0xd3, 0x5c, 0x6d, 0x5b, 0x71, 0x4a, 0x2b, 0xf4, 0x2d, 0x34, 0xb2,
-	0xd1, 0x48, 0xa1, 0x66, 0xae, 0xe9, 0xae, 0x13, 0x7d, 0x07, 0x9e, 0xe0, 0x52, 0x27, 0x3a, 0xc9,
-	0x52, 0xe6, 0x05, 0x24, 0x7c, 0x1e, 0xdd, 0x37, 0x0a, 0x4a, 0x70, 0x89, 0xa9, 0x66, 0x50, 0x52,
-	0x65, 0x3a, 0xea, 0xd8, 0x39, 0xcd, 0xf1, 0x63, 0xf8, 0x6f, 0x76, 0xbd, 0xf4, 0xc9, 0x62, 0xe9,
-	0x93, 0xdb, 0xa5, 0x4f, 0x2e, 0x57, 0x7e, 0x6d, 0xb1, 0xf2, 0x6b, 0x37, 0x2b, 0xbf, 0x76, 0xd6,
-	0x30, 0x5f, 0xd2, 0xe7, 0xbb, 0x00, 0x00, 0x00, 0xff, 0xff, 0x7e, 0xd1, 0x92, 0xa6, 0x57, 0x03,
-	0x00, 0x00,
+	// 381 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x8c, 0x92, 0xbf, 0x8a, 0xdb, 0x40,
+	0x10, 0xc6, 0xbd, 0x92, 0x6c, 0x4b, 0x23, 0xc7, 0x24, 0x4b, 0x08, 0x5b, 0x18, 0x21, 0x54, 0x04,
+	0x11, 0x82, 0x0b, 0xe7, 0x09, 0x12, 0x48, 0x65, 0x1c, 0xcc, 0x16, 0xee, 0x37, 0xd6, 0xd8, 0x08,
+	0xff, 0xd1, 0xb2, 0xda, 0x18, 0xf4, 0x16, 0x79, 0x82, 0xbc, 0x45, 0xde, 0xe1, 0x4a, 0x97, 0x57,
+	0x1e, 0xf6, 0x8b, 0x1c, 0xda, 0x95, 0xce, 0x3a, 0x57, 0xd7, 0xcd, 0xf7, 0x9b, 0x9d, 0xd1, 0x7c,
+	0x1f, 0x02, 0x28, 0x25, 0xae, 0xa7, 0x52, 0x15, 0xba, 0xa0, 0x5e, 0x5d, 0x27, 0x5f, 0xc1, 0x99,
+	0xaf, 0xe8, 0x7b, 0x70, 0x77, 0x58, 0x31, 0x12, 0x93, 0x34, 0xe0, 0x75, 0x49, 0x3f, 0x42, 0xff,
+	0x24, 0xf6, 0x7f, 0x90, 0x39, 0x86, 0x59, 0x91, 0xfc, 0x23, 0xe0, 0x2f, 0x50, 0x8b, 0x4c, 0x68,
+	0x41, 0x27, 0xe0, 0x69, 0xb1, 0x2d, 0x19, 0x89, 0xdd, 0x34, 0x9c, 0xf9, 0x53, 0xb3, 0x7b, 0xbe,
+	0xe2, 0x86, 0xd2, 0x14, 0x40, 0xaa, 0x42, 0xa2, 0xd2, 0x39, 0x96, 0xcc, 0xb9, 0x7b, 0xd3, 0xe9,
+	0xd1, 0x18, 0xc2, 0xb5, 0x42, 0xa1, 0x31, 0xfb, 0xae, 0x7f, 0x95, 0xac, 0x1f, 0x93, 0xd4, 0xe5,
+	0x5d, 0x54, 0x1f, 0x73, 0x10, 0x3b, 0x54, 0x6c, 0x60, 0x8f, 0x31, 0x82, 0x52, 0xf0, 0x74, 0x25,
+	0x91, 0x0d, 0x0d, 0x34, 0x75, 0xb2, 0x04, 0xff, 0xe7, 0xf1, 0x84, 0xfb, 0x42, 0x22, 0xfd, 0x02,
+	0xfe, 0xa1, 0xb9, 0xd5, 0x38, 0x0b, 0x67, 0x63, 0xfb, 0xfd, 0xd6, 0x01, 0x7f, 0xe9, 0x53, 0x06,
+	0x43, 0x29, 0xaa, 0x7d, 0x21, 0x32, 0x63, 0x78, 0xc4, 0x5b, 0x99, 0xfc, 0x77, 0xe0, 0xc3, 0x12,
+	0x55, 0x99, 0x97, 0x1a, 0xb3, 0x45, 0xe7, 0xbd, 0x16, 0xdb, 0x39, 0x56, 0xd6, 0xbe, 0xc7, 0x5b,
+	0x49, 0x27, 0x10, 0x68, 0xb1, 0x5d, 0xd5, 0x71, 0x59, 0xdb, 0x01, 0xbf, 0x01, 0x9a, 0xc0, 0xa8,
+	0x71, 0x5e, 0x99, 0x61, 0xd7, 0x0c, 0xbf, 0x62, 0xf4, 0x33, 0x8c, 0x5b, 0xdd, 0xac, 0xf1, 0xcc,
+	0x9a, 0x3b, 0xfa, 0x86, 0xdc, 0xba, 0x09, 0x79, 0x36, 0x21, 0xfa, 0x09, 0x06, 0xc5, 0x66, 0x53,
+	0xa2, 0x66, 0xbe, 0xa1, 0x8d, 0xaa, 0xef, 0x96, 0x42, 0xe9, 0x5c, 0xe7, 0xc5, 0x91, 0x05, 0x31,
+	0x49, 0xdf, 0xf1, 0x1b, 0xa8, 0xa7, 0xa4, 0x50, 0x78, 0xd4, 0x0c, 0xec, 0x94, 0x55, 0xdd, 0xdc,
+	0x42, 0xd3, 0x68, 0xe5, 0x0f, 0xf6, 0x70, 0x89, 0xc8, 0xf9, 0x12, 0x91, 0xa7, 0x4b, 0x44, 0xfe,
+	0x5e, 0xa3, 0xde, 0xf9, 0x1a, 0xf5, 0x1e, 0xaf, 0x51, 0xef, 0xf7, 0xc0, 0xfc, 0x7f, 0xdf, 0x9e,
+	0x03, 0x00, 0x00, 0xff, 0xff, 0xb3, 0x43, 0x5a, 0xf9, 0x8d, 0x02, 0x00, 0x00,
+}
+
+func (m *KV) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalTo(dAtA)
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *KV) MarshalTo(dAtA []byte) (int, error) {
+	var i int
+	_ = i
+	var l int
+	_ = l
+	if len(m.Key) > 0 {
+		dAtA[i] = 0xa
+		i++
+		i = encodeVarintSpec(dAtA, i, uint64(len(m.Key)))
+		i += copy(dAtA[i:], m.Key)
+	}
+	if len(m.Value) > 0 {
+		dAtA[i] = 0x12
+		i++
+		i = encodeVarintSpec(dAtA, i, uint64(len(m.Value)))
+		i += copy(dAtA[i:], m.Value)
+	}
+	return i, nil
 }
 
 func (m *Metadata) Marshal() (dAtA []byte, err error) {
@@ -298,37 +400,27 @@ func (m *Metadata) MarshalTo(dAtA []byte) (int, error) {
 	var l int
 	_ = l
 	if len(m.Tags) > 0 {
-		for k, _ := range m.Tags {
+		for _, msg := range m.Tags {
 			dAtA[i] = 0xa
 			i++
-			v := m.Tags[k]
-			mapSize := 1 + len(k) + sovSpec(uint64(len(k))) + 1 + len(v) + sovSpec(uint64(len(v)))
-			i = encodeVarintSpec(dAtA, i, uint64(mapSize))
-			dAtA[i] = 0xa
-			i++
-			i = encodeVarintSpec(dAtA, i, uint64(len(k)))
-			i += copy(dAtA[i:], k)
-			dAtA[i] = 0x12
-			i++
-			i = encodeVarintSpec(dAtA, i, uint64(len(v)))
-			i += copy(dAtA[i:], v)
+			i = encodeVarintSpec(dAtA, i, uint64(msg.Size()))
+			n, err := msg.MarshalTo(dAtA[i:])
+			if err != nil {
+				return 0, err
+			}
+			i += n
 		}
 	}
 	if len(m.Properties) > 0 {
-		for k, _ := range m.Properties {
+		for _, msg := range m.Properties {
 			dAtA[i] = 0x12
 			i++
-			v := m.Properties[k]
-			mapSize := 1 + len(k) + sovSpec(uint64(len(k))) + 1 + len(v) + sovSpec(uint64(len(v)))
-			i = encodeVarintSpec(dAtA, i, uint64(mapSize))
-			dAtA[i] = 0xa
-			i++
-			i = encodeVarintSpec(dAtA, i, uint64(len(k)))
-			i += copy(dAtA[i:], k)
-			dAtA[i] = 0x12
-			i++
-			i = encodeVarintSpec(dAtA, i, uint64(len(v)))
-			i += copy(dAtA[i:], v)
+			i = encodeVarintSpec(dAtA, i, uint64(msg.Size()))
+			n, err := msg.MarshalTo(dAtA[i:])
+			if err != nil {
+				return 0, err
+			}
+			i += n
 		}
 	}
 	if m.CreatedAtNs != 0 {
@@ -400,36 +492,68 @@ func (m *PersistedMetadata) MarshalTo(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
-	if len(m.Tags) > 0 {
-		for k, _ := range m.Tags {
-			dAtA[i] = 0xa
-			i++
-			v := m.Tags[k]
-			mapSize := 1 + sovSpec(uint64(k)) + 1 + len(v) + sovSpec(uint64(len(v)))
-			i = encodeVarintSpec(dAtA, i, uint64(mapSize))
-			dAtA[i] = 0x8
-			i++
-			i = encodeVarintSpec(dAtA, i, uint64(k))
+	if len(m.TagKeys) > 0 {
+		dAtA3 := make([]byte, len(m.TagKeys)*10)
+		var j2 int
+		for _, num := range m.TagKeys {
+			for num >= 1<<7 {
+				dAtA3[j2] = uint8(uint64(num)&0x7f | 0x80)
+				num >>= 7
+				j2++
+			}
+			dAtA3[j2] = uint8(num)
+			j2++
+		}
+		dAtA[i] = 0xa
+		i++
+		i = encodeVarintSpec(dAtA, i, uint64(j2))
+		i += copy(dAtA[i:], dAtA3[:j2])
+	}
+	if len(m.TagValues) > 0 {
+		for _, s := range m.TagValues {
 			dAtA[i] = 0x12
 			i++
-			i = encodeVarintSpec(dAtA, i, uint64(len(v)))
-			i += copy(dAtA[i:], v)
+			l = len(s)
+			for l >= 1<<7 {
+				dAtA[i] = uint8(uint64(l)&0x7f | 0x80)
+				l >>= 7
+				i++
+			}
+			dAtA[i] = uint8(l)
+			i++
+			i += copy(dAtA[i:], s)
 		}
 	}
-	if len(m.Properties) > 0 {
-		for k, _ := range m.Properties {
-			dAtA[i] = 0x12
+	if len(m.PropertyKeys) > 0 {
+		dAtA5 := make([]byte, len(m.PropertyKeys)*10)
+		var j4 int
+		for _, num := range m.PropertyKeys {
+			for num >= 1<<7 {
+				dAtA5[j4] = uint8(uint64(num)&0x7f | 0x80)
+				num >>= 7
+				j4++
+			}
+			dAtA5[j4] = uint8(num)
+			j4++
+		}
+		dAtA[i] = 0x1a
+		i++
+		i = encodeVarintSpec(dAtA, i, uint64(j4))
+		i += copy(dAtA[i:], dAtA5[:j4])
+	}
+	if len(m.PropertyValues) > 0 {
+		for _, s := range m.PropertyValues {
+			dAtA[i] = 0x22
 			i++
-			v := m.Properties[k]
-			mapSize := 1 + sovSpec(uint64(k)) + 1 + len(v) + sovSpec(uint64(len(v)))
-			i = encodeVarintSpec(dAtA, i, uint64(mapSize))
-			dAtA[i] = 0x8
+			l = len(s)
+			for l >= 1<<7 {
+				dAtA[i] = uint8(uint64(l)&0x7f | 0x80)
+				l >>= 7
+				i++
+			}
+			dAtA[i] = uint8(l)
 			i++
-			i = encodeVarintSpec(dAtA, i, uint64(k))
-			dAtA[i] = 0x12
-			i++
-			i = encodeVarintSpec(dAtA, i, uint64(len(v)))
-			i += copy(dAtA[i:], v)
+			i += copy(dAtA[i:], s)
 		}
 	}
 	if m.CreatedAtNs != 0 {
@@ -457,6 +581,11 @@ func (m *PersistedMetadata) MarshalTo(dAtA []byte) (int, error) {
 		i++
 		i = encodeVarintSpec(dAtA, i, uint64(m.Parent))
 	}
+	if m.Payload != 0 {
+		dAtA[i] = 0x58
+		i++
+		i = encodeVarintSpec(dAtA, i, uint64(m.Payload))
+	}
 	return i, nil
 }
 
@@ -469,6 +598,23 @@ func encodeVarintSpec(dAtA []byte, offset int, v uint64) int {
 	dAtA[offset] = uint8(v)
 	return offset + 1
 }
+func (m *KV) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.Key)
+	if l > 0 {
+		n += 1 + l + sovSpec(uint64(l))
+	}
+	l = len(m.Value)
+	if l > 0 {
+		n += 1 + l + sovSpec(uint64(l))
+	}
+	return n
+}
+
 func (m *Metadata) Size() (n int) {
 	if m == nil {
 		return 0
@@ -476,19 +622,15 @@ func (m *Metadata) Size() (n int) {
 	var l int
 	_ = l
 	if len(m.Tags) > 0 {
-		for k, v := range m.Tags {
-			_ = k
-			_ = v
-			mapEntrySize := 1 + len(k) + sovSpec(uint64(len(k))) + 1 + len(v) + sovSpec(uint64(len(v)))
-			n += mapEntrySize + 1 + sovSpec(uint64(mapEntrySize))
+		for _, e := range m.Tags {
+			l = e.Size()
+			n += 1 + l + sovSpec(uint64(l))
 		}
 	}
 	if len(m.Properties) > 0 {
-		for k, v := range m.Properties {
-			_ = k
-			_ = v
-			mapEntrySize := 1 + len(k) + sovSpec(uint64(len(k))) + 1 + len(v) + sovSpec(uint64(len(v)))
-			n += mapEntrySize + 1 + sovSpec(uint64(mapEntrySize))
+		for _, e := range m.Properties {
+			l = e.Size()
+			n += 1 + l + sovSpec(uint64(l))
 		}
 	}
 	if m.CreatedAtNs != 0 {
@@ -528,20 +670,30 @@ func (m *PersistedMetadata) Size() (n int) {
 	}
 	var l int
 	_ = l
-	if len(m.Tags) > 0 {
-		for k, v := range m.Tags {
-			_ = k
-			_ = v
-			mapEntrySize := 1 + sovSpec(uint64(k)) + 1 + len(v) + sovSpec(uint64(len(v)))
-			n += mapEntrySize + 1 + sovSpec(uint64(mapEntrySize))
+	if len(m.TagKeys) > 0 {
+		l = 0
+		for _, e := range m.TagKeys {
+			l += sovSpec(uint64(e))
+		}
+		n += 1 + sovSpec(uint64(l)) + l
+	}
+	if len(m.TagValues) > 0 {
+		for _, s := range m.TagValues {
+			l = len(s)
+			n += 1 + l + sovSpec(uint64(l))
 		}
 	}
-	if len(m.Properties) > 0 {
-		for k, v := range m.Properties {
-			_ = k
-			_ = v
-			mapEntrySize := 1 + sovSpec(uint64(k)) + 1 + len(v) + sovSpec(uint64(len(v)))
-			n += mapEntrySize + 1 + sovSpec(uint64(mapEntrySize))
+	if len(m.PropertyKeys) > 0 {
+		l = 0
+		for _, e := range m.PropertyKeys {
+			l += sovSpec(uint64(e))
+		}
+		n += 1 + sovSpec(uint64(l)) + l
+	}
+	if len(m.PropertyValues) > 0 {
+		for _, s := range m.PropertyValues {
+			l = len(s)
+			n += 1 + l + sovSpec(uint64(l))
 		}
 	}
 	if m.CreatedAtNs != 0 {
@@ -559,6 +711,9 @@ func (m *PersistedMetadata) Size() (n int) {
 	if m.Parent != 0 {
 		n += 1 + sovSpec(uint64(m.Parent))
 	}
+	if m.Payload != 0 {
+		n += 1 + sovSpec(uint64(m.Payload))
+	}
 	return n
 }
 
@@ -574,6 +729,114 @@ func sovSpec(x uint64) (n int) {
 }
 func sozSpec(x uint64) (n int) {
 	return sovSpec(uint64((x << 1) ^ uint64((int64(x) >> 63))))
+}
+func (m *KV) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowSpec
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= (uint64(b) & 0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: KV: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: KV: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Key", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowSpec
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= (uint64(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthSpec
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Key = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Value", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowSpec
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= (uint64(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthSpec
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Value = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipSpec(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthSpec
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
 }
 func (m *Metadata) Unmarshal(dAtA []byte) error {
 	l := len(dAtA)
@@ -630,97 +893,10 @@ func (m *Metadata) Unmarshal(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			if m.Tags == nil {
-				m.Tags = make(map[string]string)
+			m.Tags = append(m.Tags, &KV{})
+			if err := m.Tags[len(m.Tags)-1].Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
 			}
-			var mapkey string
-			var mapvalue string
-			for iNdEx < postIndex {
-				entryPreIndex := iNdEx
-				var wire uint64
-				for shift := uint(0); ; shift += 7 {
-					if shift >= 64 {
-						return ErrIntOverflowSpec
-					}
-					if iNdEx >= l {
-						return io.ErrUnexpectedEOF
-					}
-					b := dAtA[iNdEx]
-					iNdEx++
-					wire |= (uint64(b) & 0x7F) << shift
-					if b < 0x80 {
-						break
-					}
-				}
-				fieldNum := int32(wire >> 3)
-				if fieldNum == 1 {
-					var stringLenmapkey uint64
-					for shift := uint(0); ; shift += 7 {
-						if shift >= 64 {
-							return ErrIntOverflowSpec
-						}
-						if iNdEx >= l {
-							return io.ErrUnexpectedEOF
-						}
-						b := dAtA[iNdEx]
-						iNdEx++
-						stringLenmapkey |= (uint64(b) & 0x7F) << shift
-						if b < 0x80 {
-							break
-						}
-					}
-					intStringLenmapkey := int(stringLenmapkey)
-					if intStringLenmapkey < 0 {
-						return ErrInvalidLengthSpec
-					}
-					postStringIndexmapkey := iNdEx + intStringLenmapkey
-					if postStringIndexmapkey > l {
-						return io.ErrUnexpectedEOF
-					}
-					mapkey = string(dAtA[iNdEx:postStringIndexmapkey])
-					iNdEx = postStringIndexmapkey
-				} else if fieldNum == 2 {
-					var stringLenmapvalue uint64
-					for shift := uint(0); ; shift += 7 {
-						if shift >= 64 {
-							return ErrIntOverflowSpec
-						}
-						if iNdEx >= l {
-							return io.ErrUnexpectedEOF
-						}
-						b := dAtA[iNdEx]
-						iNdEx++
-						stringLenmapvalue |= (uint64(b) & 0x7F) << shift
-						if b < 0x80 {
-							break
-						}
-					}
-					intStringLenmapvalue := int(stringLenmapvalue)
-					if intStringLenmapvalue < 0 {
-						return ErrInvalidLengthSpec
-					}
-					postStringIndexmapvalue := iNdEx + intStringLenmapvalue
-					if postStringIndexmapvalue > l {
-						return io.ErrUnexpectedEOF
-					}
-					mapvalue = string(dAtA[iNdEx:postStringIndexmapvalue])
-					iNdEx = postStringIndexmapvalue
-				} else {
-					iNdEx = entryPreIndex
-					skippy, err := skipSpec(dAtA[iNdEx:])
-					if err != nil {
-						return err
-					}
-					if skippy < 0 {
-						return ErrInvalidLengthSpec
-					}
-					if (iNdEx + skippy) > postIndex {
-						return io.ErrUnexpectedEOF
-					}
-					iNdEx += skippy
-				}
-			}
-			m.Tags[mapkey] = mapvalue
 			iNdEx = postIndex
 		case 2:
 			if wireType != 2 {
@@ -748,97 +924,10 @@ func (m *Metadata) Unmarshal(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			if m.Properties == nil {
-				m.Properties = make(map[string]string)
+			m.Properties = append(m.Properties, &KV{})
+			if err := m.Properties[len(m.Properties)-1].Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
 			}
-			var mapkey string
-			var mapvalue string
-			for iNdEx < postIndex {
-				entryPreIndex := iNdEx
-				var wire uint64
-				for shift := uint(0); ; shift += 7 {
-					if shift >= 64 {
-						return ErrIntOverflowSpec
-					}
-					if iNdEx >= l {
-						return io.ErrUnexpectedEOF
-					}
-					b := dAtA[iNdEx]
-					iNdEx++
-					wire |= (uint64(b) & 0x7F) << shift
-					if b < 0x80 {
-						break
-					}
-				}
-				fieldNum := int32(wire >> 3)
-				if fieldNum == 1 {
-					var stringLenmapkey uint64
-					for shift := uint(0); ; shift += 7 {
-						if shift >= 64 {
-							return ErrIntOverflowSpec
-						}
-						if iNdEx >= l {
-							return io.ErrUnexpectedEOF
-						}
-						b := dAtA[iNdEx]
-						iNdEx++
-						stringLenmapkey |= (uint64(b) & 0x7F) << shift
-						if b < 0x80 {
-							break
-						}
-					}
-					intStringLenmapkey := int(stringLenmapkey)
-					if intStringLenmapkey < 0 {
-						return ErrInvalidLengthSpec
-					}
-					postStringIndexmapkey := iNdEx + intStringLenmapkey
-					if postStringIndexmapkey > l {
-						return io.ErrUnexpectedEOF
-					}
-					mapkey = string(dAtA[iNdEx:postStringIndexmapkey])
-					iNdEx = postStringIndexmapkey
-				} else if fieldNum == 2 {
-					var stringLenmapvalue uint64
-					for shift := uint(0); ; shift += 7 {
-						if shift >= 64 {
-							return ErrIntOverflowSpec
-						}
-						if iNdEx >= l {
-							return io.ErrUnexpectedEOF
-						}
-						b := dAtA[iNdEx]
-						iNdEx++
-						stringLenmapvalue |= (uint64(b) & 0x7F) << shift
-						if b < 0x80 {
-							break
-						}
-					}
-					intStringLenmapvalue := int(stringLenmapvalue)
-					if intStringLenmapvalue < 0 {
-						return ErrInvalidLengthSpec
-					}
-					postStringIndexmapvalue := iNdEx + intStringLenmapvalue
-					if postStringIndexmapvalue > l {
-						return io.ErrUnexpectedEOF
-					}
-					mapvalue = string(dAtA[iNdEx:postStringIndexmapvalue])
-					iNdEx = postStringIndexmapvalue
-				} else {
-					iNdEx = entryPreIndex
-					skippy, err := skipSpec(dAtA[iNdEx:])
-					if err != nil {
-						return err
-					}
-					if skippy < 0 {
-						return ErrInvalidLengthSpec
-					}
-					if (iNdEx + skippy) > postIndex {
-						return io.ErrUnexpectedEOF
-					}
-					iNdEx += skippy
-				}
-			}
-			m.Properties[mapkey] = mapvalue
 			iNdEx = postIndex
 		case 5:
 			if wireType != 0 {
@@ -1082,39 +1171,8 @@ func (m *PersistedMetadata) Unmarshal(dAtA []byte) error {
 		}
 		switch fieldNum {
 		case 1:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Tags", wireType)
-			}
-			var msglen int
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowSpec
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			if msglen < 0 {
-				return ErrInvalidLengthSpec
-			}
-			postIndex := iNdEx + msglen
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			if m.Tags == nil {
-				m.Tags = make(map[uint64]string)
-			}
-			var mapkey uint64
-			var mapvalue string
-			for iNdEx < postIndex {
-				entryPreIndex := iNdEx
-				var wire uint64
+			if wireType == 0 {
+				var v uint64
 				for shift := uint(0); ; shift += 7 {
 					if shift >= 64 {
 						return ErrIntOverflowSpec
@@ -1124,75 +1182,72 @@ func (m *PersistedMetadata) Unmarshal(dAtA []byte) error {
 					}
 					b := dAtA[iNdEx]
 					iNdEx++
-					wire |= (uint64(b) & 0x7F) << shift
+					v |= (uint64(b) & 0x7F) << shift
 					if b < 0x80 {
 						break
 					}
 				}
-				fieldNum := int32(wire >> 3)
-				if fieldNum == 1 {
-					for shift := uint(0); ; shift += 7 {
-						if shift >= 64 {
-							return ErrIntOverflowSpec
-						}
-						if iNdEx >= l {
-							return io.ErrUnexpectedEOF
-						}
-						b := dAtA[iNdEx]
-						iNdEx++
-						mapkey |= (uint64(b) & 0x7F) << shift
-						if b < 0x80 {
-							break
-						}
+				m.TagKeys = append(m.TagKeys, v)
+			} else if wireType == 2 {
+				var packedLen int
+				for shift := uint(0); ; shift += 7 {
+					if shift >= 64 {
+						return ErrIntOverflowSpec
 					}
-				} else if fieldNum == 2 {
-					var stringLenmapvalue uint64
-					for shift := uint(0); ; shift += 7 {
-						if shift >= 64 {
-							return ErrIntOverflowSpec
-						}
-						if iNdEx >= l {
-							return io.ErrUnexpectedEOF
-						}
-						b := dAtA[iNdEx]
-						iNdEx++
-						stringLenmapvalue |= (uint64(b) & 0x7F) << shift
-						if b < 0x80 {
-							break
-						}
-					}
-					intStringLenmapvalue := int(stringLenmapvalue)
-					if intStringLenmapvalue < 0 {
-						return ErrInvalidLengthSpec
-					}
-					postStringIndexmapvalue := iNdEx + intStringLenmapvalue
-					if postStringIndexmapvalue > l {
+					if iNdEx >= l {
 						return io.ErrUnexpectedEOF
 					}
-					mapvalue = string(dAtA[iNdEx:postStringIndexmapvalue])
-					iNdEx = postStringIndexmapvalue
-				} else {
-					iNdEx = entryPreIndex
-					skippy, err := skipSpec(dAtA[iNdEx:])
-					if err != nil {
-						return err
+					b := dAtA[iNdEx]
+					iNdEx++
+					packedLen |= (int(b) & 0x7F) << shift
+					if b < 0x80 {
+						break
 					}
-					if skippy < 0 {
-						return ErrInvalidLengthSpec
-					}
-					if (iNdEx + skippy) > postIndex {
-						return io.ErrUnexpectedEOF
-					}
-					iNdEx += skippy
 				}
+				if packedLen < 0 {
+					return ErrInvalidLengthSpec
+				}
+				postIndex := iNdEx + packedLen
+				if postIndex > l {
+					return io.ErrUnexpectedEOF
+				}
+				var elementCount int
+				var count int
+				for _, integer := range dAtA {
+					if integer < 128 {
+						count++
+					}
+				}
+				elementCount = count
+				if elementCount != 0 && len(m.TagKeys) == 0 {
+					m.TagKeys = make([]uint64, 0, elementCount)
+				}
+				for iNdEx < postIndex {
+					var v uint64
+					for shift := uint(0); ; shift += 7 {
+						if shift >= 64 {
+							return ErrIntOverflowSpec
+						}
+						if iNdEx >= l {
+							return io.ErrUnexpectedEOF
+						}
+						b := dAtA[iNdEx]
+						iNdEx++
+						v |= (uint64(b) & 0x7F) << shift
+						if b < 0x80 {
+							break
+						}
+					}
+					m.TagKeys = append(m.TagKeys, v)
+				}
+			} else {
+				return fmt.Errorf("proto: wrong wireType = %d for field TagKeys", wireType)
 			}
-			m.Tags[mapkey] = mapvalue
-			iNdEx = postIndex
 		case 2:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Properties", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field TagValues", wireType)
 			}
-			var msglen int
+			var stringLen uint64
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return ErrIntOverflowSpec
@@ -1202,26 +1257,24 @@ func (m *PersistedMetadata) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
+				stringLen |= (uint64(b) & 0x7F) << shift
 				if b < 0x80 {
 					break
 				}
 			}
-			if msglen < 0 {
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
 				return ErrInvalidLengthSpec
 			}
-			postIndex := iNdEx + msglen
+			postIndex := iNdEx + intStringLen
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			if m.Properties == nil {
-				m.Properties = make(map[uint64]string)
-			}
-			var mapkey uint64
-			var mapvalue string
-			for iNdEx < postIndex {
-				entryPreIndex := iNdEx
-				var wire uint64
+			m.TagValues = append(m.TagValues, string(dAtA[iNdEx:postIndex]))
+			iNdEx = postIndex
+		case 3:
+			if wireType == 0 {
+				var v uint64
 				for shift := uint(0); ; shift += 7 {
 					if shift >= 64 {
 						return ErrIntOverflowSpec
@@ -1231,13 +1284,48 @@ func (m *PersistedMetadata) Unmarshal(dAtA []byte) error {
 					}
 					b := dAtA[iNdEx]
 					iNdEx++
-					wire |= (uint64(b) & 0x7F) << shift
+					v |= (uint64(b) & 0x7F) << shift
 					if b < 0x80 {
 						break
 					}
 				}
-				fieldNum := int32(wire >> 3)
-				if fieldNum == 1 {
+				m.PropertyKeys = append(m.PropertyKeys, v)
+			} else if wireType == 2 {
+				var packedLen int
+				for shift := uint(0); ; shift += 7 {
+					if shift >= 64 {
+						return ErrIntOverflowSpec
+					}
+					if iNdEx >= l {
+						return io.ErrUnexpectedEOF
+					}
+					b := dAtA[iNdEx]
+					iNdEx++
+					packedLen |= (int(b) & 0x7F) << shift
+					if b < 0x80 {
+						break
+					}
+				}
+				if packedLen < 0 {
+					return ErrInvalidLengthSpec
+				}
+				postIndex := iNdEx + packedLen
+				if postIndex > l {
+					return io.ErrUnexpectedEOF
+				}
+				var elementCount int
+				var count int
+				for _, integer := range dAtA {
+					if integer < 128 {
+						count++
+					}
+				}
+				elementCount = count
+				if elementCount != 0 && len(m.PropertyKeys) == 0 {
+					m.PropertyKeys = make([]uint64, 0, elementCount)
+				}
+				for iNdEx < postIndex {
+					var v uint64
 					for shift := uint(0); ; shift += 7 {
 						if shift >= 64 {
 							return ErrIntOverflowSpec
@@ -1247,53 +1335,44 @@ func (m *PersistedMetadata) Unmarshal(dAtA []byte) error {
 						}
 						b := dAtA[iNdEx]
 						iNdEx++
-						mapkey |= (uint64(b) & 0x7F) << shift
+						v |= (uint64(b) & 0x7F) << shift
 						if b < 0x80 {
 							break
 						}
 					}
-				} else if fieldNum == 2 {
-					var stringLenmapvalue uint64
-					for shift := uint(0); ; shift += 7 {
-						if shift >= 64 {
-							return ErrIntOverflowSpec
-						}
-						if iNdEx >= l {
-							return io.ErrUnexpectedEOF
-						}
-						b := dAtA[iNdEx]
-						iNdEx++
-						stringLenmapvalue |= (uint64(b) & 0x7F) << shift
-						if b < 0x80 {
-							break
-						}
-					}
-					intStringLenmapvalue := int(stringLenmapvalue)
-					if intStringLenmapvalue < 0 {
-						return ErrInvalidLengthSpec
-					}
-					postStringIndexmapvalue := iNdEx + intStringLenmapvalue
-					if postStringIndexmapvalue > l {
-						return io.ErrUnexpectedEOF
-					}
-					mapvalue = string(dAtA[iNdEx:postStringIndexmapvalue])
-					iNdEx = postStringIndexmapvalue
-				} else {
-					iNdEx = entryPreIndex
-					skippy, err := skipSpec(dAtA[iNdEx:])
-					if err != nil {
-						return err
-					}
-					if skippy < 0 {
-						return ErrInvalidLengthSpec
-					}
-					if (iNdEx + skippy) > postIndex {
-						return io.ErrUnexpectedEOF
-					}
-					iNdEx += skippy
+					m.PropertyKeys = append(m.PropertyKeys, v)
+				}
+			} else {
+				return fmt.Errorf("proto: wrong wireType = %d for field PropertyKeys", wireType)
+			}
+		case 4:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field PropertyValues", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowSpec
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= (uint64(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
 				}
 			}
-			m.Properties[mapkey] = mapvalue
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthSpec
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.PropertyValues = append(m.PropertyValues, string(dAtA[iNdEx:postIndex]))
 			iNdEx = postIndex
 		case 5:
 			if wireType != 0 {
@@ -1386,6 +1465,25 @@ func (m *PersistedMetadata) Unmarshal(dAtA []byte) error {
 				b := dAtA[iNdEx]
 				iNdEx++
 				m.Parent |= (uint64(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 11:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Payload", wireType)
+			}
+			m.Payload = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowSpec
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Payload |= (uint64(b) & 0x7F) << shift
 				if b < 0x80 {
 					break
 				}

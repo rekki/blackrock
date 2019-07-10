@@ -1,0 +1,36 @@
+{{ $m := .Metadata }}
+{{ $maker := .Maker }}
+<tr>
+  <td colspan=2>
+    <a href="/scan/haml/type:{{ $m.Type }}">{{$m.Type }}</a><br>
+    <a href="/scan/haml/maker:{{ .Maker }}">{{.Maker}}</a><br>
+    {{ time $m.CreatedAtNs }}<br>
+  </td>
+</tr>
+
+{{ range $m.Tags }}
+<tr>
+  <td class="left">
+    {{ .Key }}
+  </td>
+  <td class="right">
+    <a href="/scan/html/maker:{{$maker}}/{{ .Key }}/{{ .Value}}">{{.Value}}</a>
+  </td>
+</tr>
+{{ end }}
+
+
+{{ range $m.Properties }}
+<tr>
+  <td class="left">
+      {{ .Key }}
+  </td>
+  <td class="right">
+      {{.Value}}
+  </td>
+</tr>
+{{ end }}
+
+<tr>
+<td colspan=2 class="hit-sep">&nbsp;</td>
+</tr>

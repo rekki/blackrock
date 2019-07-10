@@ -1,0 +1,23 @@
+<tr>
+  <td class="left">
+    {{ .Data.Key }}
+  </td>
+  <td class="right">
+    total: {{ .Data.TotalCount }} {{ percent .GlobalTotal .Data.TotalCount }}
+  </td>
+</tr>
+{{ $total := .Data.TotalCount }}
+{{ $b := .BaseUrl }}
+{{ $tag := .Data.Key }}
+{{ range .Data.Values }}
+{{ $p := percent $total .Count }}
+
+<tr>
+  <td class="left">
+    &nbsp;&nbsp;&nbsp;&nbsp;<a href="{{$b}}/{{$tag}}:{{.Value}}">{{ .Value }}</a>, {{ .Count }} ({{$p}}%)
+  </td>
+  <td class="right">
+     <div style="display: inline-block; width: {{$p}}%; background-color: gray;">&nbsp;</div>
+  </td>
+</tr>
+{{ end }}

@@ -1,6 +1,9 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"html/template"
@@ -9,6 +12,7 @@ import (
 	_ "net/http/pprof"
 	"os"
 	"path"
+	"reflect"
 	"runtime"
 	"sort"
 	"strings"
@@ -21,6 +25,7 @@ import (
 	"github.com/jackdoe/blackrock/orgrim/spec"
 	auth "github.com/jackdoe/gin-basic-auth-dynamic"
 	log "github.com/sirupsen/logrus"
+	"gopkg.in/yaml.v2"
 )
 
 type QueryRequest struct {
@@ -42,38 +47,27 @@ type Hit struct {
 	KafkaOffset *KafkaOffset   `json:"kafka,omitempty"`
 }
 
-func (h Hit) String(link bool) string {
+type ByKV []*spec.KV
+
+func (a ByKV) Len() int      { return len(a) }
+func (a ByKV) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
+func (a ByKV) Less(i, j int) bool {
+	if a[i].Key == a[j].Key {
+		return a[i].Value < a[j].Value
+	}
+	return a[i].Key < a[j].Key
+}
+
+func (h Hit) String() string {
 	out := []string{}
 	m := h.Metadata
 	t := time.Unix(m.CreatedAtNs/1000000000, 0)
-	if !link {
-		out = append(out, fmt.Sprintf("%s\n%s\n%s", m.Maker, m.Type, t.Format(time.UnixDate)))
-	} else {
-		out = append(out, fmt.Sprintf("<a href='/scan/html/maker:%s'>%s</a>", m.Maker, m.Maker))
-		out = append(out, fmt.Sprintf("<a href='/scan/html/maker:%s/%s:%s'>%s</a>", m.Maker, "type", m.Type, m.Type))
-		out = append(out, fmt.Sprintf("%s", t.Format(time.UnixDate)))
+	out = append(out, fmt.Sprintf("%s\n%s\n%s", m.Maker, m.Type, t.Format(time.UnixDate)))
+	for _, kv := range m.Tags {
+		out = append(out, fmt.Sprintf("  %-30s: %s", kv.Key, kv.Value))
 	}
-	keys := []string{}
-	for k, _ := range m.Tags {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	for _, k := range keys {
-		v := m.Tags[k]
-		if !link {
-			out = append(out, fmt.Sprintf("  %-30s: %s", k, v))
-		} else {
-			out = append(out, fmt.Sprintf("  %-30s: <a href='/scan/html/maker:%s/%s:%s'>%s</a>", k, m.Maker, k, v, v))
-		}
-	}
-	keys = []string{}
-	for k, _ := range m.Properties {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	for _, k := range keys {
-		v := m.Properties[k]
-		out = append(out, fmt.Sprintf("  %-30s: %s", k, v))
+	for _, kv := range m.Properties {
+		out = append(out, fmt.Sprintf("  %-30s: %s", kv.Key, kv.Value))
 	}
 
 	return strings.Join(out, "\n") + "\n\n"
@@ -128,20 +122,25 @@ func toHit(dictionary *disk.PersistedDictionary, did int64, maker uint64, p *spe
 		return hit
 	}
 	pretty := &spec.Metadata{
-		Maker:      hit.Maker,
-		Type:       dictionary.ReverseResolve(p.Type),
-		Tags:       map[string]string{},
-		Properties: map[string]string{},
+		Maker:       hit.Maker,
+		Type:        dictionary.ReverseResolve(p.Type),
+		Tags:        []*spec.KV{},
+		Properties:  []*spec.KV{},
+		CreatedAtNs: p.CreatedAtNs,
 	}
 	hit.KafkaOffset = &KafkaOffset{Offset: p.Offset, Partition: p.Partition}
-	for k, v := range p.Tags {
-		tk := dictionary.ReverseResolve(k)
-		pretty.Tags[tk] = v
+	for i := 0; i < len(p.TagKeys); i++ {
+		tk := dictionary.ReverseResolve(p.TagKeys[i])
+		pretty.Tags = append(pretty.Tags, &spec.KV{Key: tk, Value: p.TagValues[i]})
 	}
-	for k, v := range p.Properties {
-		tk := dictionary.ReverseResolve(k)
-		pretty.Properties[tk] = v
+
+	for i := 0; i < len(p.PropertyKeys); i++ {
+		tk := dictionary.ReverseResolve(p.PropertyKeys[i])
+		pretty.Properties = append(pretty.Properties, &spec.KV{Key: tk, Value: p.PropertyValues[i]})
 	}
+
+	sort.Sort(ByKV(pretty.Tags))
+	sort.Sort(ByKV(pretty.Properties))
 
 	hit.Metadata = pretty
 	return hit
@@ -211,7 +210,9 @@ func (c *Counter) Prettify() *CountedResult {
 }
 
 func (c *Counter) Add(offset int64, maker uint64, p *spec.PersistedMetadata) {
-	for k, v := range p.Tags {
+	for i := 0; i < len(p.TagKeys); i++ {
+		k := p.TagKeys[i]
+		v := p.TagValues[i]
 		m, ok := c.Tags[k]
 		if !ok {
 			m = map[string]uint32{}
@@ -219,8 +220,11 @@ func (c *Counter) Add(offset int64, maker uint64, p *spec.PersistedMetadata) {
 		}
 		m[v]++
 	}
-	for k, v := range p.Properties {
-		m, ok := c.Properties[k]
+
+	for i := 0; i < len(p.PropertyKeys); i++ {
+		k := p.PropertyKeys[i]
+		v := p.PropertyValues[i]
+		m, ok := c.Tags[k]
 		if !ok {
 			m = map[string]uint32{}
 			c.Properties[k] = m
@@ -258,35 +262,37 @@ type CountedResult struct {
 }
 
 func (cr *CountedResult) String(c *gin.Context) {
-	t := cr.prettyCategoryStats(false, strings.TrimRight(c.Request.URL.Path, "/"))
+	t := cr.prettyCategoryStats()
 	c.String(200, t)
+}
+
+type Breadcrumb struct {
+	Base  string
+	Exact string
 }
 
 func (cr *CountedResult) HTML(c *gin.Context) {
 	url := strings.TrimRight(c.Request.URL.Path, "/")
-	t := cr.prettyCategoryStats(true, url)
+	t := cr.prettyCategoryStats()
 	splitted := strings.Split(url, "/")
-
-	crumbs := []string{`<a href="/scan/html/">/scan/html/</a>`}
-
+	crumbs := []Breadcrumb{}
 	for i := 0; i < len(splitted[3:]); i++ {
 		v := splitted[i+3]
 		p := strings.Join(splitted[:i+3], "/")
-		crumbs = append(crumbs, fmt.Sprintf(`<a href="%s/%s">%s</a> <a href="/scan/html/%s">=</a>`, p, v, v, v))
+		crumbs = append(crumbs, Breadcrumb{Base: p, Exact: v})
 	}
-	cs := strings.Join(crumbs, ", ")
-	c.HTML(http.StatusOK, "/html/t/index.tmpl", map[string]interface{}{"Body": t, "Crumbs": cs})
+	c.HTML(http.StatusOK, "/html/t/index.tmpl", map[string]interface{}{"Body": t, "Crumbs": crumbs, "Stats": cr, "BaseUrl": url})
 }
 
-func (cr CountedResult) prettyCategoryStats(link bool, base string) string {
-	makers := prettyStats("MAKERS", []*PerKey{cr.Makers}, link, base)
-	types := prettyStats("TYPES", []*PerKey{cr.Types}, link, base)
-	properties := prettyStats("PROPERTIES", cr.Properties, false, base)
-	tags := prettyStats("TAGS", cr.Tags, link, base)
+func (cr CountedResult) prettyCategoryStats() string {
+	makers := prettyStats("MAKERS", []*PerKey{cr.Makers})
+	types := prettyStats("TYPES", []*PerKey{cr.Types})
+	properties := prettyStats("PROPERTIES", cr.Properties)
+	tags := prettyStats("TAGS", cr.Tags)
 	out := fmt.Sprintf("%s%s%s%s\n", makers, types, tags, properties)
 	out += chart.Banner("SAMPLE")
 	for _, h := range cr.Sample {
-		out += fmt.Sprintf("%s\n", h.String(link))
+		out += fmt.Sprintf("%s\n", h.String())
 	}
 	return out
 }
@@ -324,7 +330,7 @@ func statsForMapMap(pd *disk.PersistedDictionary, input map[uint64]map[string]ui
 	return out
 }
 
-func prettyStats(title string, stats []*PerKey, link bool, base string) string {
+func prettyStats(title string, stats []*PerKey) string {
 	if stats == nil {
 		return ""
 	}
@@ -355,12 +361,7 @@ func prettyStats(title string, stats []*PerKey, link bool, base string) string {
 
 		for _, v := range t.Values {
 			x = append(x, float64(v.Count))
-			linkified := v.Value
-			if link {
-				linkified = fmt.Sprintf("<a href='%s/%s:%s'>%s</a>", base, t.Key, v.Value, v.Value)
-			}
-
-			y = append(y, chart.Label{Display: linkified, Len: len(v.Value)})
+			y = append(y, chart.Label{Display: v.Value, Len: len(v.Value)})
 		}
 		percent := float64(100) * float64(t.TotalCount) / float64(total)
 		out = append(out, fmt.Sprintf("« %s » total: %d, %.2f%%\n%s", t.Key, t.TotalCount, percent, chart.HorizontalBar(x, y, '▒', width, pad, 50)))
@@ -440,8 +441,8 @@ func main() {
 			ok := user == u && pass == p
 			return auth.AuthResult{Success: ok, Text: "not authorized"}
 		}))
-
 	}
+
 	go func() {
 		for {
 			tmp, err := disk.NewPersistedDictionary(root)
@@ -590,10 +591,68 @@ func main() {
 	log.Panic(r.Run(*bind))
 }
 
+func dumpObj(src interface{}) string {
+	data, err := yaml.Marshal(src)
+	if err != nil {
+		log.Fatalf("marshaling to JSON failed: %s", err.Error())
+	}
+	var out bytes.Buffer
+	err = json.Indent(&out, data, "", "  ")
+	if err != nil {
+		log.Fatalf("failed to dump object: %s", err.Error())
+	}
+	return string(out.Bytes())
+}
+
 func loadTemplate() (*template.Template, error) {
 	t := template.New("").Funcs(template.FuncMap{
 		"banner": func(b string) string {
 			return chart.Banner(b)
+		},
+		"time": func(b int64) string {
+			t := time.Unix(b/1000000000, 0)
+			return t.Format(time.UnixDate)
+		},
+		"pretty": func(b interface{}) string {
+			return dumpObj(b)
+		},
+		"format": func(value float64) string {
+			return fmt.Sprintf("%.2f", value)
+		},
+		"percent": func(value ...interface{}) string {
+			a := float64(value[0].(int64))
+			b := float64(value[1].(int64))
+
+			return fmt.Sprintf("%.2f", (100 * (b / a)))
+		},
+		"dict": func(values ...interface{}) (map[string]interface{}, error) {
+			if len(values) == 0 {
+				return nil, errors.New("invalid dict call")
+			}
+
+			dict := make(map[string]interface{})
+
+			for i := 0; i < len(values); i++ {
+				key, isset := values[i].(string)
+				if !isset {
+					if reflect.TypeOf(values[i]).Kind() == reflect.Map {
+						m := values[i].(map[string]interface{})
+						for i, v := range m {
+							dict[i] = v
+						}
+					} else {
+						return nil, errors.New("dict values must be maps")
+					}
+				} else {
+					i++
+					if i == len(values) {
+						return nil, errors.New("specify the key for non array values")
+					}
+					dict[key] = values[i]
+				}
+
+			}
+			return dict, nil
 		},
 		"safeHTML": func(b string) template.HTML {
 			return template.HTML(b)

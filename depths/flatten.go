@@ -140,8 +140,19 @@ func flatten(top bool, flatMap map[string]string, nested interface{}, prefix str
 			if err := flatten(false, flatMap, v, newKey, style); err != nil {
 				return err
 			}
+
+		case string:
+			flatMap[newKey] = v.(string)
+		case int32, int64, int16:
+			flatMap[newKey] = fmt.Sprintf("%d", v.(int32))
+		case uint16, uint32, uint64:
+			flatMap[newKey] = fmt.Sprintf("%d", v.(uint64))
+		case float32, float64:
+			flatMap[newKey] = strconv.FormatFloat(v.(float64), 'f', 0, 64)
+
 		default:
 			flatMap[newKey] = fmt.Sprintf("%v", v)
+
 		}
 
 		return nil

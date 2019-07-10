@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"os"
 	"os/signal"
+	"sort"
 	"syscall"
 
 	"github.com/gin-contrib/cors"
@@ -37,6 +38,55 @@ func dumpObj(src interface{}) string {
 	return string(out.Bytes())
 }
 
+/*
+
+{
+   restaurant: {
+       "92e2e4af-f833-492e-9ade-f797bbaa80fd": true,
+       "ca91f7ab-13fa-46b7-9fbc-3f0276647238": true
+   }
+   message: "hello",
+}
+in this case you want to search for message:helo/restaurant:92e2e4af-f833-492e-9ade-f797bbaa80fd
+
+{
+   restaurant: {
+       "92e2e4af-f833-492e-9ade-f797bbaa80fd": { updated: true  },
+       "ca91f7ab-13fa-46b7-9fbc-3f0276647238": { updated: false }
+   }
+}
+
+
+{
+   example: {
+      restaurant: {
+          "92e2e4af-f833-492e-9ade-f797bbaa80fd": { updated: true  },
+          "ca91f7ab-13fa-46b7-9fbc-3f0276647238": { updated: false }
+      }
+   }
+}
+
+possible search would be restaurant:92e2e4af-f833-492e-9ade-f797bbaa80fd/updated:true
+but never restaurant:true or example:true
+
+because of this we make extremely simple convention, every key that
+has _id or _ids is expanded, e.g.:
+
+{
+   example: {
+      restaurant_id: {
+          "92e2e4af-f833-492e-9ade-f797bbaa80fd": { updated: true  },
+          "ca91f7ab-13fa-46b7-9fbc-3f0276647238": { updated: false }
+      }
+   }
+}
+
+this event will be findable by 'restaurant_id:ca91f7ab-13fa-46b7-9fbc-3f0276647238'
+but also 'example.retaurant_id.ca91f7ab-13fa-46b7-9fbc-3f0276647238.updated:true'
+
+
+*/
+
 type JsonFrame struct {
 	Tags        map[string]interface{} `json:"tags"`
 	Properties  map[string]interface{} `json:"properties"`
@@ -44,6 +94,65 @@ type JsonFrame struct {
 	Maker       string                 `json:"maker"`
 	Type        string                 `json:"type"`
 	Payload     interface{}            `json:"payload"`
+}
+
+func transform(m map[string]interface{}, expand bool) ([]*spec.KV, error) {
+	out := []*spec.KV{}
+	flatten, err := depths.Flatten(m, "", depths.DotStyle)
+	if err != nil {
+		return nil, err
+	}
+	seen := map[string]bool{}
+	add := func(k, v string) {
+		key := k + "_" + v
+		if _, ok := seen[key]; ok {
+			return
+		}
+		seen[key] = true
+		out = append(out, &spec.KV{Key: k, Value: v})
+	}
+	hasID := func(s string) bool {
+		return strings.HasSuffix(s, "_id") || strings.HasSuffix(s, "_ids")
+	}
+	for k, v := range flatten {
+		if expand {
+			// a lot of CoC here, path like example.restaurant_id.92e2e4af-f833-492e-9ade-f797bbaa80fd.updated = true
+			// will be expanded to restaurant_id:92e2e4af-f833-492e-9ade-f797bbaa80fd and example.updated:true
+			// so that it can be found, this of course is not ideal
+
+			splitted := strings.Split(k, ".")
+			noid := []string{}
+
+			for i := len(splitted) - 1; i >= 0; i-- {
+				part := splitted[i]
+				prev := ""
+				if i > 0 {
+					prev = splitted[i-1]
+				}
+				if hasID(part) {
+					add(part, v)
+				} else {
+					if hasID(prev) {
+						add(prev, part)
+						i--
+					} else {
+						noid = append(noid, part)
+					}
+				}
+			}
+
+			sort.SliceStable(noid, func(i, j int) bool {
+				return true
+			})
+			if len(noid) > 0 {
+				add(strings.Join(noid, "."), v)
+			}
+		} else {
+			out = append(out, &spec.KV{Key: k, Value: v})
+		}
+	}
+
+	return out, nil
 }
 
 func main() {
@@ -104,67 +213,6 @@ func main() {
 			return
 		}
 		c.String(200, "OK")
-	})
-
-	r.POST("/push/raw/:type/:maker", func(c *gin.Context) {
-		body := c.Request.Body
-		defer body.Close()
-
-		data, err := ioutil.ReadAll(body)
-		if err != nil {
-			log.Infof("[orgrim] error reading, error: %s", err.Error())
-			c.JSON(400, gin.H{"error": err.Error()})
-			return
-		}
-
-		tags := map[string]string{}
-		maker := c.Param("maker")
-		etype := c.Param("type")
-		for k, values := range c.Request.URL.Query() {
-			for _, v := range values {
-				if v == "" {
-					continue
-				}
-				if k == "maker" {
-					maker = v
-				} else if k == "type" {
-					etype = v
-				} else {
-					tags[k] = v
-				}
-			}
-		}
-		if maker == "" {
-			maker = "__nobody"
-		}
-		if etype == "" {
-			etype = "event"
-		}
-		metadata := &spec.Metadata{
-			Tags:        tags,
-			CreatedAtNs: time.Now().UnixNano(),
-			Type:        etype,
-			Maker:       maker,
-		}
-		envelope := &spec.Envelope{Metadata: metadata, Payload: data}
-		encoded, err := proto.Marshal(envelope)
-		if err != nil {
-			log.Warnf("[orgrim] error encoding metadata %v, error: %s", metadata, err.Error())
-			c.JSON(500, gin.H{"error": err.Error()})
-			return
-		}
-
-		err = kw.WriteMessages(context.Background(), kafka.Message{
-			Value: encoded,
-		})
-
-		if err != nil {
-			log.Warnf("[orgrim] error sending message, metadata %v, error: %s", metadata, err.Error())
-			c.JSON(500, gin.H{"error": err.Error()})
-			return
-		}
-
-		c.JSON(200, gin.H{"success": true})
 	})
 
 	r.POST("/push/envelope", func(c *gin.Context) {
@@ -252,9 +300,9 @@ func main() {
 			metadata.CreatedAtNs = time.Now().UnixNano()
 		}
 
-		tags := map[string]string{}
+		tags := []*spec.KV{}
 		if metadata.Tags != nil {
-			tags, err = depths.Flatten(metadata.Tags, "", depths.DotStyle)
+			tags, err = transform(metadata.Tags, true)
 			if err != nil {
 				log.Warnf("[orgrim] unable to flatten tags error: %s", err.Error())
 				c.JSON(500, gin.H{"error": "unable to flatten"})
@@ -262,15 +310,16 @@ func main() {
 			}
 		}
 
-		properties := map[string]string{}
+		properties := []*spec.KV{}
 		if metadata.Properties != nil {
-			properties, err = depths.Flatten(metadata.Properties, "", depths.DotStyle)
+			properties, err = transform(metadata.Properties, true)
 			if err != nil {
 				log.Warnf("[orgrim] unable to flatten properties error: %s", err.Error())
 				c.JSON(500, gin.H{"error": "unable to flatten"})
 				return
 			}
 		}
+
 		converted := spec.Envelope{
 			Metadata: &spec.Metadata{
 				Tags:        tags,
@@ -280,6 +329,7 @@ func main() {
 				Maker:       metadata.Maker,
 			},
 		}
+
 		if metadata.Payload != nil {
 			payload, err := json.Marshal(&metadata.Payload)
 			if err != nil {

@@ -80,6 +80,11 @@ func main() {
 		log.Fatal(err)
 	}
 
+	payload, err := disk.NewForwardWriter(root, "payload")
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	inverted, err := disk.NewInvertedWriter(root, *maxDescriptors)
 	if err != nil {
 		log.Fatal(err)
@@ -135,34 +140,55 @@ func main() {
 			log.Fatal("failed to get dictionary value for %v", meta)
 		}
 
+		poff, err := payload.Append(maker, envelope.Payload)
+		if err != nil {
+			log.Fatal(err)
+		}
+
 		stype := depths.Cleanup(strings.ToLower(meta.Type))
 		etype, err := dictionary.GetUniqueTerm(stype)
 		if err != nil {
 			log.Fatal("failed to get dictionary value for %v", meta)
 		}
+
 		persisted := &spec.PersistedMetadata{
 			Partition:   uint32(m.Partition),
 			Offset:      uint64(m.Offset),
 			CreatedAtNs: envelope.Metadata.CreatedAtNs,
+			TagKeys:     []uint64{},
+			Payload:     poff,
 			Type:        etype,
-			Tags:        map[uint64]string{},
-			Properties:  map[uint64]string{},
 		}
 
-		for k, v := range meta.Tags {
-			tk, err := dictionary.GetUniqueTerm(k)
+		for _, kv := range meta.Tags {
+			k := kv.Key
+			v := kv.Value
+			lc := strings.ToLower(k)
+			if lc == "type" {
+				continue
+			}
+			if lc == "maker" {
+				continue
+			}
+
+			tk, err := dictionary.GetUniqueTerm(lc)
 			if err != nil {
 				log.Fatal("failed to get dictionary value for %v", meta)
 			}
-			persisted.Tags[tk] = depths.Cleanup(strings.ToLower(v))
+			persisted.TagKeys = append(persisted.TagKeys, tk)
+			persisted.TagValues = append(persisted.TagValues, depths.Cleanup(strings.ToLower(v)))
 		}
 
-		for k, v := range meta.Properties {
+		for _, kv := range meta.Properties {
+			k := kv.Key
+			v := kv.Value
+
 			pk, err := dictionary.GetUniqueTerm(k)
 			if err != nil {
 				log.Fatal("failed to get dictionary value for %v", m)
 			}
-			persisted.Properties[pk] = v
+			persisted.PropertyKeys = append(persisted.PropertyKeys, pk)
+			persisted.PropertyValues = append(persisted.PropertyValues, v)
 		}
 
 		encoded, err := proto.Marshal(persisted)
@@ -177,8 +203,9 @@ func main() {
 
 		inverted.Append(int64(id), makerKey, smaker)
 		inverted.Append(int64(id), typeKey, stype)
-		for k, v := range persisted.Tags {
-			inverted.Append(int64(id), k, v)
+
+		for i := 0; i < len(persisted.TagKeys); i++ {
+			inverted.Append(int64(id), persisted.TagKeys[i], persisted.TagValues[i])
 		}
 
 		log.Infof("message at topic/partition/offset %v/%v/%v: %s\n", m.Topic, m.Partition, m.Offset, envelope.Metadata.String())

@@ -27,12 +27,51 @@
       color: #000;
       text-decoration: none;
       }
+      .hit-sep {
+      background-color: gray;
+      }
+      .left {
+      width: 30ch;
+      word-break: break-all
+      }
+      .right {
+      width: 50ch;
+      word-break: break-all
+      }
+      table {
+      width: 80ch;
+      }
+
     </style>
   </head>
   <body>
+    <a href="/scan/html/">/scan/html/</a>&nbsp;&nbsp;
+    {{ range .Crumbs }}
+    <a href="{{ .Base }}/{{.Exact}}">{{.Exact}}</a> <a href="/scan/html/{{.Exact}}">=</a>&nbsp;&nbsp;
+    {{ end }}
+    {{ $total := .Stats.TotalCount }}
+    {{ $base := .BaseUrl }}
+    <table border=0>
+      <tr><td colspan=2><pre>{{ banner "makers"}}</pre></td></tr>
+      {{ template "/html/t/chart.tmpl" dict "Data" .Stats.Makers "GlobalTotal" $total "BaseUrl" $base}}
+      <tr><td colspan=2><pre>{{ banner "types"}}</pre></td></tr>
+      {{ template "/html/t/chart.tmpl" dict "Data" .Stats.Types "GlobalTotal" $total  "BaseUrl" $base}}
+      <tr><td colspan=2><pre>{{ banner "tags"}}</pre></td></tr>
+      {{ range .Stats.Tags }}
+      {{ template "/html/t/chart.tmpl" dict "Data" . "GlobalTotal" $total  "BaseUrl" $base}}
+      {{ end }}
+      <tr><td colspan=2><pre>{{ banner "properties"}}</pre></td></tr>
+      {{ range .Stats.Properties }}
+      {{ template "/html/t/chart.tmpl" dict "Data" . "GlobalTotal" $total  "BaseUrl" $base}}
+      {{ end }}
+      <tr><td colspan=2><pre>{{ banner "sample"}}</pre></td></tr>
+      {{ range .Stats.Sample }}
+      {{ template "/html/t/hit.tmpl" . }}
+      {{ end  }}
+    </table>
     <pre>
-      {{ .Crumbs | safeHTML }}
       {{ .Body | safeHTML }}
     </pre>
+
   </body>
 </html>
