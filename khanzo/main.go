@@ -224,7 +224,7 @@ func (c *Counter) Add(offset int64, maker uint64, p *spec.PersistedMetadata) {
 	for i := 0; i < len(p.PropertyKeys); i++ {
 		k := p.PropertyKeys[i]
 		v := p.PropertyValues[i]
-		m, ok := c.Tags[k]
+		m, ok := c.Properties[k]
 		if !ok {
 			m = map[string]uint32{}
 			c.Properties[k] = m
@@ -280,6 +280,10 @@ func (cr *CountedResult) HTML(c *gin.Context) {
 		p := strings.Join(splitted[:i+3], "/")
 		crumbs = append(crumbs, Breadcrumb{Base: p, Exact: v})
 	}
+	if url == "/scan/html" {
+		url = "/scan/html/"
+	}
+
 	c.HTML(http.StatusOK, "/html/t/index.tmpl", map[string]interface{}{"Crumbs": crumbs, "Stats": cr, "BaseUrl": url})
 }
 

@@ -9,19 +9,23 @@
 {{ $total := .Data.TotalCount }}
 {{ $b := .BaseUrl }}
 {{ $tag := .Data.Key }}
+{{ $link := .Link }}
 
 {{ range $i, $val := .Data.Values }}
 {{ $p := percent $total $val.Count }}
 {{ if lt $i 50}}
 <tr>
   <td class="left">
-    &nbsp;&nbsp;&nbsp;&nbsp;<a href="{{$b}}/{{$tag}}:{{$val.Value}}">{{ $val.Value }}</a>
+    {{ if $link }}
+    <div style="padding-left: 1.5em"><a href="{{$b}}/{{$tag}}:{{$val.Value}}">{{ $val.Value }}</a></div>
+    {{ else }}
+    <div style="padding-left: 1.5em">{{ $val.Value }}</div>
+    {{ end }}
   </td>
   <td class="right">
     <div style="position: relative">
      <div style="display: inline-block; z-index: 1">{{ format $val.Count }} ({{$p}}%)</div>
      <div style="position: absolute; left: 0; bottom: 0;  display: inline-block; width: {{$p}}%; background-color: rgba(200,200,200,0.5);">&nbsp;</div>
-
     </div>
   </td>
 </tr>

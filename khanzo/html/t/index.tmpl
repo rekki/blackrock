@@ -16,7 +16,7 @@
       font-family: "blackrock";
       background-color: white;
       color: #3f3f3f;
-      max-width: 50rem;
+      max-width: 55rem;
       padding: 1rem;
       font-size: 14px;
       margin: auto;
@@ -34,11 +34,11 @@
       }
       .left {
       width: 30%;
-      word-break: break-all
+      word-break: break-word
       }
       .right {
       width: 30%;
-      word-break: break-all
+      word-break: break-word
       }
       table {
       width: 100%;
@@ -59,16 +59,16 @@
 
     <table border=0>
       <tr><td colspan=2><pre class="banner">{{ banner "makers"}}</pre></td></tr>
-      {{ template "/html/t/chart.tmpl" dict "Data" .Stats.Makers "GlobalTotal" $total "BaseUrl" $base}}
+      {{ template "/html/t/chart.tmpl" dict "Data" .Stats.Makers "GlobalTotal" $total "BaseUrl" $base "Link" true}}
       <tr><td colspan=2><pre class="banner">{{ banner "types"}}</pre></td></tr>
-      {{ template "/html/t/chart.tmpl" dict "Data" .Stats.Types "GlobalTotal" $total  "BaseUrl" $base}}
+      {{ template "/html/t/chart.tmpl" dict "Data" .Stats.Types "GlobalTotal" $total  "BaseUrl" $base "Link" true}}
       <tr><td colspan=2><pre class="banner">{{ banner "tags"}}</pre></td></tr>
       {{ range .Stats.Tags }}
-      {{ template "/html/t/chart.tmpl" dict "Data" . "GlobalTotal" $total  "BaseUrl" $base}}
+      {{ template "/html/t/chart.tmpl" dict "Data" . "GlobalTotal" $total  "BaseUrl" $base "Link" true}}
       {{ end }}
       <tr><td colspan=2><pre class="banner">{{ banner "properties"}}</pre></td></tr>
       {{ range .Stats.Properties }}
-      {{ template "/html/t/chart.tmpl" dict "Data" . "GlobalTotal" $total  "BaseUrl" $base}}
+      {{ template "/html/t/chart.tmpl" dict "Data" . "GlobalTotal" $total  "BaseUrl" $base "Link" false}}
       {{ end }}
       <tr><td colspan=2><pre class="banner">{{ banner "sample"}}</pre></td></tr>
       {{ range .Stats.Sample }}

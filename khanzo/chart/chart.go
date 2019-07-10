@@ -111,21 +111,13 @@ func Banner(s string) string {
 }
 
 func BannerLeft(s string) string {
-	width := 80
 	out := "\n┌"
-	for i := 0; i < width-2; i++ {
-		out += " "
-	}
 	out += "\n"
 	out += "│"
 	out += " "
 	out += s
 	out += "\n"
 	out += "└"
-	for i := 0; i < width-2; i++ {
-		out += " "
-	}
-
 	out += "\n"
 	return out
 }
