@@ -278,7 +278,9 @@ func (cr *CountedResult) HTML(c *gin.Context) {
 	for i := 0; i < len(splitted[3:]); i++ {
 		v := splitted[i+3]
 		p := strings.Join(splitted[:i+3], "/")
-		crumbs = append(crumbs, Breadcrumb{Base: p, Exact: v})
+		if len(v) > 0 {
+			crumbs = append(crumbs, Breadcrumb{Base: p, Exact: v})
+		}
 	}
 	if url == "/scan/html" {
 		url = "/scan/html/"

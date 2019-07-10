@@ -51,10 +51,15 @@
   </head>
   <body>
     {{ $base := .BaseUrl }}
-     <a href="{{ replace $base "/html/" "/text/" }}">text</a> <a href="/scan/html/">/scan/html/</a>&nbsp;&nbsp;
-    {{ range .Crumbs }}
-    <a href="{{ .Base }}/{{.Exact}}">{{.Exact}}</a> <a href="/scan/html/{{.Exact}}">=</a>&nbsp;&nbsp;
-    {{ end }}
+    <div style="line-height: 25px;">
+      <a href="{{ replace $base "/html/" "/text/" }}">text</a>
+      <br>
+      <a href="/scan/html/">/scan/html/</a><br>
+      {{ range .Crumbs }}
+      <a href="{{ .Base }}/{{.Exact}}">{{.Exact}}</a> <a href="/scan/html/{{.Exact}}">=</a>
+      <br>
+      {{ end }}
+    </div>
     {{ $total := .Stats.TotalCount }}
 
     <table border=0>
