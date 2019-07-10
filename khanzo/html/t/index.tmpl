@@ -50,12 +50,13 @@
     </style>
   </head>
   <body>
-    <a href="/scan/html/">/scan/html/</a>&nbsp;&nbsp;
+    {{ $base := .BaseUrl }}
+     <a href="{{ replace $base "/html/" "/text/" }}">text</a> <a href="/scan/html/">/scan/html/</a>&nbsp;&nbsp;
     {{ range .Crumbs }}
     <a href="{{ .Base }}/{{.Exact}}">{{.Exact}}</a> <a href="/scan/html/{{.Exact}}">=</a>&nbsp;&nbsp;
     {{ end }}
     {{ $total := .Stats.TotalCount }}
-    {{ $base := .BaseUrl }}
+
     <table border=0>
       <tr><td colspan=2><pre class="banner">{{ banner "makers"}}</pre></td></tr>
       {{ template "/html/t/chart.tmpl" dict "Data" .Stats.Makers "GlobalTotal" $total "BaseUrl" $base}}
@@ -74,9 +75,5 @@
       {{ template "/html/t/hit.tmpl" . }}
       {{ end  }}
     </table>
-    <pre>
-      {{ .Body | safeHTML }}
-    </pre>
-
   </body>
 </html>
