@@ -106,6 +106,10 @@ func (fw *ForwardWriter) Size() (uint64, error) {
 	return uint64(s.Size()), nil
 }
 
+func (fw *ForwardWriter) Offset() uint64 {
+	return fw.offset
+}
+
 func (fw *ForwardWriter) Append(maker uint64, encoded []byte) (uint64, error) {
 	// maker, len, checksum of the header, checksum of the data
 	blobSize := 8 + 4 + 4 + 4 + len(encoded)
