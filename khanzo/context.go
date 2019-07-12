@@ -32,7 +32,7 @@ func (r *ContextCache) Lookup(t uint64, id uint64, from int64) (*spec.PersistedC
 	}
 	v, ok := m[id]
 	// context is in the future
-	if v.CreatedAtNs > from {
+	if ok && v.CreatedAtNs >= from {
 		return nil, false
 	}
 	return v, ok
