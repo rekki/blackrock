@@ -23,6 +23,7 @@ func NewContextCache(forward *disk.ForwardWriter) *ContextCache {
 		offset:  0,
 	}
 }
+
 func (r *ContextCache) Lookup(t uint64, id string, from int64) (*spec.PersistedContext, bool) {
 	r.RLock()
 	defer r.RUnlock()
@@ -32,7 +33,7 @@ func (r *ContextCache) Lookup(t uint64, id string, from int64) (*spec.PersistedC
 	}
 	v, ok := m[id]
 	// context is in the future
-	if ok && v.CreatedAtNs >= from {
+	if ok && v.CreatedAtNs <= from {
 		return nil, false
 	}
 	return v, ok
@@ -56,7 +57,7 @@ func (r *ContextCache) Scan() error {
 			mt = map[string]*spec.PersistedContext{}
 			r.cache[decoded.Type] = mt
 		}
-		log.Infof("setting %d:%d to %v", id, decoded.Type, decoded)
+		log.Infof("setting %d:%s to %v", decoded.Type, decoded.ForeignId, decoded)
 		mt[decoded.ForeignId] = &decoded
 		r.Unlock()
 

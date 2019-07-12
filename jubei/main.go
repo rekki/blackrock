@@ -172,11 +172,11 @@ func consumeContext(r *kafka.Reader, dictionary *disk.PersistedDictionary, forwa
 			return err
 		}
 
-		persisted := &spec.PersistedMetadata{
-			CreatedAtNs: envelope.CreatedAtNs,
-			TagKeys:     []uint64{},
-			Type:        etype,
-			ForeignId:   envelope.ForeignId,
+		persisted := &spec.PersistedContext{
+			CreatedAtNs:  envelope.CreatedAtNs,
+			PropertyKeys: []uint64{},
+			Type:         etype,
+			ForeignId:    envelope.ForeignId,
 		}
 
 		for _, kv := range envelope.Properties {

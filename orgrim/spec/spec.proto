@@ -11,14 +11,14 @@ message KV {
 message Metadata {
         repeated KV tags = 1; 
         repeated KV properties = 2;
-        int64 createdAtNs  = 5;
+        int64 created_at_ns  = 5;
         string foreign_id = 6;
         string type = 7;
 }
 
 message Context {
         repeated KV properties = 2;
-        int64 createdAtNs  = 5;
+        int64 created_at_ns  = 5;
         string foreign_id = 6;
         string type = 7;
 }
@@ -35,7 +35,7 @@ message PersistedMetadata {
         repeated uint64 propertyKeys = 3; 
         repeated string propertyValues = 4; 
 
-        int64 createdAtNs  = 5;
+        int64 created_at_ns  = 5;
         uint64 type = 7;
 
         uint64 offset = 8;
