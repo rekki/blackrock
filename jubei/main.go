@@ -24,7 +24,7 @@ import (
 )
 
 func consumeEvents(r *kafka.Reader, dictionary *disk.PersistedDictionary, forward *disk.ForwardWriter, payload *disk.ForwardWriter, inverted *disk.InvertedWriter) error {
-	idKey, err := dictionary.GetUniqueTerm("id")
+	idKey, err := dictionary.GetUniqueTerm("foreign_id")
 	if err != nil {
 		return err
 	}
@@ -86,7 +86,7 @@ func consumeEvents(r *kafka.Reader, dictionary *disk.PersistedDictionary, forwar
 			if lc == "type" {
 				continue
 			}
-			if lc == "id" {
+			if lc == "foreign_id" {
 				continue
 			}
 
@@ -132,7 +132,7 @@ func consumeEvents(r *kafka.Reader, dictionary *disk.PersistedDictionary, forwar
 }
 
 func consumeContext(r *kafka.Reader, dictionary *disk.PersistedDictionary, forward *disk.ForwardWriter) error {
-	idKey, err := dictionary.GetUniqueTerm("id")
+	idKey, err := dictionary.GetUniqueTerm("foreign_id")
 	if err != nil {
 		return err
 	}
@@ -176,6 +176,7 @@ func consumeContext(r *kafka.Reader, dictionary *disk.PersistedDictionary, forwa
 			CreatedAtNs: envelope.CreatedAtNs,
 			TagKeys:     []uint64{},
 			Type:        etype,
+			ForeignId:   envelope.ForeignId,
 		}
 
 		for _, kv := range envelope.Properties {

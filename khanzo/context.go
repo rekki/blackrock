@@ -10,7 +10,7 @@ import (
 )
 
 type ContextCache struct {
-	cache   map[uint64]map[uint64]*spec.PersistedContext
+	cache   map[uint64]map[string]*spec.PersistedContext
 	offset  uint64
 	forward *disk.ForwardWriter
 	sync.RWMutex
@@ -18,12 +18,12 @@ type ContextCache struct {
 
 func NewContextCache(forward *disk.ForwardWriter) *ContextCache {
 	return &ContextCache{
-		cache:   map[uint64]map[uint64]*spec.PersistedContext{},
+		cache:   map[uint64]map[string]*spec.PersistedContext{},
 		forward: forward,
 		offset:  0,
 	}
 }
-func (r *ContextCache) Lookup(t uint64, id uint64, from int64) (*spec.PersistedContext, bool) {
+func (r *ContextCache) Lookup(t uint64, id string, from int64) (*spec.PersistedContext, bool) {
 	r.RLock()
 	defer r.RUnlock()
 	m, ok := r.cache[t]
@@ -53,11 +53,11 @@ func (r *ContextCache) Scan() error {
 		mt, ok := r.cache[decoded.Type]
 		if !ok {
 			log.Infof("creating new type %d", decoded.Type)
-			mt = map[uint64]*spec.PersistedContext{}
+			mt = map[string]*spec.PersistedContext{}
 			r.cache[decoded.Type] = mt
 		}
 		log.Infof("setting %d:%d to %v", id, decoded.Type, decoded)
-		mt[id] = &decoded
+		mt[decoded.ForeignId] = &decoded
 		r.Unlock()
 
 		r.offset = offset

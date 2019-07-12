@@ -63,7 +63,7 @@
     {{ $total := .Stats.TotalCount }}
 
     <table border=0>
-      <tr><td colspan=2><pre class="banner">{{ banner "makers"}}</pre></td></tr>
+      <tr><td colspan=2><pre class="banner">{{ banner "foreign ids"}}</pre></td></tr>
       {{ template "/html/t/chart.tmpl" dict "Data" .Stats.Makers "GlobalTotal" $total "BaseUrl" $base "Link" true}}
       <tr><td colspan=2><pre class="banner">{{ banner "types"}}</pre></td></tr>
       {{ template "/html/t/chart.tmpl" dict "Data" .Stats.Types "GlobalTotal" $total  "BaseUrl" $base "Link" true}}

@@ -1,9 +1,9 @@
 {{ $m := .Metadata }}
-{{ $maker := .Maker }}
+{{ $maker := .ForeignId }}
 <tr>
   <td colspan=2>
     <a href="/scan/haml/type:{{ $m.Type }}">{{$m.Type }}</a><br>
-    <a href="/scan/haml/maker:{{ .Maker }}">{{.Maker}}</a><br>
+    <a href="/scan/haml/foreign_id:{{ .ForeignId }}">{{.ForeignId}}</a><br>
     {{ time $m.CreatedAtNs }}<br>
   </td>
 </tr>
@@ -14,7 +14,7 @@
     {{ .Key }}
   </td>
   <td class="right">
-    <a href="/scan/html/maker:{{$maker}}/{{ .Key }}:{{ .Value}}">{{.Value}}</a>
+    <a href="/scan/html/foreign_id:{{$maker}}/{{ .Key }}:{{ .Value}}">{{.Value}}</a>
   </td>
 </tr>
 {{ end }}

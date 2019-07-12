@@ -210,7 +210,7 @@ func (c *Counter) Prettify() *CountedResult {
 	return out
 }
 
-func (c *Counter) Add(offset int64, maker uint64, p *spec.PersistedMetadata) {
+func (c *Counter) Add(offset int64, maker uint64, p *spec.PersistedMetadata, ctx *ContextCache) {
 	for i := 0; i < len(p.TagKeys); i++ {
 		k := p.TagKeys[i]
 		v := p.TagValues[i]
@@ -220,6 +220,20 @@ func (c *Counter) Add(offset int64, maker uint64, p *spec.PersistedMetadata) {
 			c.Tags[k] = m
 		}
 		m[v]++
+
+		// merge the tags with the context's properties
+		if context, ok := ctx.Lookup(k, v, p.CreatedAtNs); ok {
+			for j := 0; j < len(context.PropertyKeys); j++ {
+				ck := context.PropertyKeys[j]
+				cv := context.PropertyValues[j]
+				cm, ok := c.Properties[ck]
+				if !ok {
+					cm = map[string]uint32{}
+					c.Properties[ck] = cm
+				}
+				cm[cv]++
+			}
+		}
 	}
 
 	for i := 0; i < len(p.PropertyKeys); i++ {
@@ -236,6 +250,7 @@ func (c *Counter) Add(offset int64, maker uint64, p *spec.PersistedMetadata) {
 	c.Makers[maker]++
 	c.Types[p.Type]++
 	c.Total++
+
 	if len(c.Sample) < 100 {
 		hit := toHit(c.pd, offset, maker, p)
 		c.Sample = append(c.Sample, hit)
@@ -569,7 +584,7 @@ func main() {
 					c.JSON(400, gin.H{"error": err.Error()})
 					return
 				}
-				counter.Add(int64(offset), maker, &p)
+				counter.Add(int64(offset), maker, &p, contextCache)
 			}
 		} else {
 			back := uint64(0)
@@ -589,7 +604,7 @@ func main() {
 				if err != nil {
 					return err
 				}
-				counter.Add(int64(offset), maker, &p)
+				counter.Add(int64(offset), maker, &p, contextCache)
 				return nil
 			})
 

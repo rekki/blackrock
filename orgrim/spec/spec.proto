@@ -50,5 +50,6 @@ message PersistedContext {
         repeated string propertyValues = 4;
 
         int64 createdAtNs  = 5;
+        string foreign_id = 6;
         uint64 type = 7;
 }
