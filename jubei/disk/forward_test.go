@@ -110,7 +110,7 @@ func TestForward(t *testing.T) {
 		}
 	}
 	n := 0
-	err = fw.Scan(0, true, func(id uint64, maker uint64, data []byte) error {
+	err = fw.Scan(0, true, func(offset uint64, id uint64, data []byte) error {
 		n++
 		return nil
 	})

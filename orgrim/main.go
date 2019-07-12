@@ -91,7 +91,7 @@ type JsonFrame struct {
 	Tags        map[string]interface{} `json:"tags"`
 	Properties  map[string]interface{} `json:"properties"`
 	CreatedAtNs int64                  `json:"created_at_ns"`
-	Maker       string                 `json:"maker"`
+	ForeignId   string                 `json:"foreign_id"`
 	Type        string                 `json:"type"`
 	Payload     interface{}            `json:"payload"`
 }
@@ -261,6 +261,12 @@ func main() {
 			return
 		}
 
+		if envelope.Metadata.ForeignId == "" {
+			log.Warnf("[orgrim] no type in metadata, rejecting")
+			c.JSON(500, gin.H{"error": "need foreign_id key in metadata"})
+			return
+		}
+
 		if envelope.Metadata.Type == "" {
 			log.Warnf("[orgrim] no type in metadata, rejecting")
 			c.JSON(500, gin.H{"error": "need type key in metadata"})
@@ -312,9 +318,9 @@ func main() {
 			c.JSON(500, gin.H{"error": err.Error()})
 			return
 		}
-		if ctx.Id == "" {
+		if ctx.ForeignId == "" {
 			log.Warnf("[orgrim] no id in ctx, rejecting")
-			c.JSON(500, gin.H{"error": "need id key"})
+			c.JSON(500, gin.H{"error": "need foreign_id key"})
 			return
 		}
 
@@ -372,6 +378,12 @@ func main() {
 			return
 		}
 
+		if metadata.ForeignId == "" {
+			log.Warnf("[orgrim] no id in metadata, rejecting")
+			c.JSON(500, gin.H{"error": "need foreign_id in metadata"})
+			return
+		}
+
 		if metadata.CreatedAtNs == 0 {
 			metadata.CreatedAtNs = time.Now().UnixNano()
 		}
@@ -402,7 +414,7 @@ func main() {
 				Properties:  properties,
 				CreatedAtNs: metadata.CreatedAtNs,
 				Type:        metadata.Type,
-				Maker:       metadata.Maker,
+				ForeignId:   metadata.ForeignId,
 			},
 		}
 

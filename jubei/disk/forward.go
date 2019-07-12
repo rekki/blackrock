@@ -41,7 +41,7 @@ var EBADSLT = errors.New("checksum mismatch")
 
 func (fw *ForwardWriter) Scan(offset uint64, readData bool, cb func(uint64, uint64, []byte) error) error {
 	for {
-		maker, data, next, err := fw.Read(offset, readData)
+		id, data, next, err := fw.Read(offset, readData)
 		if err == io.EOF {
 			return nil
 		}
@@ -52,7 +52,7 @@ func (fw *ForwardWriter) Scan(offset uint64, readData bool, cb func(uint64, uint
 		if err != nil {
 			return err
 		}
-		err = cb(offset, maker, data)
+		err = cb(offset, id, data)
 		if err != nil {
 			return err
 		}
@@ -67,7 +67,7 @@ func (fw *ForwardWriter) Read(offset uint64, readData bool) (uint64, []byte, uin
 		return 0, nil, 0, err
 	}
 
-	maker := binary.LittleEndian.Uint64(header[0:])
+	id := binary.LittleEndian.Uint64(header[0:])
 	metadataLen := binary.LittleEndian.Uint32(header[8:])
 	nextOffset := offset + uint64(len(header)) + (uint64(metadataLen))
 
@@ -78,7 +78,7 @@ func (fw *ForwardWriter) Read(offset uint64, readData bool) (uint64, []byte, uin
 		return 0, nil, 0, EBADSLT
 	}
 	if !readData {
-		return maker, nil, nextOffset, nil
+		return id, nil, nextOffset, nil
 	}
 
 	readInto := make([]byte, metadataLen)
@@ -91,7 +91,7 @@ func (fw *ForwardWriter) Read(offset uint64, readData bool) (uint64, []byte, uin
 	if checksumData != computedChecksumData {
 		return 0, nil, 0, EBADSLT
 	}
-	return maker, readInto, nextOffset, nil
+	return id, readInto, nextOffset, nil
 }
 
 func (fw *ForwardWriter) Close() {
@@ -106,16 +106,20 @@ func (fw *ForwardWriter) Size() (uint64, error) {
 	return uint64(s.Size()), nil
 }
 
+func (fw *ForwardWriter) Sync() {
+	fw.forward.Sync()
+}
+
 func (fw *ForwardWriter) Offset() uint64 {
 	return fw.offset
 }
 
-func (fw *ForwardWriter) Append(maker uint64, encoded []byte) (uint64, error) {
-	// maker, len, checksum of the header, checksum of the data
+func (fw *ForwardWriter) Append(id uint64, encoded []byte) (uint64, error) {
+	// id, len, checksum of the header, checksum of the data
 	blobSize := 8 + 4 + 4 + 4 + len(encoded)
 	blob := make([]byte, blobSize)
 	copy(blob[20:], encoded)
-	binary.LittleEndian.PutUint64(blob[0:], maker)
+	binary.LittleEndian.PutUint64(blob[0:], id)
 	binary.LittleEndian.PutUint32(blob[8:], uint32(len(encoded)))
 	binary.LittleEndian.PutUint32(blob[12:], uint32(depths.Hash(blob[:12])))
 	binary.LittleEndian.PutUint32(blob[16:], uint32(depths.Hash(encoded)))

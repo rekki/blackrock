@@ -25,6 +25,7 @@ import (
 	"github.com/jackdoe/blackrock/orgrim/spec"
 	auth "github.com/jackdoe/gin-basic-auth-dynamic"
 	log "github.com/sirupsen/logrus"
+
 	"gopkg.in/yaml.v2"
 )
 
@@ -42,7 +43,7 @@ type KafkaOffset struct {
 type Hit struct {
 	Score       float32        `json:"score,omitempty"`
 	ID          int64          `json:"id,omitempty"`
-	Maker       string         `json:"maker,omitempty"`
+	ForeignId   string         `json:"foreign_id,omitempty"`
 	Metadata    *spec.Metadata `json:"metadata,omitempty"`
 	KafkaOffset *KafkaOffset   `json:"kafka,omitempty"`
 }
@@ -62,7 +63,7 @@ func (h Hit) String() string {
 	out := []string{}
 	m := h.Metadata
 	t := time.Unix(m.CreatedAtNs/1000000000, 0)
-	out = append(out, fmt.Sprintf("%s\n%s\n%s", m.Maker, m.Type, t.Format(time.UnixDate)))
+	out = append(out, fmt.Sprintf("%s\n%s\n%s", m.ForeignId, m.Type, t.Format(time.UnixDate)))
 	for _, kv := range m.Tags {
 		out = append(out, fmt.Sprintf("  %-30s: %s", kv.Key, kv.Value))
 	}
@@ -117,12 +118,12 @@ func toHit(dictionary *disk.PersistedDictionary, did int64, maker uint64, p *spe
 	hit := Hit{
 		ID: did,
 	}
-	hit.Maker = dictionary.ReverseResolve(maker)
+	hit.ForeignId = dictionary.ReverseResolve(maker)
 	if p == nil {
 		return hit
 	}
 	pretty := &spec.Metadata{
-		Maker:       hit.Maker,
+		ForeignId:   hit.ForeignId,
 		Type:        dictionary.ReverseResolve(p.Type),
 		Tags:        []*spec.KV{},
 		Properties:  []*spec.KV{},
@@ -376,7 +377,7 @@ func prettyStats(title string, stats []*PerKey) string {
 }
 
 func main() {
-	var proot = flag.String("root", "/blackrock", "root directory for the files (root/topic/partition)")
+	var proot = flag.String("root", "/blackrock", "root directory for the files root/topic")
 	var dataTopic = flag.String("topic-data", "blackrock-data", "topic for the data")
 	var basicAuth = flag.String("basic-auth", "", "basic auth user and password, leave empty for no auth [just for testing, better hide it behind nginx]")
 	var verbose = flag.Bool("verbose", false, "print info level logs to stdout")
@@ -392,6 +393,12 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	forwardContext, err := disk.NewForwardWriter(root, "context")
+	if err != nil {
+		log.Fatal(err)
+	}
+	contextCache := NewContextCache(forwardContext)
 
 	inverted, err := disk.NewInvertedWriter(root, 0)
 	if err != nil {
@@ -410,6 +417,22 @@ func main() {
 		gin.SetMode(gin.ReleaseMode)
 		log.SetLevel(log.WarnLevel)
 	}
+
+	go func() {
+		for {
+			tmp, err := disk.NewPersistedDictionary(root)
+			if err != nil {
+				log.Fatal(err)
+			}
+			tmp.Close()
+			dictionary = tmp
+
+			contextCache.Scan()
+			runtime.GC()
+
+			time.Sleep(1 * time.Minute)
+		}
+	}()
 
 	r := gin.Default()
 
@@ -446,20 +469,6 @@ func main() {
 			return auth.AuthResult{Success: ok, Text: "not authorized"}
 		}))
 	}
-
-	go func() {
-		for {
-			tmp, err := disk.NewPersistedDictionary(root)
-			if err != nil {
-				log.Fatal(err)
-			}
-			tmp.Close()
-			dictionary = tmp
-			runtime.GC()
-			time.Sleep(1 * time.Minute)
-		}
-
-	}()
 
 	search := func(qr QueryRequest) (*QueryResponse, error) {
 		query, err := fromJson(qr.Query, func(k, v string) Query {

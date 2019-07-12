@@ -7,6 +7,7 @@ import (
 	"os"
 	"path"
 	"strings"
+	"sync"
 	"sync/atomic"
 
 	"github.com/jackdoe/blackrock/depths"
@@ -18,6 +19,7 @@ type PersistedDictionary struct {
 	offset   uint64
 	resolved map[string]uint64
 	reverse  map[uint64]string
+	sync.RWMutex
 }
 
 func NewPersistedDictionary(root string) (*PersistedDictionary, error) {
@@ -90,11 +92,23 @@ func (pd *PersistedDictionary) normalize(s string) string {
 }
 
 func (pd *PersistedDictionary) GetUniqueTerm(s string) (uint64, error) {
+	pd.RLock()
 	s = pd.normalize(s)
 	v, ok := pd.resolved[s]
 	if ok {
+		pd.RUnlock()
 		return v, nil
 	}
+	pd.RUnlock()
+
+	pd.Lock()
+	v, ok = pd.resolved[s]
+	if ok {
+		pd.Unlock()
+		return v, nil
+	}
+	defer pd.Unlock()
+
 	b := []byte(s)
 
 	// length, checksum, data
