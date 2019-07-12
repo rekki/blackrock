@@ -1,6 +1,7 @@
 package main
 
 import (
+	"sort"
 	"sync"
 
 	"github.com/gogo/protobuf/proto"
@@ -10,20 +11,49 @@ import (
 )
 
 type ContextCache struct {
-	cache   map[uint64]map[string]*spec.PersistedContext
+	cache   map[uint64]map[string][]*spec.PersistedContext
 	offset  uint64
 	forward *disk.ForwardWriter
 	sync.RWMutex
 }
 
+func insertSort(data []*spec.PersistedContext, el *spec.PersistedContext) []*spec.PersistedContext {
+	index := sort.Search(len(data), func(i int) bool { return data[i].CreatedAtNs < el.CreatedAtNs })
+
+	if len(data) == 0 {
+		return []*spec.PersistedContext{el}
+	}
+
+	if index < len(data) && data[index].CreatedAtNs == el.CreatedAtNs {
+		return data
+	}
+
+	data = append(data, &spec.PersistedContext{})
+	copy(data[index+1:], data[index:])
+	data[index] = el
+
+	return data
+}
+
 func NewContextCache(forward *disk.ForwardWriter) *ContextCache {
 	return &ContextCache{
-		cache:   map[uint64]map[string]*spec.PersistedContext{},
+		cache:   map[uint64]map[string][]*spec.PersistedContext{},
 		forward: forward,
 		offset:  0,
 	}
 }
-
+func (r *ContextCache) Insert(decoded *spec.PersistedContext) {
+	r.Lock()
+	mt, ok := r.cache[decoded.Type]
+	if !ok {
+		log.Infof("creating new type %d", decoded.Type)
+		mt = map[string][]*spec.PersistedContext{}
+		r.cache[decoded.Type] = mt
+	}
+	log.Infof("setting %d:%s to %v", decoded.Type, decoded.ForeignId, decoded)
+	mt[decoded.ForeignId] = insertSort(mt[decoded.ForeignId], decoded)
+	r.Unlock()
+}
 func (r *ContextCache) Lookup(t uint64, id string, from int64) (*spec.PersistedContext, bool) {
 	r.RLock()
 	defer r.RUnlock()
@@ -32,35 +62,30 @@ func (r *ContextCache) Lookup(t uint64, id string, from int64) (*spec.PersistedC
 		return nil, false
 	}
 	v, ok := m[id]
-	// context is in the future
-	if ok && v.CreatedAtNs <= from {
-		return nil, false
+	if ok {
+		index := sort.Search(len(v), func(i int) bool { return v[i].CreatedAtNs <= from })
+
+		if index >= len(v) {
+			index = len(v) - 1
+		}
+		if v[index].CreatedAtNs <= from {
+			return v[index], true
+		}
 	}
-	return v, ok
+	return nil, false
 }
 
 func (r *ContextCache) Scan() error {
 	log.Printf("scanning from %d", r.offset)
 	n := 0
 	err := r.forward.Scan(r.offset, true, func(offset uint64, id uint64, data []byte) error {
-		decoded := spec.PersistedContext{}
-		err := proto.Unmarshal(data, &decoded)
+		decoded := &spec.PersistedContext{}
+		err := proto.Unmarshal(data, decoded)
 		if err != nil {
 			log.Warnf("rend failed to unmarshal, data: %s, error: %s", string(data), err.Error())
 			return nil
 		}
-
-		r.Lock()
-		mt, ok := r.cache[decoded.Type]
-		if !ok {
-			log.Infof("creating new type %d", decoded.Type)
-			mt = map[string]*spec.PersistedContext{}
-			r.cache[decoded.Type] = mt
-		}
-		log.Infof("setting %d:%s to %v", decoded.Type, decoded.ForeignId, decoded)
-		mt[decoded.ForeignId] = &decoded
-		r.Unlock()
-
+		r.Insert(decoded)
 		r.offset = offset
 		n++
 		return nil
