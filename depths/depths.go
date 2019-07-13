@@ -42,8 +42,15 @@ func PathForTag(root string, tagKey uint64, tagValue string) (string, string) {
 	dir := path.Join(root, fmt.Sprintf("%d", tagKey), fmt.Sprintf("shard_%d", h%255))
 	return dir, fmt.Sprintf("%s.p", Cleanup(tagValue))
 }
-
 func Cleanup(s string) string {
+	return cleanup(s, false)
+}
+
+func CleanupAllowDot(s string) string {
+	return cleanup(s, true)
+}
+
+func cleanup(s string, allowDot bool) string {
 	clean := strings.Map(
 		func(r rune) rune {
 			if r > unicode.MaxLatin1 {
@@ -65,6 +72,9 @@ func Cleanup(s string) string {
 			if r == ':' || r == '-' || r == '_' {
 				return r
 			}
+			if allowDot && r == '.' {
+				return r
+			}
 			return '_'
 		},
 		s,
@@ -75,7 +85,6 @@ func Cleanup(s string) string {
 	}
 	return clean
 }
-
 func Hash(s []byte) uint64 {
 	return metro.Hash64(s, 0)
 }

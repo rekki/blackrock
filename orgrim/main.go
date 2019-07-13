@@ -92,7 +92,8 @@ type JsonFrame struct {
 	Properties  map[string]interface{} `json:"properties"`
 	CreatedAtNs int64                  `json:"created_at_ns"`
 	ForeignId   string                 `json:"foreign_id"`
-	Type        string                 `json:"type"`
+	ForeignType string                 `json:"foreign_type"`
+	EventType   string                 `json:"event_type"`
 	Payload     interface{}            `json:"payload"`
 }
 
@@ -262,13 +263,19 @@ func main() {
 		}
 
 		if envelope.Metadata.ForeignId == "" {
-			log.Warnf("[orgrim] no type in metadata, rejecting")
+			log.Warnf("[orgrim] no foreign_id in metadata, rejecting")
 			c.JSON(500, gin.H{"error": "need foreign_id key in metadata"})
 			return
 		}
 
-		if envelope.Metadata.Type == "" {
-			log.Warnf("[orgrim] no type in metadata, rejecting")
+		if envelope.Metadata.ForeignType == "" {
+			log.Warnf("[orgrim] no foreign_type in metadata, rejecting")
+			c.JSON(500, gin.H{"error": "need foreign_type key in metadata"})
+			return
+		}
+
+		if envelope.Metadata.EventType == "" {
+			log.Warnf("[orgrim] no event_type in metadata, rejecting")
 			c.JSON(500, gin.H{"error": "need type key in metadata"})
 			return
 		}
@@ -324,9 +331,9 @@ func main() {
 			return
 		}
 
-		if ctx.Type == "" {
-			log.Warnf("[orgrim] no type in metadata, rejecting")
-			c.JSON(500, gin.H{"error": "need type key in context"})
+		if ctx.ForeignType == "" {
+			log.Warnf("[orgrim] no foreign_type in metadata, rejecting")
+			c.JSON(500, gin.H{"error": "need toreign_ype key in context"})
 			return
 		}
 
@@ -372,15 +379,21 @@ func main() {
 			return
 		}
 
-		if metadata.Type == "" {
+		if metadata.EventType == "" {
 			log.Warnf("[orgrim] no type in metadata, rejecting")
-			c.JSON(500, gin.H{"error": "need type key in metadata"})
+			c.JSON(500, gin.H{"error": "need event_type key in metadata"})
 			return
 		}
 
 		if metadata.ForeignId == "" {
 			log.Warnf("[orgrim] no id in metadata, rejecting")
 			c.JSON(500, gin.H{"error": "need foreign_id in metadata"})
+			return
+		}
+
+		if metadata.ForeignType == "" {
+			log.Warnf("[orgrim] no foreign_type in metadata, rejecting")
+			c.JSON(500, gin.H{"error": "need foreign_type in metadata"})
 			return
 		}
 
@@ -413,8 +426,9 @@ func main() {
 				Tags:        tags,
 				Properties:  properties,
 				CreatedAtNs: metadata.CreatedAtNs,
-				Type:        metadata.Type,
+				EventType:   metadata.EventType,
 				ForeignId:   metadata.ForeignId,
+				ForeignType: metadata.ForeignType,
 			},
 		}
 

@@ -12,15 +12,18 @@ message Metadata {
         repeated KV tags = 1; 
         repeated KV properties = 2;
         int64 created_at_ns  = 5;
-        string foreign_id = 6;
-        string type = 7;
+        string event_type = 7;
+
+        string foreign_id = 9;
+        string foreign_type = 10;
 }
 
 message Context {
         repeated KV properties = 2;
         int64 created_at_ns  = 5;
+
         string foreign_id = 6;
-        string type = 7;
+        string foreign_type = 7;
 }
 
 message Envelope {
@@ -36,12 +39,15 @@ message PersistedMetadata {
         repeated string propertyValues = 4; 
 
         int64 created_at_ns  = 5;
-        uint64 type = 7;
+        uint64 event_type = 7;
 
         uint64 offset = 8;
         uint32 partition = 9;
 
-        uint64 payload = 11;
+        string foreign_id = 10;
+        uint64 foreign_type = 11;
+
+        uint64 payload = 12;
 }
 
 
@@ -50,6 +56,8 @@ message PersistedContext {
         repeated string propertyValues = 4;
 
         int64 createdAtNs  = 5;
-        string foreign_id = 6;
-        uint64 type = 7;
+
+        string foreign_id = 9;
+        uint64 foreign_type = 10;
 }
+

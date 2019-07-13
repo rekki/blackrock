@@ -44,6 +44,7 @@ type Hit struct {
 	Score       float32        `json:"score,omitempty"`
 	ID          int64          `json:"id,omitempty"`
 	ForeignId   string         `json:"foreign_id,omitempty"`
+	ForeignType string         `json:"foreign_type,omitempty"`
 	Metadata    *spec.Metadata `json:"metadata,omitempty"`
 	KafkaOffset *KafkaOffset   `json:"kafka,omitempty"`
 }
@@ -63,7 +64,7 @@ func (h Hit) String() string {
 	out := []string{}
 	m := h.Metadata
 	t := time.Unix(m.CreatedAtNs/1000000000, 0)
-	out = append(out, fmt.Sprintf("%s\n%s\n%s", m.ForeignId, m.Type, t.Format(time.UnixDate)))
+	out = append(out, fmt.Sprintf("%s:%s\n%s\n%s", m.ForeignType, m.ForeignId, m.EventType, t.Format(time.UnixDate)))
 	for _, kv := range m.Tags {
 		out = append(out, fmt.Sprintf("  %-30s: %s", kv.Key, kv.Value))
 	}
@@ -99,7 +100,7 @@ func NewTermQuery(inverted *disk.InvertedWriter, dictionary *disk.PersistedDicti
 }
 
 func getScoredHit(forward *disk.ForwardWriter, dictionary *disk.PersistedDictionary, did int64, decodeMetadata bool) (Hit, error) {
-	maker, data, _, err := forward.Read(uint64(did), decodeMetadata)
+	foreignId, foreignType, data, _, err := forward.Read(uint64(did), decodeMetadata)
 	if err != nil {
 		return Hit{}, err
 	}
@@ -109,22 +110,24 @@ func getScoredHit(forward *disk.ForwardWriter, dictionary *disk.PersistedDiction
 		if err != nil {
 			return Hit{}, err
 		}
-		return toHit(dictionary, did, maker, nil), nil
+		return toHit(dictionary, did, foreignId, foreignType, nil), nil
 	}
-	return toHit(dictionary, did, maker, nil), nil
+	return toHit(dictionary, did, foreignId, foreignType, nil), nil
 }
 
-func toHit(dictionary *disk.PersistedDictionary, did int64, maker uint64, p *spec.PersistedMetadata) Hit {
+func toHit(dictionary *disk.PersistedDictionary, did int64, foreignId, foreignType uint64, p *spec.PersistedMetadata) Hit {
 	hit := Hit{
 		ID: did,
 	}
-	hit.ForeignId = dictionary.ReverseResolve(maker)
+	hit.ForeignId = dictionary.ReverseResolve(foreignId)
+	hit.ForeignType = dictionary.ReverseResolve(foreignType)
 	if p == nil {
 		return hit
 	}
 	pretty := &spec.Metadata{
 		ForeignId:   hit.ForeignId,
-		Type:        dictionary.ReverseResolve(p.Type),
+		ForeignType: hit.ForeignId,
+		EventType:   dictionary.ReverseResolve(p.EventType),
 		Tags:        []*spec.KV{},
 		Properties:  []*spec.KV{},
 		CreatedAtNs: p.CreatedAtNs,
@@ -171,8 +174,8 @@ func Render(c *gin.Context, x Renderable) {
 type Counter struct {
 	Tags       map[uint64]map[string]uint32 `json:"tags"`
 	Properties map[uint64]map[string]uint32 `json:"properties"`
-	Makers     map[uint64]uint32            `json:"makers"`
-	Types      map[uint64]uint32            `json:"types"`
+	Foreign    map[uint64]map[string]uint32 `json:"foreign"`
+	EventTypes map[uint64]uint32            `json:"event_types"`
 	Sample     []Hit                        `json:"sample"`
 	Total      uint64                       `json:"total"`
 	pd         *disk.PersistedDictionary
@@ -182,8 +185,8 @@ func NewCounter(pd *disk.PersistedDictionary) *Counter {
 	return &Counter{
 		Tags:       map[uint64]map[string]uint32{},
 		Properties: map[uint64]map[string]uint32{},
-		Makers:     map[uint64]uint32{},
-		Types:      map[uint64]uint32{},
+		Foreign:    map[uint64]map[string]uint32{},
+		EventTypes: map[uint64]uint32{},
 		Sample:     []Hit{},
 		Total:      0,
 		pd:         pd,
@@ -193,24 +196,20 @@ func NewCounter(pd *disk.PersistedDictionary) *Counter {
 func (c *Counter) Prettify() *CountedResult {
 	out := &CountedResult{}
 	out.Tags = statsForMapMap(c.pd, c.Tags)
+	out.Foreign = statsForMapMap(c.pd, c.Foreign)
 	out.Properties = statsForMapMap(c.pd, c.Properties)
 
 	resolved := map[string]uint32{}
-	for k, v := range c.Makers {
+	for k, v := range c.EventTypes {
 		resolved[c.pd.ReverseResolve(k)] = v
 	}
-	out.Makers = statsForMap("maker", resolved)
-	resolved = map[string]uint32{}
-	for k, v := range c.Types {
-		resolved[c.pd.ReverseResolve(k)] = v
-	}
-	out.Types = statsForMap("type", resolved)
+	out.EventTypes = statsForMap("event_type", resolved)
 	out.Sample = c.Sample
 	out.TotalCount = int64(c.Total)
 	return out
 }
 
-func (c *Counter) Add(offset int64, maker uint64, p *spec.PersistedMetadata, ctx *ContextCache) {
+func (c *Counter) Add(offset int64, foreignId, foreignType uint64, p *spec.PersistedMetadata, ctx *ContextCache) {
 	for i := 0; i < len(p.TagKeys); i++ {
 		k := p.TagKeys[i]
 		v := p.TagValues[i]
@@ -246,13 +245,17 @@ func (c *Counter) Add(offset int64, maker uint64, p *spec.PersistedMetadata, ctx
 		}
 		m[v]++
 	}
-
-	c.Makers[maker]++
-	c.Types[p.Type]++
+	m, ok := c.Foreign[foreignType]
+	if !ok {
+		m = map[string]uint32{}
+		c.Foreign[foreignType] = m
+	}
+	m[p.ForeignId]++
+	c.EventTypes[p.EventType]++
 	c.Total++
 
 	if len(c.Sample) < 100 {
-		hit := toHit(c.pd, offset, maker, p)
+		hit := toHit(c.pd, offset, foreignId, foreignType, p)
 		c.Sample = append(c.Sample, hit)
 	}
 }
@@ -269,8 +272,8 @@ type PerKey struct {
 }
 
 type CountedResult struct {
-	Makers     *PerKey   `json:"makers"`
-	Types      *PerKey   `json:"types"`
+	EventTypes *PerKey   `json:"event_types"`
+	Foreign    []*PerKey `json:"foreign"`
 	Tags       []*PerKey `json:"tags"`
 	Properties []*PerKey `json:"properties"`
 	Sample     []Hit     `json:"sample"`
@@ -306,8 +309,8 @@ func (cr *CountedResult) HTML(c *gin.Context) {
 }
 
 func (cr CountedResult) prettyCategoryStats() string {
-	makers := prettyStats("MAKERS", []*PerKey{cr.Makers})
-	types := prettyStats("TYPES", []*PerKey{cr.Types})
+	makers := prettyStats("FOREIGN", cr.Foreign)
+	types := prettyStats("EVENT_TYPES", []*PerKey{cr.EventTypes})
 	properties := prettyStats("PROPERTIES", cr.Properties)
 	tags := prettyStats("TAGS", cr.Tags)
 	out := fmt.Sprintf("%s%s%s%s\n", makers, types, tags, properties)
@@ -573,7 +576,7 @@ func main() {
 			}
 			for query.Next() != NO_MORE {
 				did := query.GetDocId()
-				maker, data, offset, err := forward.Read(uint64(did), true)
+				foreignId, foreignType, data, offset, err := forward.Read(uint64(did), true)
 				if err != nil {
 					c.JSON(400, gin.H{"error": err.Error()})
 					return
@@ -584,7 +587,7 @@ func main() {
 					c.JSON(400, gin.H{"error": err.Error()})
 					return
 				}
-				counter.Add(int64(offset), maker, &p, contextCache)
+				counter.Add(int64(offset), foreignId, foreignType, &p, contextCache)
 			}
 		} else {
 			back := uint64(0)
@@ -599,12 +602,12 @@ func main() {
 				back = size - uint64(max)
 			}
 
-			err = forward.Scan(back, true, func(offset uint64, maker uint64, data []byte) error {
+			err = forward.Scan(back, true, func(offset uint64, foreignId, foreignType uint64, data []byte) error {
 				err := proto.Unmarshal(data, &p)
 				if err != nil {
 					return err
 				}
-				counter.Add(int64(offset), maker, &p, contextCache)
+				counter.Add(int64(offset), foreignId, foreignType, &p, contextCache)
 				return nil
 			})
 

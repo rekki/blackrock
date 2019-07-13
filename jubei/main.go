@@ -24,16 +24,12 @@ import (
 )
 
 func consumeEvents(r *kafka.Reader, dictionary *disk.PersistedDictionary, forward *disk.ForwardWriter, payload *disk.ForwardWriter, inverted *disk.InvertedWriter) error {
-	idKey, err := dictionary.GetUniqueTerm("foreign_id")
-	if err != nil {
-		return err
-	}
-	typeKey, err := dictionary.GetUniqueTerm("type")
+	typeKey, err := dictionary.GetUniqueTerm("event_type")
 	if err != nil {
 		return err
 	}
 
-	log.Warnf("waiting... [idKey: %d, typeKey: %d]", idKey, typeKey)
+	log.Warnf("waiting... [typeKey: %d]", typeKey)
 	ctx := context.Background()
 	for {
 		m, err := r.ReadMessage(ctx)
@@ -53,19 +49,24 @@ func consumeEvents(r *kafka.Reader, dictionary *disk.PersistedDictionary, forwar
 		}
 
 		meta := envelope.Metadata
-		sid := depths.Cleanup(strings.ToLower(meta.ForeignId))
-		id, err := dictionary.GetUniqueTerm(sid)
+		sforeignId := depths.Cleanup(strings.ToLower(meta.ForeignId))
+		foreignId, err := dictionary.GetUniqueTerm(sforeignId)
+		if err != nil {
+			return err
+		}
+		sforeignType := depths.Cleanup(strings.ToLower(meta.ForeignType))
+		foreignType, err := dictionary.GetUniqueTerm(sforeignType)
 		if err != nil {
 			return err
 		}
 
-		poff, err := payload.Append(id, envelope.Payload)
+		poff, err := payload.Append(foreignId, foreignType, envelope.Payload)
 		if err != nil {
 			return err
 		}
 
-		stype := depths.Cleanup(strings.ToLower(meta.Type))
-		etype, err := dictionary.GetUniqueTerm(stype)
+		seventType := depths.Cleanup(strings.ToLower(meta.EventType))
+		eventType, err := dictionary.GetUniqueTerm(seventType)
 		if err != nil {
 			return err
 		}
@@ -76,17 +77,16 @@ func consumeEvents(r *kafka.Reader, dictionary *disk.PersistedDictionary, forwar
 			CreatedAtNs: envelope.Metadata.CreatedAtNs,
 			TagKeys:     []uint64{},
 			Payload:     poff,
-			Type:        etype,
+			EventType:   eventType,
+			ForeignType: foreignType,
+			ForeignId:   sforeignId,
 		}
 
 		for _, kv := range meta.Tags {
 			k := kv.Key
 			v := kv.Value
-			lc := strings.ToLower(k)
-			if lc == "type" {
-				continue
-			}
-			if lc == "foreign_id" {
+			lc := depths.CleanupAllowDot(strings.ToLower(k))
+			if lc == "event_type" || lc == "foreign_type" || lc == "foreign_id" || lc == sforeignType {
 				continue
 			}
 
@@ -101,8 +101,12 @@ func consumeEvents(r *kafka.Reader, dictionary *disk.PersistedDictionary, forwar
 		for _, kv := range meta.Properties {
 			k := kv.Key
 			v := kv.Value
+			lc := depths.CleanupAllowDot(strings.ToLower(k))
+			if lc == "event_type" || lc == "foreign_type" || lc == "foreign_id" || lc == sforeignType {
+				continue
+			}
 
-			pk, err := dictionary.GetUniqueTerm(k)
+			pk, err := dictionary.GetUniqueTerm(lc)
 			if err != nil {
 				return err
 			}
@@ -115,16 +119,16 @@ func consumeEvents(r *kafka.Reader, dictionary *disk.PersistedDictionary, forwar
 			return err
 		}
 
-		docId, err := forward.Append(id, encoded)
+		docId, err := forward.Append(foreignId, foreignType, encoded)
 		if err != nil {
 			return err
 		}
 
-		inverted.Append(int64(docId), idKey, sid)
-		inverted.Append(int64(docId), typeKey, stype)
+		inverted.Append(int64(docId), foreignType, sforeignId)
+		inverted.Append(int64(docId), typeKey, seventType)
 
 		for i := 0; i < len(persisted.TagKeys); i++ {
-			inverted.Append(int64(id), persisted.TagKeys[i], persisted.TagValues[i])
+			inverted.Append(int64(docId), persisted.TagKeys[i], persisted.TagValues[i])
 		}
 
 		log.Infof("message at topic/partition/offset %v/%v/%v: %v\n", m.Topic, m.Partition, m.Offset, envelope.Metadata)
@@ -136,12 +140,8 @@ func consumeContext(r *kafka.Reader, dictionary *disk.PersistedDictionary, forwa
 	if err != nil {
 		return err
 	}
-	typeKey, err := dictionary.GetUniqueTerm("type")
-	if err != nil {
-		return err
-	}
 
-	log.Warnf("context waiting... [idKey: %d, typeKey: %d]", idKey, typeKey)
+	log.Warnf("context waiting... [idKey: %d", idKey)
 	ctx := context.Background()
 	for {
 		m, err := r.ReadMessage(ctx)
@@ -160,14 +160,14 @@ func consumeContext(r *kafka.Reader, dictionary *disk.PersistedDictionary, forwa
 			envelope.CreatedAtNs = time.Now().UnixNano()
 		}
 
-		sid := depths.Cleanup(strings.ToLower(envelope.ForeignId))
-		id, err := dictionary.GetUniqueTerm(sid)
+		sforeignType := depths.Cleanup(strings.ToLower(envelope.ForeignType))
+		foreignType, err := dictionary.GetUniqueTerm(sforeignType)
 		if err != nil {
 			return err
 		}
 
-		stype := depths.Cleanup(strings.ToLower(envelope.Type))
-		etype, err := dictionary.GetUniqueTerm(stype)
+		sforeignId := depths.Cleanup(strings.ToLower(envelope.ForeignId))
+		foreignId, err := dictionary.GetUniqueTerm(sforeignId)
 		if err != nil {
 			return err
 		}
@@ -175,15 +175,15 @@ func consumeContext(r *kafka.Reader, dictionary *disk.PersistedDictionary, forwa
 		persisted := &spec.PersistedContext{
 			CreatedAtNs:  envelope.CreatedAtNs,
 			PropertyKeys: []uint64{},
-			Type:         etype,
-			ForeignId:    envelope.ForeignId,
+			ForeignType:  foreignType,
+			ForeignId:    sforeignId,
 		}
 
 		for _, kv := range envelope.Properties {
 			k := kv.Key
 			v := kv.Value
-
-			pk, err := dictionary.GetUniqueTerm(k)
+			lc := depths.CleanupAllowDot(strings.ToLower(k))
+			pk, err := dictionary.GetUniqueTerm(lc)
 			if err != nil {
 				return err
 			}
@@ -196,7 +196,7 @@ func consumeContext(r *kafka.Reader, dictionary *disk.PersistedDictionary, forwa
 			return err
 		}
 
-		_, err = forward.Append(id, encoded)
+		_, err = forward.Append(foreignId, foreignType, encoded)
 		//forward.Sync()
 		if err != nil {
 			return err

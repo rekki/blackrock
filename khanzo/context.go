@@ -42,18 +42,20 @@ func NewContextCache(forward *disk.ForwardWriter) *ContextCache {
 		offset:  0,
 	}
 }
+
 func (r *ContextCache) Insert(decoded *spec.PersistedContext) {
 	r.Lock()
-	mt, ok := r.cache[decoded.Type]
+	mt, ok := r.cache[decoded.ForeignType]
 	if !ok {
-		log.Infof("creating new type %d", decoded.Type)
+		log.Infof("creating new type %d", decoded.ForeignType)
 		mt = map[string][]*spec.PersistedContext{}
-		r.cache[decoded.Type] = mt
+		r.cache[decoded.ForeignType] = mt
 	}
-	log.Infof("setting %d:%s to %v", decoded.Type, decoded.ForeignId, decoded)
+	log.Infof("setting %d:%s to %v", decoded.ForeignType, decoded.ForeignId, decoded)
 	mt[decoded.ForeignId] = insertSort(mt[decoded.ForeignId], decoded)
 	r.Unlock()
 }
+
 func (r *ContextCache) Lookup(t uint64, id string, from int64) (*spec.PersistedContext, bool) {
 	r.RLock()
 	defer r.RUnlock()
@@ -63,13 +65,21 @@ func (r *ContextCache) Lookup(t uint64, id string, from int64) (*spec.PersistedC
 	}
 	v, ok := m[id]
 	if ok {
-		index := sort.Search(len(v), func(i int) bool { return v[i].CreatedAtNs <= from })
+		if len(v) < 8 {
+			for _, vv := range v {
+				if vv.CreatedAtNs <= from {
+					return vv, true
+				}
+			}
+		} else {
+			index := sort.Search(len(v), func(i int) bool { return v[i].CreatedAtNs <= from })
 
-		if index >= len(v) {
-			index = len(v) - 1
-		}
-		if v[index].CreatedAtNs <= from {
-			return v[index], true
+			if index >= len(v) {
+				index = len(v) - 1
+			}
+			if v[index].CreatedAtNs <= from {
+				return v[index], true
+			}
 		}
 	}
 	return nil, false
@@ -78,7 +88,7 @@ func (r *ContextCache) Lookup(t uint64, id string, from int64) (*spec.PersistedC
 func (r *ContextCache) Scan() error {
 	log.Printf("scanning from %d", r.offset)
 	n := 0
-	err := r.forward.Scan(r.offset, true, func(offset uint64, id uint64, data []byte) error {
+	err := r.forward.Scan(r.offset, true, func(offset uint64, foreignId uint64, foreignType uint64, data []byte) error {
 		decoded := &spec.PersistedContext{}
 		err := proto.Unmarshal(data, decoded)
 		if err != nil {
