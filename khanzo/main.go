@@ -118,7 +118,7 @@ func getScoredHit(contextCache *ContextCache, forward *disk.ForwardWriter, dicti
 		if err != nil {
 			return Hit{}, err
 		}
-		return toHit(contextCache, dictionary, did, foreignId, foreignType, nil), nil
+		return toHit(contextCache, dictionary, did, foreignId, foreignType, &p), nil
 	}
 	return toHit(contextCache, dictionary, did, foreignId, foreignType, nil), nil
 }

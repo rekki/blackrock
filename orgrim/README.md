@@ -18,23 +18,54 @@ honor. He was also known as the Backstabber by loyalists of Gul'dan
 and Blackhand.
 
 
-# consume events
+# consume events and context
 
-Consume events and write them to kafka enveloping with metadata
+
 
 ```
-curl -d '{"hello":"world"}' 'http://localhost:9001/push/raw?app_open=true&type=example'
+curl -d '{
+  "created_at_ns": 1,
+  "foreign_id": "england",
+  "foreign_type": "region",
+  "properties": [
+    {
+      "key": "hello",
+      "value": "world"
+    },
+    {
+      "key": "brave",
+      "value": "world"
+    }
+  ]
+}' http://orgrim/push/context
 
 ```
 
 all query params are tags in the form of key:value, this creates protobuf message with the following schema:
 
 ```
+message KV {
+        string key = 1;
+        string value = 2;
+        uint64 context = 3;
+}
 
 message Metadata {
-        map<string,string> tags = 1;
-        string remoteAddr  = 2;
-        int64 createdAtNs  = 3;
+        repeated KV tags = 1; 
+        repeated KV properties = 2;
+        int64 created_at_ns  = 5;
+        string event_type = 7;
+
+        string foreign_id = 9;
+        string foreign_type = 10;
+}
+
+message Context {
+        repeated KV properties = 2;
+        int64 created_at_ns  = 5;
+
+        string foreign_id = 6;
+        string foreign_type = 7;
 }
 
 message Envelope {
@@ -43,3 +74,4 @@ message Envelope {
 }
 
 ```
+
