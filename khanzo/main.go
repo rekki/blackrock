@@ -62,6 +62,17 @@ func (a ByKV) Less(i, j int) bool {
 	return a[i].Key < a[j].Key
 }
 
+type ByCtxName []*spec.Context
+
+func (a ByCtxName) Len() int      { return len(a) }
+func (a ByCtxName) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
+func (a ByCtxName) Less(i, j int) bool {
+	if a[i].ForeignType != a[j].ForeignType {
+		return a[i].ForeignType < a[j].ForeignType
+	}
+	return a[i].ForeignId < a[j].ForeignId
+}
+
 func (h Hit) String() string {
 	out := []string{}
 	m := h.Metadata
@@ -126,7 +137,7 @@ func (qr *QueryResponse) VW(c *gin.Context) {
 		}
 		for _, ctx := range hit.Context {
 			for _, kv := range ctx.Properties {
-				w.Write([]byte(fmt.Sprintf("|%s %s ", kv.Key, depths.CleanupVW(kv.Value))))
+				w.Write([]byte(fmt.Sprintf("|%s_%s %s ", ctx.ForeignType, kv.Key, depths.CleanupVW(kv.Value))))
 			}
 		}
 		w.Write([]byte{'\n'})
@@ -170,6 +181,29 @@ func getScoredHit(contextCache *ContextCache, forward *disk.ForwardWriter, dicti
 	return toHit(contextCache, dictionary, did, foreignId, foreignType, nil), nil
 }
 
+func toContextDeep(seen map[uint64]map[string]bool, contextCache *ContextCache, dictionary *disk.PersistedDictionary, p *spec.PersistedContext) []*spec.Context {
+	out := []*spec.Context{toContext(dictionary, p)}
+	for i := 0; i < len(p.PropertyKeys); i++ {
+		k := p.PropertyKeys[i]
+		v := p.PropertyValues[i]
+
+		m, ok := seen[k]
+		if !ok {
+			m = map[string]bool{}
+			seen[k] = m
+		}
+		_, ok = m[v]
+		if ok {
+			continue
+		}
+		m[v] = true
+		if px, ok := contextCache.Lookup(k, v, p.CreatedAtNs); ok {
+			out = append(out, toContextDeep(seen, contextCache, dictionary, px)...)
+		}
+	}
+
+	return out
+}
 func toContext(dictionary *disk.PersistedDictionary, p *spec.PersistedContext) *spec.Context {
 	out := &spec.Context{
 		CreatedAtNs: p.CreatedAtNs,
@@ -195,21 +229,23 @@ func toHit(contextCache *ContextCache, dictionary *disk.PersistedDictionary, did
 	}
 	pretty := &spec.Metadata{
 		ForeignId:   hit.ForeignId,
-		ForeignType: hit.ForeignId,
+		ForeignType: hit.ForeignType,
 		EventType:   dictionary.ReverseResolve(p.EventType),
 		Tags:        []*spec.KV{},
 		Properties:  []*spec.KV{},
 		CreatedAtNs: p.CreatedAtNs,
 	}
 	hit.KafkaOffset = &KafkaOffset{Offset: p.Offset, Partition: p.Partition}
+	seen := map[uint64]map[string]bool{}
 	for i := 0; i < len(p.TagKeys); i++ {
 		k := p.TagKeys[i]
 		v := p.TagValues[i]
 		tk := dictionary.ReverseResolve(k)
 
 		pretty.Tags = append(pretty.Tags, &spec.KV{Key: tk, Value: v})
+
 		if px, ok := contextCache.Lookup(k, v, p.CreatedAtNs); ok {
-			hit.Context = append(hit.Context, toContext(dictionary, px))
+			hit.Context = append(hit.Context, toContextDeep(seen, contextCache, dictionary, px)...)
 		}
 	}
 
@@ -218,6 +254,7 @@ func toHit(contextCache *ContextCache, dictionary *disk.PersistedDictionary, did
 		pretty.Properties = append(pretty.Properties, &spec.KV{Key: tk, Value: p.PropertyValues[i]})
 	}
 
+	sort.Sort(ByCtxName(hit.Context))
 	sort.Sort(ByKV(pretty.Tags))
 	sort.Sort(ByKV(pretty.Properties))
 

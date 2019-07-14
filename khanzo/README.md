@@ -26,6 +26,40 @@ the beginning (`scan_max_documents: -1` in the query), also things can
 be faster if you decide not to decode the metadata in the hit.
 
 
+# context
+
+event stream
+```
+[
+   {created: "Sun 14 Jul 21:19:58", user: 5, book: 10, event: "click"},
+   {created: "Sun 14 Jul 21:20:55", user: 5, book: 10, event: "click"},
+   {created: "Sun 14 Jul 22:41:02", user: 5, book: 10, event: "book"}
+[   
+
+```
+
+context stream
+
+```
+[
+   {created: "Sun 14 Jul 21:28:55", author:60, name: "jrr tolkien",... }
+   {created: "Sun 14 Jul 21:29:55", book:10, name: "lotr", author: 60,... }
+   {created: "Sun 14 Jul 21:30:55", user:5, name: "jack",... }
+]
+```
+
+In this example, the context for `user:5` is created at `"Sun 14 Jul
+21:30:55"`, and will be visible to all events after that (keep in mind
+you can also insert context in the past).
+
+Khanzo will automatically and recursively join the context with the
+event stream. So for the event `{created: "Sun 14 Jul 22:41:02", user:
+5, book: 10, event: "book"}`, we will lookup `book:10` from the
+context and if found it will lookup from the book's properties and try
+to find accessible context for them, so it will lookup for `author:
+60` and join with the author.
+
+
 # searching
 
 ```
@@ -48,59 +82,116 @@ be faster if you decide not to decode the metadata in the hit.
 {
   "hits": [
     {
-      "foreign_id": "717f780d067d4abf95b28e013f4570c1",
+      "context": [
+        {
+          "created_at_ns": 1563131082772484400,
+          "foreign_id": "3f40a264710d4874aadc2ba88b3ed0d3",
+          "foreign_type": "author_id",
+          "properties": [
+            {
+              "key": "date_of_birth",
+              "value": "1974-11-29"
+            },
+            {
+              "key": "name",
+              "value": "quidem"
+            }
+          ]
+        },
+        {
+          "created_at_ns": 1563131082772820500,
+          "foreign_id": "d2ab0acd480c46b2920fed7f8db9af5f",
+          "foreign_type": "book_id",
+          "properties": [
+            {
+              "key": "author_id",
+              "value": "3f40a264710d4874aadc2ba88b3ed0d3"
+            },
+            {
+              "key": "genre",
+              "value": "ea"
+            },
+            {
+              "key": "name",
+              "value": "velit"
+            },
+            {
+              "key": "published_at",
+              "value": "1970-03-20"
+            }
+          ]
+        }
+      ],
+      "foreign_id": "dfe5992d20004791be066b0dc67558a1",
       "foreign_type": "user_id",
-      "id": 91799307,
+      "id": 8394,
       "kafka": {
-        "offset": 104244,
+        "offset": 37,
         "partition": 3
       },
       "metadata": {
-        "created_at_ns": 1563113016592233200,
-        "event_type": "ignore",
-        "foreign_id": "717f780d067d4abf95b28e013f4570c1",
-        "foreign_type": "717f780d067d4abf95b28e013f4570c1",
+        "created_at_ns": 1563131082828701400,
+        "event_type": "skip",
+        "foreign_id": "dfe5992d20004791be066b0dc67558a1",
+        "foreign_type": "user_id",
         "properties": [
           {
             "key": "currency",
-            "value": "EUR"
+            "value": "UAH"
           },
           {
             "key": "timezone",
-            "value": "Antarctica/Casey"
+            "value": "America/Cayenne"
           },
           {
             "key": "user_agent",
-            "value": "Aghaven/Nutch-1.2 (www.aghaven.com)"
+            "value": "urlfan-bot/1.0; +http://www.urlfan.com/site/bot/350.html"
           }
         ],
         "tags": [
           {
             "key": "book_id",
-            "value": "439c3bfbfcc04dab9eceb65a4effa039"
-          },
-          {
-            "key": "book_id",
-            "value": "a29b2a883e10474894399acfcd6c61a9"
-          },
-          {
-            "key": "book_id",
-            "value": "c1d8326a4db945769d4fe2185019f7dc"
-          },
-          {
-            "key": "book_id",
-            "value": "e4d1cc5be1b343e5934687cd12b82bcd"
-          },
-          {
-            "key": "book_id",
-            "value": "f4936e9dff4449f482330ee4b8b7cb3e"
+            "value": "d2ab0acd480c46b2920fed7f8db9af5f"
           }
         ]
       },
       "score": 1
-    }
+    },
+    {
+      "context": [
+        {
+          "created_at_ns": 1563131082772584000,
+          "foreign_id": "772e1c891915440288565a861bd5ce7a",
+          "foreign_type": "author_id",
+          "properties": [
+            {
+              "key": "date_of_birth",
+              "value": "1980-08-20"
+            },
+            {
+              "key": "name",
+              "value": "labore"
+            }
+          ]
+        },
+        {
+          "created_at_ns": 1563131082772648200,
+          "foreign_id": "f1f503b783b345faacdcdb5fdd0e8fee",
+          "foreign_type": "author_id",
+          "properties": [
+            {
+              "key": "date_of_birth",
+              "value": "2000-03-21"
+            },
+            {
+              "key": "name",
+              "value": "qui"
+            }
+          ]
+        },
+        ...
   ],
-  "total": 20259
+  "total": 2045
 }
 
 
@@ -108,133 +199,152 @@ be faster if you decide not to decode the metadata in the hit.
 
 # scan
 
-http://khanzo/scan/html/ (or /scan/text/ for text), example output of /scan/text/ (see full output on [baxx.dev](https://baxx.dev/s/e659718f-9eec-45b5-92f7-2be5fb4a46ad))
+http://khanzo/scan/html/ (or /scan/text/ for text), example output of /scan/text/ (see full output on [baxx.dev](https://baxx.dev/s/3b50e58d-b0e5-43ae-bf23-45cd002708c7))
+
 
 ```
-
 ┌                                                                              ┐
 │ FOREIGN......................................................................│
 └                                                                              ┘
-« user_id » total: 34822, 100.00%
-    717f780d067d4abf95b28e013f4570c1     7122  20.45% ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
-    ad5e3dc7da9a48a1883470ea0d34489a     6991  20.08% ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
-    06fed53b590c43198e0b4bc5c8abc229     2763   7.93% ▒▒▒▒▒▒▒▒▒▒
-    cc7aa0b55e0a46b399162b9cbc105ccc     2663   7.65% ▒▒▒▒▒▒▒▒▒
-    a94c4d4595d74bdd8006c54a87e16e7b     2656   7.63% ▒▒▒▒▒▒▒▒▒
-    3d0e080b1d254e69838afa7472ec0ce0     1005   2.89% ▒▒▒
-    c93ab736518d4945a0f5a271324d6ffe      977   2.81% ▒▒▒
-    ... [ cut ]
+« user_id » total: 10000, 100.00%
+    dfe5992d20004791be066b0dc67558a1     2045  20.45% ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+    061b3b7bd2034fbfb1ce9454bf1f0570     2035  20.35% ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+    793a2482e79a4b9285c37515df732846      793   7.93% ▒▒▒▒▒▒▒▒▒▒
+    920aa39eaf74430db07ba740abd8a4f7      756   7.56% ▒▒▒▒▒▒▒▒▒
+    555c32def93a4ae1a7058addb76c903b      752   7.52% ▒▒▒▒▒▒▒▒▒
+    5b259853f3344fab9db3995c0096bd18      291   2.91% ▒▒▒
+    8264196f234b485c9ad8e1228def3025      283   2.83% ▒▒▒
+    e86bd65482134521a653426d898a4d3c      270   2.70% ▒▒▒
+    7b74ea43443d42e087eec9f82ce596cb      267   2.67% ▒▒▒
+    cfcdd5c7822745a4a52ba9651e4b4e85      247   2.47% ▒▒▒
+    3813413352444366aabbdbc16a0aaa16       38   0.38% 
+    4ac30af5a6204b04b6298731ba67c1bc       36   0.36% 
+    [ ... cut ]
 ┌                                                                              ┐
 │ EVENT_TYPES..................................................................│
 └                                                                              ┘
-« event_type » total: 34822, 100.00%
-    click     11668  33.51% ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
-    ignore    11482  32.97% ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
-    skip       7719  22.17% ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
-    buy        3953  11.35% ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+« event_type » total: 10000, 100.00%
+    ignore     3399  33.99% ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+    click      3318  33.18% ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+    skip       2194  21.94% ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+    buy        1089  10.89% ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
 ┌                                                                              ┐
 │ TAGS.........................................................................│
 └                                                                              ┘
-« book_id » total: 105256, 100.00%
-    ea647026d57543d999f972457e180aa5     9581   9.10% ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
-    c99129fd6dcf488f9bd5b0b4b36f0b33     9514   9.04% ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
-    9b1283fd81bb4bd3b8b4cb5432ad246a     9512   9.04% ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
-    f4936e9dff4449f482330ee4b8b7cb3e     9488   9.01% ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
-    2329dfa714d745a1b5b39dabe51f5065     9414   8.94% ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
-    0e223cede80c4a7aa2c1285c4d060c72     4281   4.07% ▒▒▒▒▒▒▒▒▒▒▒
-    4ca3126219e64b6b9840e6092edf38f7     4265   4.05% ▒▒▒▒▒▒▒▒▒▒▒
-    a29b2a883e10474894399acfcd6c61a9     4206   4.00% ▒▒▒▒▒▒▒▒▒▒▒
-    737e62b2fc3a45fe934e08775b1ac925     4135   3.93% ▒▒▒▒▒▒▒▒▒▒▒
-    e4d4bbfa3c8f487f858c81d4a7429a73     4029   3.83% ▒▒▒▒▒▒▒▒▒▒
-    f0369680c9f34369b50602c6bcbcd06c     1643   1.56% ▒▒▒▒
-    439c3bfbfcc04dab9eceb65a4effa039     1612   1.53% ▒▒▒▒
-    c1d8326a4db945769d4fe2185019f7dc     1605   1.52% ▒▒▒▒
-    b3377bf4744d4f9d9da19a7dc609a7d4     1595   1.52% ▒▒▒▒
-    ... [ cut ]
+« book_id » total: 15155, 100.00%
+    5634976e4d8942e8b51f8c97f559897f     1416   9.34% ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+    14273466cb2b47a68c185d8ea04c462a     1386   9.15% ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+    bee8f865406248e38335e5d02dbbd1e9     1362   8.99% ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+    7f68113ab1e448dfa7c7ec63cc29096d     1335   8.81% ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+    5fa70292d42c416f8ec968d1fdaba9fd     1333   8.80% ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+    f3eefb5a3fd549f4adcb0646627aa377      652   4.30% ▒▒▒▒▒▒▒▒▒▒▒
+    1a6cb1e184354458aff8e53e5b31f3f1      645   4.26% ▒▒▒▒▒▒▒▒▒▒▒
+    317660a79cce4d669ad39bb3b9011c0d      614   4.05% ▒▒▒▒▒▒▒▒▒▒▒
+    d2ab0acd480c46b2920fed7f8db9af5f      594   3.92% ▒▒▒▒▒▒▒▒▒▒
+    e791ac1cba6b4f259bbf6c9896c27636      584   3.85% ▒▒▒▒▒▒▒▒▒▒
+    7a25c156c20c4037a4b7fa1a488e80ff      251   1.66% ▒▒▒▒
+    15d7da551b29476882a05bac2cf37781      231   1.52% ▒▒▒▒
+    [ ... cut ]
+
 ┌                                                                              ┐
 │ PROPERTIES...................................................................│
 └                                                                              ┘
-« currency » total: 34822, 33.33%
-    MMK      236   0.68% ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
-    NGN      230   0.66% ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
-    VES      229   0.66% ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
-    LKR      228   0.65% ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
-    KMF      227   0.65% ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
-    SOS      225   0.65% ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
-    IQD      221   0.63% ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
-    LYD      220   0.63% ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
-    AED      216   0.62% ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
-    ALL      216   0.62% ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
-    PGK      216   0.62% ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
-    ... [ cut ]
-
+« currency » total: 10000, 33.33%
+    AZN       84   0.84% ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+    HNL       78   0.78% ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+    TJS       76   0.76% ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+    UYU       76   0.76% ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+    VND       74   0.74% ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+    PEN       73   0.73% ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+    FJD       72   0.72% ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+    KMF       71   0.71% ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+    ZMW       71   0.71% ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+    [ ... cut ]
 --------
 
-« timezone » total: 34822, 33.33%
-    Pacific/Kwajalein                      88   0.25% ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
-    US/East-Indiana                        86   0.25% ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
-    Etc/GMT-13                             84   0.24% ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
-    Africa/Nairobi                         82   0.24% ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
-    Europe/Prague                          81   0.23% ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
-    Pacific/Kiritimati                     81   0.23% ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
-    ... [ cut ]
+« timezone » total: 10000, 33.33%
+    America/Halifax                        30   0.30% ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+    America/Mendoza                        29   0.29% ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+    Asia/Novokuznetsk                      28   0.28% ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+    US/Indiana-Starke                      28   0.28% ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+    Asia/Aqtobe                            27   0.27% ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+    Africa/Mbabane                         27   0.27% ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+    Australia/North                        27   0.27% ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+    PRC                                    27   0.27% ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+    America/Detroit                        27   0.27% ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+    Europe/Sofia                           26   0.26% ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+    [ ... cut ]
 --------
 
-« user_agent » total: 34822, 33.33%
-    UnwindFetchor/1.0 (+http://www.gnip...      423   1.21% ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
-    Mozilla/5.0 (compatible; PaperLiBot...      419   1.20% ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
-    Voyager/1.0                                 390   1.12% ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
-    Mozilla/5.0 (compatible; MSIE 6.0b;...      389   1.12% ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
-    Mozilla/5.0 (compatible; woriobot s...      389   1.12% ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
-    Summify (Summify/1.0.1; +http://sum...      389   1.12% ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
-    SeznamBot/3.0 (+http://fulltext.sbl...      388   1.11% ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
-    PostPost/1.0 (+http://postpo.st/cra...      386   1.11% ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
-    ssearch_bot (sSearch Crawler; http:...      386   1.11% ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
-    wikiwix-bot-3.0                             386   1.11% ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
-    radian6_default_(www.radian6.com/cr...      384   1.10% ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
-    Trapit/1.1                                  383   1.10% ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
-    Mozilla/5.0 (compatible; AhrefsBot/...      379   1.09% ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
-    Mozilla/5.0 (compatible; PrintfulBo...      379   1.09% ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
-    Mozilla/4.0 (compatible; www.euro-d...      378   1.09% ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
-    ... [ cut ]
+« user_agent » total: 10000, 33.33%
+    Netvibes (http://www.netvibes.com)          130   1.30% ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+    Moreoverbot/5.1 (+http://w.moreover...      127   1.27% ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+    trunk.ly spider contact@trunk.ly            125   1.25% ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+    MLBot (www.metadatalabs.com/mlbot)          124   1.24% ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+    Mozilla/5.0 (compatible; TweetedTim...      120   1.20% ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+    Owlin.com/1.3 (http://owlin.com/)           120   1.20% ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+    [ ... cut ]
 ┌                                                                              ┐
 │ SAMPLE.......................................................................│
 └                                                                              ┘
-ad5e3dc7da9a48a1883470ea0d34489a:ad5e3dc7da9a48a1883470ea0d34489a
-type:skip
-Sun Jul 14 16:03:43 CEST 2019
-  book_id                       : a29b2a883e10474894399acfcd6c61a9
-  currency                      : GEL
-  timezone                      : Pacific/Truk
-  user_agent                    : Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)
-
-
-717f780d067d4abf95b28e013f4570c1:717f780d067d4abf95b28e013f4570c1
-type:ignore
-Sun Jul 14 16:03:43 CEST 2019
-  book_id                       : 21a5f69718784eeb97a86deb0a15db98
-  book_id                       : 4d107d12348c450abd28c59d14f9f57e
-  book_id                       : 6fb9a161af4142c58b9d26d860ff2f51
-  book_id                       : 942cb675fbcb4d7fbb4cd37ff6bd57dc
-  book_id                       : d2885d6001e54083814e182e1fd0a949
-  currency                      : CLF
-  timezone                      : America/Mendoza
-  user_agent                    : UnwindFetchor/1.0 (+http://www.gnip.com/)
-
-
-717f780d067d4abf95b28e013f4570c1:717f780d067d4abf95b28e013f4570c1
+user_id:69c6d8c30c294fef96aaa2b92d30ad2d
 type:click
-Sun Jul 14 16:03:43 CEST 2019
-  book_id                       : 9b1283fd81bb4bd3b8b4cb5432ad246a
-  book_id                       : c99129fd6dcf488f9bd5b0b4b36f0b33
-  book_id                       : c99129fd6dcf488f9bd5b0b4b36f0b33
-  book_id                       : ea647026d57543d999f972457e180aa5
-  book_id                       : f4936e9dff4449f482330ee4b8b7cb3e
-  currency                      : MVR
-  timezone                      : Atlantic/Cape_Verde
-  user_agent                    : Mozilla/5.0 (compatible; Yahoo! Slurp; http://help.yahoo.com/help/us/ysearch/slurp)
+Sun Jul 14 21:04:42 CEST 2019
+  book_id                       : 15d7da551b29476882a05bac2cf37781
+  book_id                       : 5871f4ee144b4db7ace6d1a72ea27912
+  book_id                       : 70b6ef5ccb80410aa9137a88729dd657
+  currency                      : XUA
+  timezone                      : America/Grand_Turk
+  user_agent                    : Trapit/1.1
+  @author_id:3f40a264710d4874aadc2ba88b3ed0d3:
+    date_of_birth               : 1974-11-29
+    name                        : quidem
+  @author_id:652e781362ab4a7b8b3d056b900b05f5:
+    date_of_birth               : 1989-06-09
+    name                        : odio
+  @author_id:6a01fb7c04054652ab8f9dc3dbf8a53b:
+    date_of_birth               : 1972-11-07
+    name                        : adipisci
+  @author_id:d220fb93899c40c2affd877b918529d6:
+    date_of_birth               : 2005-05-02
+    name                        : cumque
+  @book_id:15d7da551b29476882a05bac2cf37781:
+    author_id                   : d220fb93899c40c2affd877b918529d6
+    genre                       : beatae
+    name                        : totam
+    published_at                : 2010-08-28
+  @book_id:5871f4ee144b4db7ace6d1a72ea27912:
+    author_id                   : 6a01fb7c04054652ab8f9dc3dbf8a53b
+    genre                       : quis
+    name                        : eos
+    published_at                : 1977-08-01
+  @book_id:70b6ef5ccb80410aa9137a88729dd657:
+    author_id                   : 3f40a264710d4874aadc2ba88b3ed0d3
+    author_id                   : 652e781362ab4a7b8b3d056b900b05f5
+    genre                       : suscipit
+    name                        : consequatur
+    published_at                : 2000-12-19
 
-  ... [ cut ]
+
+user_id:061b3b7bd2034fbfb1ce9454bf1f0570
+type:ignore
+Sun Jul 14 21:04:42 CEST 2019
+  book_id                       : 14273466cb2b47a68c185d8ea04c462a
+  book_id                       : 5fa70292d42c416f8ec968d1fdaba9fd
+  currency                      : SSP
+  timezone                      : Pacific/Auckland
+  user_agent                    : ia_archiver (+http://www.alexa.com/site/help/webmasters; crawler@alexa.com)
+  @book_id:14273466cb2b47a68c185d8ea04c462a:
+    genre                       : adipisci
+    name                        : sit
+    published_at                : 2003-06-23
+  @book_id:5fa70292d42c416f8ec968d1fdaba9fd:
+    genre                       : necessitatibus
+    name                        : eveniet
+    published_at                : 2014-06-20
+
+
+  [ ...cut ]
 
 ```
 

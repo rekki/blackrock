@@ -202,7 +202,7 @@ func genBook(author ...*spec.Context) *spec.Context {
 func pickAuthors(authors []*spec.Context) []*spec.Context {
 	out := []*spec.Context{}
 	seen := map[string]bool{}
-	for i := 0; i < rand.Intn(5); i++ {
+	for i := 1; i < rand.Intn(5); i++ {
 		a := authors[rand.Intn(len(authors))]
 		if _, ok := seen[a.ForeignId]; !ok {
 			out = append(out, a)
@@ -229,10 +229,6 @@ func genEvent(users []*spec.Context, books []*spec.Context) *spec.Envelope {
 		tags = append(tags, &spec.KV{Key: "book_id", Value: book.ForeignId})
 	}
 
-	for i := 0; i < rand.Intn(5); i++ {
-		book := books[rand.Intn(len(books))]
-		tags = append(tags, &spec.KV{Key: "book_id", Value: book.ForeignId})
-	}
 	ua := UA[rand.Intn(len(UA))]
 	m := &spec.Metadata{
 		CreatedAtNs: time.Now().UnixNano(),

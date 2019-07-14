@@ -64,6 +64,7 @@ func (r *ContextCache) Lookup(t uint64, id string, from int64) (*spec.PersistedC
 		return nil, false
 	}
 	v, ok := m[id]
+
 	if ok {
 		if len(v) < 8 {
 			for _, vv := range v {
