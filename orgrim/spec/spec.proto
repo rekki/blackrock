@@ -5,7 +5,6 @@ package spec;
 message KV {
         string key = 1;
         string value = 2;
-        uint64 context = 3;
 }
 
 message Metadata {

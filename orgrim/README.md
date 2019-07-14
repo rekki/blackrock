@@ -47,7 +47,6 @@ all query params are tags in the form of key:value, this creates protobuf messag
 message KV {
         string key = 1;
         string value = 2;
-        uint64 context = 3;
 }
 
 message Metadata {
