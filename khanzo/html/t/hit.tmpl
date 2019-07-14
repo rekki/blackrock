@@ -32,6 +32,27 @@
 </tr>
 {{ end }}
 
+
+  {{ range .Context }}
+    <tr>
+      <td class="left" colspan=2>
+        @{{.ForeignType}}:{{ .ForeignId }}
+      </td>
+    </tr>
+    {{ range .Properties }}
+    <tr>
+      <td class="left">
+        &nbsp;&nbsp;{{.Key }}
+      </td>
+      <td class="right">
+        {{.Value}}
+      </td>
+    </tr>
+    {{ end }}
+  {{ end }}
+
+
+
 <tr>
 <td colspan=2 class="hit-sep">&nbsp;</td>
 </tr>

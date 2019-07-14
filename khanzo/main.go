@@ -35,18 +35,20 @@ type QueryRequest struct {
 	DecodeMetadata   bool        `json:"decode_metadata"`
 	ScanMaxDocuments int64       `json:"scan_max_documents"`
 }
+
 type KafkaOffset struct {
 	Offset    uint64 `json:"offset,omitempty"`
 	Partition uint32 `json:"partition,omitempty"`
 }
 
 type Hit struct {
-	Score       float32        `json:"score,omitempty"`
-	ID          int64          `json:"id,omitempty"`
-	ForeignId   string         `json:"foreign_id,omitempty"`
-	ForeignType string         `json:"foreign_type,omitempty"`
-	Metadata    *spec.Metadata `json:"metadata,omitempty"`
-	KafkaOffset *KafkaOffset   `json:"kafka,omitempty"`
+	Score       float32         `json:"score,omitempty"`
+	ID          int64           `json:"id,omitempty"`
+	ForeignId   string          `json:"foreign_id,omitempty"`
+	ForeignType string          `json:"foreign_type,omitempty"`
+	Metadata    *spec.Metadata  `json:"metadata,omitempty"`
+	KafkaOffset *KafkaOffset    `json:"kafka,omitempty"`
+	Context     []*spec.Context `json:"context,omitempty"`
 }
 
 type ByKV []*spec.KV
@@ -70,6 +72,13 @@ func (h Hit) String() string {
 	}
 	for _, kv := range m.Properties {
 		out = append(out, fmt.Sprintf("  %-30s: %s", kv.Key, kv.Value))
+	}
+
+	for _, ctx := range h.Context {
+		out = append(out, fmt.Sprintf("  %-30s:", fmt.Sprintf("@%s:%s", ctx.ForeignType, ctx.ForeignId)))
+		for _, kv := range ctx.Properties {
+			out = append(out, fmt.Sprintf("    %-28s: %s", kv.Key, kv.Value))
+		}
 	}
 
 	return strings.Join(out, "\n") + "\n\n"
@@ -99,7 +108,7 @@ func NewTermQuery(inverted *disk.InvertedWriter, dictionary *disk.PersistedDicti
 	return NewTerm(s, inverted.Read(maxDocuments, tk, tagValue))
 }
 
-func getScoredHit(forward *disk.ForwardWriter, dictionary *disk.PersistedDictionary, did int64, decodeMetadata bool) (Hit, error) {
+func getScoredHit(contextCache *ContextCache, forward *disk.ForwardWriter, dictionary *disk.PersistedDictionary, did int64, decodeMetadata bool) (Hit, error) {
 	foreignId, foreignType, data, _, err := forward.Read(uint64(did), decodeMetadata)
 	if err != nil {
 		return Hit{}, err
@@ -110,12 +119,26 @@ func getScoredHit(forward *disk.ForwardWriter, dictionary *disk.PersistedDiction
 		if err != nil {
 			return Hit{}, err
 		}
-		return toHit(dictionary, did, foreignId, foreignType, nil), nil
+		return toHit(contextCache, dictionary, did, foreignId, foreignType, nil), nil
 	}
-	return toHit(dictionary, did, foreignId, foreignType, nil), nil
+	return toHit(contextCache, dictionary, did, foreignId, foreignType, nil), nil
 }
 
-func toHit(dictionary *disk.PersistedDictionary, did int64, foreignId, foreignType uint64, p *spec.PersistedMetadata) Hit {
+func toContext(dictionary *disk.PersistedDictionary, p *spec.PersistedContext) *spec.Context {
+	out := &spec.Context{
+		CreatedAtNs: p.CreatedAtNs,
+		ForeignId:   p.ForeignId,
+		ForeignType: dictionary.ReverseResolve(p.ForeignType),
+	}
+	for i := 0; i < len(p.PropertyKeys); i++ {
+		tk := dictionary.ReverseResolve(p.PropertyKeys[i])
+		out.Properties = append(out.Properties, &spec.KV{Key: tk, Value: p.PropertyValues[i]})
+	}
+	sort.Sort(ByKV(out.Properties))
+	return out
+}
+
+func toHit(contextCache *ContextCache, dictionary *disk.PersistedDictionary, did int64, foreignId, foreignType uint64, p *spec.PersistedMetadata) Hit {
 	hit := Hit{
 		ID: did,
 	}
@@ -134,8 +157,14 @@ func toHit(dictionary *disk.PersistedDictionary, did int64, foreignId, foreignTy
 	}
 	hit.KafkaOffset = &KafkaOffset{Offset: p.Offset, Partition: p.Partition}
 	for i := 0; i < len(p.TagKeys); i++ {
-		tk := dictionary.ReverseResolve(p.TagKeys[i])
-		pretty.Tags = append(pretty.Tags, &spec.KV{Key: tk, Value: p.TagValues[i]})
+		k := p.TagKeys[i]
+		v := p.TagValues[i]
+		tk := dictionary.ReverseResolve(k)
+		pretty.Tags = append(pretty.Tags, &spec.KV{Key: tk, Value: v})
+		if px, ok := contextCache.Lookup(k, v, p.CreatedAtNs); ok {
+			hit.Context = append(hit.Context, toContext(dictionary, px))
+		}
+
 	}
 
 	for i := 0; i < len(p.PropertyKeys); i++ {
@@ -172,24 +201,26 @@ func Render(c *gin.Context, x Renderable) {
 }
 
 type Counter struct {
-	Tags       map[uint64]map[string]uint32 `json:"tags"`
-	Properties map[uint64]map[string]uint32 `json:"properties"`
-	Foreign    map[uint64]map[string]uint32 `json:"foreign"`
-	EventTypes map[uint64]uint32            `json:"event_types"`
-	Sample     []Hit                        `json:"sample"`
-	Total      uint64                       `json:"total"`
-	pd         *disk.PersistedDictionary
+	Tags         map[uint64]map[string]uint32 `json:"tags"`
+	Properties   map[uint64]map[string]uint32 `json:"properties"`
+	Foreign      map[uint64]map[string]uint32 `json:"foreign"`
+	EventTypes   map[uint64]uint32            `json:"event_types"`
+	Sample       []Hit                        `json:"sample"`
+	Total        uint64                       `json:"total"`
+	pd           *disk.PersistedDictionary
+	contextCache *ContextCache
 }
 
-func NewCounter(pd *disk.PersistedDictionary) *Counter {
+func NewCounter(pd *disk.PersistedDictionary, contextCache *ContextCache) *Counter {
 	return &Counter{
-		Tags:       map[uint64]map[string]uint32{},
-		Properties: map[uint64]map[string]uint32{},
-		Foreign:    map[uint64]map[string]uint32{},
-		EventTypes: map[uint64]uint32{},
-		Sample:     []Hit{},
-		Total:      0,
-		pd:         pd,
+		Tags:         map[uint64]map[string]uint32{},
+		Properties:   map[uint64]map[string]uint32{},
+		Foreign:      map[uint64]map[string]uint32{},
+		EventTypes:   map[uint64]uint32{},
+		Sample:       []Hit{},
+		Total:        0,
+		pd:           pd,
+		contextCache: contextCache,
 	}
 }
 
@@ -209,7 +240,7 @@ func (c *Counter) Prettify() *CountedResult {
 	return out
 }
 
-func (c *Counter) Add(offset int64, foreignId, foreignType uint64, p *spec.PersistedMetadata, ctx *ContextCache) {
+func (c *Counter) Add(offset int64, foreignId, foreignType uint64, p *spec.PersistedMetadata) {
 	for i := 0; i < len(p.TagKeys); i++ {
 		k := p.TagKeys[i]
 		v := p.TagValues[i]
@@ -219,20 +250,6 @@ func (c *Counter) Add(offset int64, foreignId, foreignType uint64, p *spec.Persi
 			c.Tags[k] = m
 		}
 		m[v]++
-
-		// merge the tags with the context's properties
-		if context, ok := ctx.Lookup(k, v, p.CreatedAtNs); ok {
-			for j := 0; j < len(context.PropertyKeys); j++ {
-				ck := context.PropertyKeys[j]
-				cv := context.PropertyValues[j]
-				cm, ok := c.Properties[ck]
-				if !ok {
-					cm = map[string]uint32{}
-					c.Properties[ck] = cm
-				}
-				cm[cv]++
-			}
-		}
 	}
 
 	for i := 0; i < len(p.PropertyKeys); i++ {
@@ -255,7 +272,7 @@ func (c *Counter) Add(offset int64, foreignId, foreignType uint64, p *spec.Persi
 	c.Total++
 
 	if len(c.Sample) < 100 {
-		hit := toHit(c.pd, offset, foreignId, foreignType, p)
+		hit := toHit(c.contextCache, c.pd, offset, foreignId, foreignType, p)
 		c.Sample = append(c.Sample, hit)
 	}
 }
@@ -512,7 +529,7 @@ func main() {
 			doInsert := false
 			var hit Hit
 			if len(out.Hits) < qr.Size {
-				hit, err = getScoredHit(forward, dictionary, did, qr.DecodeMetadata)
+				hit, err = getScoredHit(contextCache, forward, dictionary, did, qr.DecodeMetadata)
 				hit.Score = score
 				if err != nil {
 					// possibly corrupt forward index, igore, error is already printed
@@ -522,7 +539,7 @@ func main() {
 				doInsert = true
 			} else if out.Hits[len(out.Hits)-1].Score < hit.Score {
 				doInsert = true
-				hit, err = getScoredHit(forward, dictionary, did, qr.DecodeMetadata)
+				hit, err = getScoredHit(contextCache, forward, dictionary, did, qr.DecodeMetadata)
 				hit.Score = score
 				if err != nil {
 					// possibly corrupt forward index, igore, error is already printed
@@ -562,7 +579,7 @@ func main() {
 	})
 
 	r.GET("/scan/:format/*query", func(c *gin.Context) {
-		counter := NewCounter(dictionary)
+		counter := NewCounter(dictionary, contextCache)
 		var p spec.PersistedMetadata
 		queryPath := strings.Trim(c.Param("query"), "/")
 
@@ -587,7 +604,7 @@ func main() {
 					c.JSON(400, gin.H{"error": err.Error()})
 					return
 				}
-				counter.Add(int64(offset), foreignId, foreignType, &p, contextCache)
+				counter.Add(int64(offset), foreignId, foreignType, &p)
 			}
 		} else {
 			back := uint64(0)
@@ -607,7 +624,7 @@ func main() {
 				if err != nil {
 					return err
 				}
-				counter.Add(int64(offset), foreignId, foreignType, &p, contextCache)
+				counter.Add(int64(offset), foreignId, foreignType, &p)
 				return nil
 			})
 
@@ -653,11 +670,9 @@ func loadTemplate() (*template.Template, error) {
 		"replace": func(a, b, c string) string {
 			return strings.Replace(a, b, c, -1)
 		},
-
 		"minus": func(a, b int) int {
 			return a - b
 		},
-
 		"percent": func(value ...interface{}) string {
 			a := float64(value[0].(int64))
 			b := float64(value[1].(int64))
