@@ -141,7 +141,7 @@ func consumeContext(r *kafka.Reader, dictionary *disk.PersistedDictionary, forwa
 		return err
 	}
 
-	log.Warnf("context waiting... [idKey: %d", idKey)
+	log.Warnf("context waiting... [idKey: %d]", idKey)
 	ctx := context.Background()
 	for {
 		m, err := r.ReadMessage(ctx)

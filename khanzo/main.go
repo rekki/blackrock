@@ -11,7 +11,6 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 	"os"
-	"path"
 	"reflect"
 	"runtime"
 	"sort"
@@ -66,7 +65,7 @@ func (h Hit) String() string {
 	out := []string{}
 	m := h.Metadata
 	t := time.Unix(m.CreatedAtNs/1000000000, 0)
-	out = append(out, fmt.Sprintf("%s:%s\n%s\n%s", m.ForeignType, m.ForeignId, m.EventType, t.Format(time.UnixDate)))
+	out = append(out, fmt.Sprintf("%s:%s\ntype:%s\n%s", m.ForeignType, m.ForeignId, m.EventType, t.Format(time.UnixDate)))
 	for _, kv := range m.Tags {
 		out = append(out, fmt.Sprintf("  %-30s: %s", kv.Key, kv.Value))
 	}
@@ -160,11 +159,11 @@ func toHit(contextCache *ContextCache, dictionary *disk.PersistedDictionary, did
 		k := p.TagKeys[i]
 		v := p.TagValues[i]
 		tk := dictionary.ReverseResolve(k)
+
 		pretty.Tags = append(pretty.Tags, &spec.KV{Key: tk, Value: v})
 		if px, ok := contextCache.Lookup(k, v, p.CreatedAtNs); ok {
 			hit.Context = append(hit.Context, toContext(dictionary, px))
 		}
-
 	}
 
 	for i := 0; i < len(p.PropertyKeys); i++ {
@@ -395,14 +394,14 @@ func prettyStats(title string, stats []*PerKey) string {
 			continue
 		}
 		x := []float64{}
-		y := []chart.Label{}
+		y := []string{}
 		sort.Slice(t.Values, func(i, j int) bool {
 			return t.Values[j].Count < t.Values[i].Count
 		})
 
 		for _, v := range t.Values {
 			x = append(x, float64(v.Count))
-			y = append(y, chart.Label{Display: v.Value, Len: len(v.Value)})
+			y = append(y, v.Value)
 		}
 		percent := float64(100) * float64(t.TotalCount) / float64(total)
 		out = append(out, fmt.Sprintf("« %s » total: %d, %.2f%%\n%s", t.Key, t.TotalCount, percent, chart.HorizontalBar(x, y, '▒', width, pad, 50)))
@@ -412,8 +411,7 @@ func prettyStats(title string, stats []*PerKey) string {
 }
 
 func main() {
-	var proot = flag.String("root", "/blackrock", "root directory for the files root/topic")
-	var dataTopic = flag.String("topic-data", "blackrock-data", "topic for the data")
+	var proot = flag.String("root", "/blackrock/data-topic", "root directory for the files root/topic")
 	var basicAuth = flag.String("basic-auth", "", "basic auth user and password, leave empty for no auth [just for testing, better hide it behind nginx]")
 	var verbose = flag.Bool("verbose", false, "print info level logs to stdout")
 	var bind = flag.String("bind", ":9002", "bind to")
@@ -421,8 +419,7 @@ func main() {
 	go func() {
 		log.Println(http.ListenAndServe("localhost:6060", nil))
 	}()
-
-	root := path.Join(*proot, *dataTopic)
+	root := *proot
 	os.MkdirAll(root, 0700)
 	forward, err := disk.NewForwardWriter(root, "main")
 	if err != nil {

@@ -8,7 +8,7 @@ import (
 func TestEverything(t *testing.T) {
 	cases := []struct {
 		x        []float64
-		y        []Label
+		y        []string
 		width    int
 		symbol   rune
 		expected string
@@ -16,23 +16,23 @@ func TestEverything(t *testing.T) {
 
 		{
 			[]float64{1, 2, 3, 4},
-			[]Label{Label{"a", 1}, Label{"b", 1}, Label{"c", 1}, Label{"d", 1}},
+			[]string{"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "b", "c", "d"},
 			80,
 			'#',
-			`a      1.0  10.00% ###############
-b      2.0  20.00% ##############################
-c      3.0  30.00% #############################################
-d      4.0  40.00% #############################################################`},
+			`aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa...        1  10.00% #####
+b                                               2  20.00% ###########
+c                                               3  30.00% ################
+d                                               4  40.00% ######################`},
 
 		{
 			[]float64{1, 2, 3, 4},
-			[]Label{Label{"a", 1}, Label{"b", 1}, Label{"c", 1}, Label{"d", 1}},
+			[]string{"a", "b", "c", "d"},
 			30,
 			'#',
-			`a      1.0  10.00% ##
-b      2.0  20.00% #####
-c      3.0  30.00% ########
-d      4.0  40.00% ###########`},
+			`a        1  10.00% ##
+b        2  20.00% #####
+c        3  30.00% ########
+d        4  40.00% ###########`},
 	}
 
 	for i := range cases {

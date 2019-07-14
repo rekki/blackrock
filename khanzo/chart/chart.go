@@ -16,6 +16,15 @@ func makeBar(symbol rune, value int) string {
 
 var multipliers = []string{"", "k", "M", "G", "T", "P"}
 
+func Truncate(x string, max int) string {
+
+	if len(x) < max {
+		return x
+	}
+
+	return x[:max-3] + "..."
+}
+
 func Fit(x float64) string {
 	div := float64(1)
 	var f string
@@ -32,12 +41,7 @@ func Fit(x float64) string {
 	return f
 }
 
-type Label struct {
-	Display string
-	Len     int
-}
-
-func HorizontalBar(x []float64, y []Label, symbol rune, width int, prefix string, size int) string {
+func HorizontalBar(x []float64, y []string, symbol rune, width int, prefix string, size int) string {
 	max := float64(0)
 	maxLabelWidth := 0
 	sum := float64(0)
@@ -53,9 +57,12 @@ func HorizontalBar(x []float64, y []Label, symbol rune, width int, prefix string
 			max = x[i]
 		}
 	}
-	for _, v := range y {
-		if v.Len > maxLabelWidth {
-			maxLabelWidth = v.Len
+
+	for i, v := range y {
+		v = Truncate(v, width/2)
+		y[i] = v
+		if len(v) > maxLabelWidth {
+			maxLabelWidth = len(v)
 		}
 	}
 
@@ -63,8 +70,10 @@ func HorizontalBar(x []float64, y []Label, symbol rune, width int, prefix string
 	lines := []string{}
 	for i := 0; i < end; i++ {
 		v := x[i]
-		label := y[i].Display
-		mustPad := maxLabelWidth - y[i].Len
+		label := y[i]
+
+		mustPad := maxLabelWidth - len(label)
+
 		for k := 0; k < mustPad; k++ {
 			label += " "
 		}
