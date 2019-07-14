@@ -9,12 +9,29 @@ Mountains of Lordaeron. Arthas and the lich Kel'Thuzad killed him
 along with four other orcs, in order for Kel'Thuzad to commune with
 the demon lord Archimonde.
 
+# speed
+
+By default khanzo picks last 100k documents by simply seeking the
+inverted index file to size(file) - (100_000 * 8), and for scanning it
+seeks the forward file (event log) to size(file) - 50mb, this allow
+all basic operations to be semi constant.
+
+Imagine a scenario where you are generating 100 errors per second,
+any conventional log store starts being delayed because it has O(n)
+where N is the number of events, but this is not the case here,
+because we just seek to near the end.
+
+You can parameterize the queries to specify if you want to start from
+the beginning (`scan_max_documents: -1` in the query), also things can
+be faster if you decide not to decode the metadata in the hit.
+
 
 # searching
 
 ```
 % curl -d '{
   "size": 1,
+  "scan_max_documents": -1,
   "query": {
     "or": [
       {

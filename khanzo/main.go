@@ -103,7 +103,12 @@ func NewTermQuery(inverted *disk.InvertedWriter, dictionary *disk.PersistedDicti
 		log.Warnf("error reading key for %s", tagKey)
 		return NewTerm(s, []int64{})
 	}
-
+	if maxDocuments == 0 {
+		maxDocuments = 1000000
+	}
+	if maxDocuments == -1 {
+		maxDocuments = 0
+	}
 	return NewTerm(s, inverted.Read(maxDocuments, tk, tagValue))
 }
 
