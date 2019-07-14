@@ -89,9 +89,9 @@ the demon lord Archimonde.
 
 ```
 
-# scan http://khanzo/scan/html/ (or /scan/text/ for text)
+# scan
 
-example output of /scan/text/ (see full output on [baxx.dev](https://baxx.dev/s/e659718f-9eec-45b5-92f7-2be5fb4a46ad)
+http://khanzo/scan/html/ (or /scan/text/ for text), example output of /scan/text/ (see full output on [baxx.dev](https://baxx.dev/s/e659718f-9eec-45b5-92f7-2be5fb4a46ad))
 
 ```
 

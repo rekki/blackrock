@@ -31,7 +31,7 @@ Composed of the following characters:
 
 # cool text
 
-example khanzo output (see full output on [baxx.dev](https://baxx.dev/s/e659718f-9eec-45b5-92f7-2be5fb4a46ad)
+example khanzo output (see full output on [baxx.dev](https://baxx.dev/s/e659718f-9eec-45b5-92f7-2be5fb4a46ad))
 
 ```
 
