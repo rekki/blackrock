@@ -85,6 +85,32 @@ func cleanup(s string, allowDot bool) string {
 	}
 	return clean
 }
+func CleanupVW(s string) string {
+	clean := strings.Map(
+		func(r rune) rune {
+			if r > unicode.MaxLatin1 {
+				return -1
+			}
+
+			if '0' <= r && r <= '9' {
+				return r
+			}
+
+			if 'A' <= r && r <= 'Z' {
+				return r
+			}
+
+			if 'a' <= r && r <= 'z' {
+				return r
+			}
+
+			return '_'
+		},
+		s,
+	)
+	return clean
+}
+
 func Hash(s []byte) uint64 {
 	return metro.Hash64(s, 0)
 }

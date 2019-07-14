@@ -19,6 +19,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/gogo/protobuf/proto"
+	"github.com/jackdoe/blackrock/depths"
 	"github.com/jackdoe/blackrock/jubei/disk"
 	"github.com/jackdoe/blackrock/khanzo/chart"
 	"github.com/jackdoe/blackrock/orgrim/spec"
@@ -90,6 +91,47 @@ type QueryResponse struct {
 
 func (qr *QueryResponse) String(c *gin.Context) {
 	c.YAML(200, qr)
+}
+
+func (qr *QueryResponse) VW(c *gin.Context) {
+	labels := map[string]int{}
+
+	for i := -1; i < 10; i++ {
+		l := c.Query(fmt.Sprintf("label_%d", i))
+		if l != "" {
+			labels[l] = i
+		}
+	}
+	if len(labels) == 0 {
+		c.JSON(400, gin.H{"error": "no labels found, use ?label_1=some_event_type"})
+		return
+	}
+	w := c.Writer
+	for _, hit := range qr.Hits {
+		m := hit.Metadata
+		if m == nil {
+			continue
+		}
+		label, ok := labels[m.EventType]
+		if !ok {
+			continue
+		}
+
+		w.Write([]byte(fmt.Sprintf("%d |%s %s ", label, hit.ForeignType, depths.CleanupVW(hit.ForeignId))))
+		for _, kv := range m.Tags {
+			w.Write([]byte(fmt.Sprintf("|%s %s ", kv.Key, depths.CleanupVW(kv.Value))))
+		}
+		for _, kv := range m.Properties {
+			w.Write([]byte(fmt.Sprintf("|%s %s ", kv.Key, depths.CleanupVW(kv.Value))))
+		}
+		for _, ctx := range hit.Context {
+			for _, kv := range ctx.Properties {
+				w.Write([]byte(fmt.Sprintf("|%s %s ", kv.Key, depths.CleanupVW(kv.Value))))
+			}
+		}
+		w.Write([]byte{'\n'})
+	}
+
 }
 
 func (qr *QueryResponse) HTML(c *gin.Context) {
@@ -185,6 +227,7 @@ func toHit(contextCache *ContextCache, dictionary *disk.PersistedDictionary, did
 
 type Renderable interface {
 	String(c *gin.Context)
+	VW(c *gin.Context)
 	HTML(c *gin.Context)
 }
 
@@ -199,6 +242,8 @@ func Render(c *gin.Context, x Renderable) {
 		c.YAML(200, x)
 	} else if format == "html" {
 		x.HTML(c)
+	} else if format == "vw" {
+		x.VW(c)
 	} else {
 		x.String(c)
 	}
@@ -299,6 +344,10 @@ type CountedResult struct {
 	Properties []*PerKey `json:"properties"`
 	Sample     []Hit     `json:"sample"`
 	TotalCount int64     `json:"total"`
+}
+
+func (cr *CountedResult) VW(c *gin.Context) {
+	c.JSON(400, gin.H{"error": "scan does not support vw output"})
 }
 
 func (cr *CountedResult) String(c *gin.Context) {
