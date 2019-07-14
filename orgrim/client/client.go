@@ -14,8 +14,9 @@ import (
 )
 
 type Client struct {
-	h   *http.Client
-	url string
+	h                *http.Client
+	endpointEnvelope string
+	endpointContext  string
 }
 
 func NewClient(url string, h *http.Client) *Client {
@@ -30,24 +31,20 @@ func NewClient(url string, h *http.Client) *Client {
 	if !strings.HasSuffix(url, "/") {
 		url = url + "/"
 	}
-	return &Client{url: url, h: h}
-}
-
-func (c *Client) endpoint() string {
-	return fmt.Sprintf("%spush/envelope", c.url)
+	return &Client{endpointEnvelope: fmt.Sprintf("%spush/envelope", url), endpointContext: fmt.Sprintf("%spush/context", url), h: h}
 }
 
 type success struct {
 	Success bool `json:"success"`
 }
 
-func (c *Client) Push(envelope *spec.Envelope) error {
-	blob, err := proto.Marshal(envelope)
+func (c *Client) push(endpoint string, message proto.Message) error {
+	blob, err := proto.Marshal(message)
 	if err != nil {
 		return err
 	}
 
-	resp, err := c.h.Post(c.endpoint(), "application/protobuf", bytes.NewReader(blob))
+	resp, err := c.h.Post(endpoint, "application/protobuf", bytes.NewReader(blob))
 	if err != nil {
 		return err
 	}
@@ -68,4 +65,12 @@ func (c *Client) Push(envelope *spec.Envelope) error {
 		return fmt.Errorf("expected {success:true} got '%v'", s)
 	}
 	return nil
+}
+
+func (c *Client) Push(envelope *spec.Envelope) error {
+	return c.push(c.endpointEnvelope, envelope)
+}
+
+func (c *Client) PushContext(message *spec.Context) error {
+	return c.push(c.endpointContext, message)
 }

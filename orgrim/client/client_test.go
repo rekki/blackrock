@@ -39,8 +39,11 @@ func RandStringBytesMaskImprSrcUnsafe(n int) string {
 func doio(t *testing.T, c *Client, size int) {
 	data := &spec.Envelope{
 		Metadata: &spec.Metadata{
-			Properties: map[string]string{"hello": "world"},
-			Tags:       map[string]string{"open": RandStringBytesMaskImprSrcUnsafe(size)},
+			Properties:  []*spec.KV{&spec.KV{Key: "hello", Value: "world"}},
+			Tags:        []*spec.KV{&spec.KV{Key: "open", Value: RandStringBytesMaskImprSrcUnsafe(size)}},
+			ForeignId:   RandStringBytesMaskImprSrcUnsafe(5),
+			ForeignType: RandStringBytesMaskImprSrcUnsafe(5),
+			EventType:   RandStringBytesMaskImprSrcUnsafe(5),
 		},
 		Payload: []byte(RandStringBytesMaskImprSrcUnsafe(size)),
 	}
@@ -48,9 +51,20 @@ func doio(t *testing.T, c *Client, size int) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	dataContext := &spec.Context{
+		Properties:  []*spec.KV{&spec.KV{Key: "hello", Value: "world"}},
+		ForeignId:   RandStringBytesMaskImprSrcUnsafe(5),
+		ForeignType: RandStringBytesMaskImprSrcUnsafe(5),
+	}
+	err = c.PushContext(dataContext)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 }
 func TestExample(t *testing.T) {
-	c := NewClient("http://localhost:7000/", nil)
+	c := NewClient("http://localhost:9001/", nil)
 	for i := 0; i < 1000; i++ {
 		doio(t, c, i)
 	}
