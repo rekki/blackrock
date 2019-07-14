@@ -19,7 +19,9 @@ spec:
         image: "jackdoe/blackrock:0.6"
         env:
         - name: TOPIC
-          value: "blackrock"
+          value: "blackrock-data"
+        - name: TOPIC_CTX
+          value: "blackrock-context"
         - name: BROKERS
           value: "localhost:9092"
         - name: BROKERS
@@ -28,14 +30,14 @@ spec:
         - name: data
           mountPath: /blackrock
         command: ["/bin/jubei"]
-        args: ["-topic-data","$(TOPIC)", "-kafka","$(BROKERS)","-verbose"]
+        args: ["-topic-data","$(TOPIC)","-topic-context","$(TOPIC_CTX)", "-kafka","$(BROKERS)","-verbose"]
       - name: khanzo
         image: "jackdoe/blackrock:0.6"
         env:
         - name: BIND
           value: ":7001"
         - name: TOPIC
-          value: "blackrock"
+          value: "blackrock-data"
         volumeMounts:
         - name: data
           mountPath: /blackrock
@@ -52,7 +54,7 @@ spec:
           initialDelaySeconds: 1
           periodSeconds: 3
         command: ["/bin/khanzo"]
-        args: ["-topic-data","$(TOPIC)", "-bind","$(BIND)","-verbose"]
+        args: ["-root","/blackrock/$(TOPIC)","-bind","$(BIND)","-verbose"]
         ports:
         - containerPort: 7001
   volumeClaimTemplates:

@@ -18,7 +18,9 @@ spec:
           - name: BIND
             value: ":7000"
           - name: TOPIC
-            value: "blackrock"
+            value: "blackrock-data"
+          - name: TOPIC_CTX
+            value: "blackrock-context"
           - name: BROKERS
             value: "localhost:9092"
         livenessProbe:
@@ -34,6 +36,6 @@ spec:
           initialDelaySeconds: 1
           periodSeconds: 3
         command: ["/bin/orgrim"]
-        args: ["-topic-data","$(TOPIC)", "-bind","$(BIND)", "-kafka","$(BROKERS)","-verbose"]
+        args: ["-topic-data","$(TOPIC)","-topic-context","$(TOPIC_CTX)", "-bind","$(BIND)", "-kafka","$(BROKERS)","-verbose"]
         ports:
         - containerPort: 7000
