@@ -199,7 +199,9 @@ to find accessible context for them, so it will lookup for `author:
 
 # scan
 
-http://khanzo/scan/html/ (or /scan/text/ for text), example output of /scan/text/ (see full output on [baxx.dev](https://baxx.dev/s/3b50e58d-b0e5-43ae-bf23-45cd002708c7))
+http://khanzo/scan/html/ (or /scan/text/ for text), example output of
+/scan/text/ (see full output on
+[baxx.dev](https://baxx.dev/s/3b50e58d-b0e5-43ae-bf23-45cd002708c7))
 
 
 ```
@@ -333,7 +335,7 @@ Sun Jul 14 21:04:42 CEST 2019
   book_id                       : 5fa70292d42c416f8ec968d1fdaba9fd
   currency                      : SSP
   timezone                      : Pacific/Auckland
-  user_agent                    : ia_archiver (+http://www.alexa.com/site/help/webmasters; crawler@alexa.com)
+  user_agent                    : ia_archiver (+http://www.ale...
   @book_id:14273466cb2b47a68c185d8ea04c462a:
     genre                       : adipisci
     name                        : sit
