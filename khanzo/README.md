@@ -16,10 +16,11 @@ inverted index file to size(file) - (100_000 * 8), and for scanning it
 seeks the forward file (event log) to size(file) - 50mb, this allow
 all basic operations to be semi constant.
 
-Imagine a scenario where you are generating 100 errors per second,
-any conventional log store starts being delayed because it has O(n)
-where N is the number of events, but this is not the case here,
-because we just seek to near the end.
+Imagine a scenario where you are generating 100 errors per second, any
+conventional log store starts being delayed because it has O(n)
+somewhere, where N is the number of events(oversimplification of
+course.  could be in log tree merges or sst compactions), but this is
+not the case here, because we just seek to near the end.
 
 You can parameterize the queries to specify if you want to start from
 the beginning (`scan_max_documents: -1` in the query), also things can
