@@ -61,7 +61,7 @@ to find accessible context for them, so it will lookup for `author:
 
 ![context](../_/img/context_thumb.jpg)
 
-[full size image](../_/img/context_full.jpg)
+[full size image](https://github.com/rekki/blackrock/raw/master/_/img/context_full.jpg)
 
 # searching
 
