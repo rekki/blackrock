@@ -59,6 +59,9 @@ context and if found it will lookup from the book's properties and try
 to find accessible context for them, so it will lookup for `author:
 60` and join with the author.
 
+![context](../_/img/context_thumb.jpg)
+
+[full size image](../_/img/context_full.jpg)
 
 # searching
 
