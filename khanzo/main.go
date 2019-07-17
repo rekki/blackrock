@@ -14,6 +14,7 @@ import (
 	"reflect"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -295,9 +296,10 @@ type Counter struct {
 	Total        uint64                       `json:"total"`
 	pd           *disk.PersistedDictionary
 	contextCache *ContextCache
+	sampleSize   int
 }
 
-func NewCounter(pd *disk.PersistedDictionary, contextCache *ContextCache) *Counter {
+func NewCounter(pd *disk.PersistedDictionary, contextCache *ContextCache, sampleSize int) *Counter {
 	return &Counter{
 		Tags:         map[uint64]map[string]uint32{},
 		Properties:   map[uint64]map[string]uint32{},
@@ -305,6 +307,7 @@ func NewCounter(pd *disk.PersistedDictionary, contextCache *ContextCache) *Count
 		EventTypes:   map[uint64]uint32{},
 		Sample:       []Hit{},
 		Total:        0,
+		sampleSize:   sampleSize,
 		pd:           pd,
 		contextCache: contextCache,
 	}
@@ -357,7 +360,7 @@ func (c *Counter) Add(offset int64, foreignId, foreignType uint64, p *spec.Persi
 	c.EventTypes[p.EventType]++
 	c.Total++
 
-	if len(c.Sample) < 100 {
+	if len(c.Sample) < c.sampleSize {
 		hit := toHit(c.contextCache, c.pd, offset, foreignId, foreignType, p)
 		c.Sample = append(c.Sample, hit)
 	}
@@ -499,6 +502,15 @@ func prettyStats(title string, stats []*PerKey) string {
 	}
 
 	return fmt.Sprintf("%s%s", chart.Banner(title), strings.Join(out, "\n\n--------\n\n"))
+}
+
+func intOrDefault(s string, n int) int {
+	v, err := strconv.ParseInt(s, 10, 32)
+	if err != nil {
+		return n
+	}
+
+	return int(v)
 }
 
 func main() {
@@ -667,7 +679,8 @@ func main() {
 	})
 
 	r.GET("/scan/:format/*query", func(c *gin.Context) {
-		counter := NewCounter(dictionary, contextCache)
+		sampleSize := intOrDefault(c.Query("sample_size"), 200)
+		counter := NewCounter(dictionary, contextCache, sampleSize)
 		var p spec.PersistedMetadata
 		queryPath := strings.Trim(c.Param("query"), "/")
 

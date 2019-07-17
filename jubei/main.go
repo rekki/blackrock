@@ -29,6 +29,25 @@ func consumeEvents(r *kafka.Reader, dictionary *disk.PersistedDictionary, forwar
 		return err
 	}
 
+	yearKey, err := dictionary.GetUniqueTerm("year")
+	if err != nil {
+		return err
+	}
+	yearMonthKey, err := dictionary.GetUniqueTerm("year-month")
+	if err != nil {
+		return err
+	}
+
+	yearMonthDayKey, err := dictionary.GetUniqueTerm("year-month-day")
+	if err != nil {
+		return err
+	}
+
+	yearMonthDayHourKey, err := dictionary.GetUniqueTerm("year-month-day-hour")
+	if err != nil {
+		return err
+	}
+
 	log.Warnf("waiting... [typeKey: %d]", typeKey)
 	ctx := context.Background()
 	for {
@@ -97,6 +116,23 @@ func consumeEvents(r *kafka.Reader, dictionary *disk.PersistedDictionary, forwar
 			persisted.TagKeys = append(persisted.TagKeys, tk)
 			persisted.TagValues = append(persisted.TagValues, depths.Cleanup(strings.ToLower(v)))
 		}
+
+		ns := meta.CreatedAtNs
+		second := ns / 1000000000
+		t := time.Unix(second, 0).UTC()
+		year, month, day := t.Date()
+		hour, _, _ := t.Clock()
+
+		persisted.TagKeys = append(persisted.TagKeys, yearKey)
+		persisted.TagValues = append(persisted.TagValues, fmt.Sprintf("%d", year))
+		persisted.TagKeys = append(persisted.TagKeys, yearMonthKey)
+		persisted.TagValues = append(persisted.TagValues, fmt.Sprintf("%d-%02d", year, month))
+
+		persisted.TagKeys = append(persisted.TagKeys, yearMonthDayKey)
+		persisted.TagValues = append(persisted.TagValues, fmt.Sprintf("%d-%02d-%02d", year, month, day))
+
+		persisted.TagKeys = append(persisted.TagKeys, yearMonthDayHourKey)
+		persisted.TagValues = append(persisted.TagValues, fmt.Sprintf("%d-%02d-%02d-%02d", year, month, day, hour))
 
 		for _, kv := range meta.Properties {
 			k := kv.Key
