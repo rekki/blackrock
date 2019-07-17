@@ -105,7 +105,7 @@ func consumeEvents(r *kafka.Reader, dictionary *disk.PersistedDictionary, forwar
 			k := kv.Key
 			v := kv.Value
 			lc := depths.CleanupAllowDot(strings.ToLower(k))
-			if lc == "event_type" || lc == "foreign_type" || lc == "foreign_id" || lc == sforeignType {
+			if lc == "event_type" || lc == "foreign_type" || lc == "foreign_id" || lc == sforeignType || lc == "" {
 				continue
 			}
 
@@ -114,7 +114,11 @@ func consumeEvents(r *kafka.Reader, dictionary *disk.PersistedDictionary, forwar
 				return err
 			}
 			persisted.TagKeys = append(persisted.TagKeys, tk)
-			persisted.TagValues = append(persisted.TagValues, depths.Cleanup(strings.ToLower(v)))
+			value := depths.Cleanup(strings.ToLower(v))
+			if value == "" {
+				value = "__empty"
+			}
+			persisted.TagValues = append(persisted.TagValues, value)
 		}
 
 		// add some automatic tags
@@ -142,7 +146,7 @@ func consumeEvents(r *kafka.Reader, dictionary *disk.PersistedDictionary, forwar
 			k := kv.Key
 			v := kv.Value
 			lc := depths.CleanupAllowDot(strings.ToLower(k))
-			if lc == "event_type" || lc == "foreign_type" || lc == "foreign_id" || lc == sforeignType {
+			if lc == "event_type" || lc == "foreign_type" || lc == "foreign_id" || lc == sforeignType || lc == "" {
 				continue
 			}
 
@@ -150,8 +154,14 @@ func consumeEvents(r *kafka.Reader, dictionary *disk.PersistedDictionary, forwar
 			if err != nil {
 				return err
 			}
+
+			value := depths.Cleanup(strings.ToLower(v))
+			if value == "" {
+				value = "__empty"
+			}
+
 			persisted.PropertyKeys = append(persisted.PropertyKeys, pk)
-			persisted.PropertyValues = append(persisted.PropertyValues, v)
+			persisted.PropertyValues = append(persisted.PropertyValues, value)
 		}
 
 		encoded, err := proto.Marshal(persisted)
