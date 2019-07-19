@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -73,4 +74,34 @@ func (c *Client) Push(envelope *spec.Envelope) error {
 
 func (c *Client) PushContext(message *spec.Context) error {
 	return c.push(c.endpointContext, message)
+}
+
+func KV(key string, v interface{}) *spec.KV {
+	var value string
+	switch v.(type) {
+	case string:
+		value = v.(string)
+	case int:
+		value = fmt.Sprintf("%d", v.(int))
+	case int32:
+		value = fmt.Sprintf("%d", v.(int32))
+	case int64:
+		value = fmt.Sprintf("%d", v.(int64))
+	case int16:
+		value = fmt.Sprintf("%d", v.(int16))
+	case uint32:
+		value = fmt.Sprintf("%d", v.(uint32))
+	case uint64:
+		value = fmt.Sprintf("%d", v.(uint64))
+	case uint16:
+		value = fmt.Sprintf("%d", v.(uint16))
+	case float32:
+		value = strconv.FormatFloat(float64(v.(float32)), 'f', 0, 64)
+	case float64:
+		value = strconv.FormatFloat(v.(float64), 'f', 0, 64)
+	default:
+		value = fmt.Sprintf("%v", v)
+	}
+
+	return &spec.KV{Key: key, Value: value}
 }

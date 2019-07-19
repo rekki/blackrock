@@ -181,20 +181,20 @@ func main() {
 		}
 		partitions, err := strconv.ParseInt(splitted[0], 10, 32)
 		if err != nil {
-			log.Fatalf("partitions is not a number, error: %s", err.Error())
+			log.Fatalf("partitions is not a number, err: %s", err.Error())
 		}
 		replicas, err := strconv.ParseInt(splitted[1], 10, 32)
 		if err != nil {
-			log.Fatalf("replicas is not a number, error: %s", err.Error())
+			log.Fatalf("replicas is not a number, err: %s", err.Error())
 		}
 
 		err = depths.CreateTopic(*kafkaServers, *dataTopic, int(partitions), int(replicas))
 		if err != nil {
-			log.Fatalf("error creating %s, error: %s", *dataTopic, err.Error())
+			log.Fatalf("error creating %s, err: %s", *dataTopic, err.Error())
 		}
 		err = depths.CreateTopic(*kafkaServers, *contextTopic, int(partitions), int(replicas))
 		if err != nil {
-			log.Fatalf("error creating %s, error: %s", *contextTopic, err.Error())
+			log.Fatalf("error creating %s, err: %s", *contextTopic, err.Error())
 		}
 
 	}
@@ -280,7 +280,7 @@ func main() {
 		}
 
 		if err != nil {
-			log.Warnf("[orgrim] error decoding envelope, error: %s", err.Error())
+			log.Warnf("[orgrim] error decoding envelope, err: %s", err.Error())
 			c.JSON(500, gin.H{"error": err.Error()})
 			return
 		}
@@ -314,7 +314,7 @@ func main() {
 
 		encoded, err := proto.Marshal(&envelope)
 		if err != nil {
-			log.Warnf("[orgrim] error encoding metadata %v, error: %s", envelope.Metadata, err.Error())
+			log.Warnf("[orgrim] error encoding metadata %v, err: %s", envelope.Metadata, err.Error())
 			c.JSON(500, gin.H{"error": err.Error()})
 			return
 		}
@@ -324,7 +324,7 @@ func main() {
 		})
 
 		if err != nil {
-			log.Warnf("[orgrim] error sending message, metadata %v, error: %s", envelope.Metadata, err.Error())
+			log.Warnf("[orgrim] error sending message, metadata %v, err: %s", envelope.Metadata, err.Error())
 			c.JSON(500, gin.H{"error": err.Error()})
 			return
 		}
@@ -349,7 +349,7 @@ func main() {
 		}
 
 		if err != nil {
-			log.Warnf("[orgrim] error decoding ctx, error: %s", err.Error())
+			log.Warnf("[orgrim] error decoding ctx, err: %s", err.Error())
 			c.JSON(500, gin.H{"error": err.Error()})
 			return
 		}
@@ -371,7 +371,7 @@ func main() {
 
 		encoded, err := proto.Marshal(&ctx)
 		if err != nil {
-			log.Warnf("[orgrim] error encoding context %v, error: %s", ctx, err.Error())
+			log.Warnf("[orgrim] error encoding context %v, err: %s", ctx, err.Error())
 			c.JSON(500, gin.H{"error": err.Error()})
 			return
 		}
@@ -381,7 +381,7 @@ func main() {
 		})
 
 		if err != nil {
-			log.Warnf("[orgrim] error sending message, context %v, error: %s", ctx, err.Error())
+			log.Warnf("[orgrim] error sending message, context %v, err: %s", ctx, err.Error())
 			c.JSON(500, gin.H{"error": err.Error()})
 			return
 		}
@@ -402,7 +402,7 @@ func main() {
 
 		err = json.Unmarshal(data, &metadata)
 		if err != nil {
-			log.Warnf("[orgrim] error decoding metadata, error: %s", err.Error())
+			log.Warnf("[orgrim] error decoding metadata, err: %s", err.Error())
 			c.JSON(500, gin.H{"error": err.Error()})
 			return
 		}
@@ -433,7 +433,7 @@ func main() {
 		if metadata.Search != nil {
 			search, err = transform(metadata.Search, true)
 			if err != nil {
-				log.Warnf("[orgrim] unable to flatten 'search' error: %s", err.Error())
+				log.Warnf("[orgrim] unable to flatten 'search' err: %s", err.Error())
 				c.JSON(500, gin.H{"error": "unable to flatten"})
 				return
 			}
@@ -443,7 +443,7 @@ func main() {
 		if metadata.Count != nil {
 			count, err = transform(metadata.Count, true)
 			if err != nil {
-				log.Warnf("[orgrim] unable to flatten 'count' error: %s", err.Error())
+				log.Warnf("[orgrim] unable to flatten 'count' err: %s", err.Error())
 				c.JSON(500, gin.H{"error": "unable to flatten"})
 				return
 			}
@@ -453,7 +453,7 @@ func main() {
 		if metadata.Count != nil {
 			count, err = transform(metadata.Properties, true)
 			if err != nil {
-				log.Warnf("[orgrim] unable to flatten 'count' error: %s", err.Error())
+				log.Warnf("[orgrim] unable to flatten 'count' err: %s", err.Error())
 				c.JSON(500, gin.H{"error": "unable to flatten"})
 				return
 			}
@@ -474,7 +474,7 @@ func main() {
 		if metadata.Payload != nil {
 			payload, err := json.Marshal(&metadata.Payload)
 			if err != nil {
-				log.Warnf("[orgrim] unable to marshal payload, error: %s", err.Error())
+				log.Warnf("[orgrim] unable to marshal payload, err: %s", err.Error())
 				c.JSON(500, gin.H{"error": err.Error()})
 				return
 			}
@@ -483,7 +483,7 @@ func main() {
 
 		encoded, err := proto.Marshal(&converted)
 		if err != nil {
-			log.Warnf("[orgrim] error encoding metadata %v, error: %s", converted.Metadata, err.Error())
+			log.Warnf("[orgrim] error encoding metadata %v, err: %s", converted.Metadata, err.Error())
 			c.JSON(500, gin.H{"error": err.Error()})
 			return
 		}
@@ -493,7 +493,7 @@ func main() {
 		})
 
 		if err != nil {
-			log.Warnf("[orgrim] error sending message, metadata %v, error: %s", metadata, err.Error())
+			log.Warnf("[orgrim] error sending message, metadata %v, err: %s", metadata, err.Error())
 			c.JSON(500, gin.H{"error": err.Error()})
 			return
 		}
