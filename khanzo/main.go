@@ -14,6 +14,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -764,7 +765,7 @@ func setupSimpleEventAccept(root string, r *gin.Engine) {
 	if err != nil {
 		log.Fatal(err)
 	}
-
+	giant := sync.Mutex{}
 	forward, err := disk.NewForwardWriter(root, "main")
 	if err != nil {
 		log.Fatal(err)
@@ -781,6 +782,8 @@ func setupSimpleEventAccept(root string, r *gin.Engine) {
 	}
 
 	r.POST("/push/envelope", func(c *gin.Context) {
+		giant.Lock()
+		defer giant.Unlock()
 		var envelope spec.Envelope
 		err := depths.UnmarshalAndClose(c, &envelope)
 		if err != nil {
@@ -806,7 +809,36 @@ func setupSimpleEventAccept(root string, r *gin.Engine) {
 		c.JSON(200, gin.H{"success": true})
 	})
 
+	r.POST("/push/flatten", func(c *gin.Context) {
+		giant.Lock()
+		defer giant.Unlock()
+
+		body := c.Request.Body
+		defer body.Close()
+
+		converted, err := spec.DecodeAndFlatten(body)
+		if err != nil {
+			log.Warnf("[orgrim] invalid input, err: %s", err.Error())
+			c.JSON(500, gin.H{"error": err.Error()})
+			return
+		}
+		if err != nil {
+			c.JSON(500, gin.H{"error": err.Error()})
+			return
+		}
+		err = consume.ConsumeEvents(0, 0, converted, dictionary, forward, nil, inverted)
+		if err != nil {
+			c.JSON(500, gin.H{"error": err.Error()})
+			return
+		}
+
+		c.JSON(200, gin.H{"success": true})
+	})
+
 	r.POST("/push/context", func(c *gin.Context) {
+		giant.Lock()
+		defer giant.Unlock()
+
 		var ctx spec.Context
 		err := depths.UnmarshalAndClose(c, &ctx)
 		if err != nil {

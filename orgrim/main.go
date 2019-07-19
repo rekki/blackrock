@@ -2,13 +2,10 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/signal"
-	"sort"
 	"strconv"
 	"syscall"
 
@@ -23,125 +20,6 @@ import (
 	"strings"
 	"time"
 )
-
-/*
-
-{
-   restaurant: {
-       "92e2e4af-f833-492e-9ade-f797bbaa80fd": true,
-       "ca91f7ab-13fa-46b7-9fbc-3f0276647238": true
-   }
-   message: "hello",
-}
-in this case you want to search for message:helo/restaurant:92e2e4af-f833-492e-9ade-f797bbaa80fd
-
-{
-   restaurant: {
-       "92e2e4af-f833-492e-9ade-f797bbaa80fd": { updated: true  },
-       "ca91f7ab-13fa-46b7-9fbc-3f0276647238": { updated: false }
-   }
-}
-
-
-{
-   example: {
-      restaurant: {
-          "92e2e4af-f833-492e-9ade-f797bbaa80fd": { updated: true  },
-          "ca91f7ab-13fa-46b7-9fbc-3f0276647238": { updated: false }
-      }
-   }
-}
-
-possible search would be restaurant:92e2e4af-f833-492e-9ade-f797bbaa80fd/updated:true
-but never restaurant:true or example:true
-
-because of this we make extremely simple convention, every key that
-has _id or _ids is expanded, e.g.:
-
-{
-   example: {
-      restaurant_id: {
-          "92e2e4af-f833-492e-9ade-f797bbaa80fd": { updated: true  },
-          "ca91f7ab-13fa-46b7-9fbc-3f0276647238": { updated: false }
-      }
-   }
-}
-
-this event will be findable by 'restaurant_id:ca91f7ab-13fa-46b7-9fbc-3f0276647238'
-but also 'example.retaurant_id.ca91f7ab-13fa-46b7-9fbc-3f0276647238.updated:true'
-
-
-*/
-
-type JsonFrame struct {
-	Search      map[string]interface{} `json:"search"`
-	Count       map[string]interface{} `json:"count"`
-	Properties  map[string]interface{} `json:"properties"`
-	CreatedAtNs int64                  `json:"created_at_ns"`
-	ForeignId   string                 `json:"foreign_id"`
-	ForeignType string                 `json:"foreign_type"`
-	EventType   string                 `json:"event_type"`
-	Payload     interface{}            `json:"payload"`
-}
-
-func transform(m map[string]interface{}, expand bool) ([]*spec.KV, error) {
-	out := []*spec.KV{}
-	flatten, err := depths.Flatten(m, "", depths.DotStyle)
-	if err != nil {
-		return nil, err
-	}
-	seen := map[string]bool{}
-	add := func(k, v string) {
-		key := k + "_" + v
-		if _, ok := seen[key]; ok {
-			return
-		}
-		seen[key] = true
-		out = append(out, &spec.KV{Key: k, Value: v})
-	}
-	hasID := func(s string) bool {
-		return strings.HasSuffix(s, "_id") || strings.HasSuffix(s, "_ids")
-	}
-	for k, v := range flatten {
-		if expand {
-			// a lot of CoC here, path like example.restaurant_id.92e2e4af-f833-492e-9ade-f797bbaa80fd.updated = true
-			// will be expanded to restaurant_id:92e2e4af-f833-492e-9ade-f797bbaa80fd and example.updated:true
-			// so that it can be found, this of course is not ideal
-
-			splitted := strings.Split(k, ".")
-			noid := []string{}
-
-			for i := len(splitted) - 1; i >= 0; i-- {
-				part := splitted[i]
-				prev := ""
-				if i > 0 {
-					prev = splitted[i-1]
-				}
-				if hasID(part) {
-					add(part, v)
-				} else {
-					if hasID(prev) {
-						add(prev, part)
-						i--
-					} else {
-						noid = append(noid, part)
-					}
-				}
-			}
-
-			sort.SliceStable(noid, func(i, j int) bool {
-				return true
-			})
-			if len(noid) > 0 {
-				add(strings.Join(noid, "."), v)
-			}
-		} else {
-			out = append(out, &spec.KV{Key: k, Value: v})
-		}
-	}
-
-	return out, nil
-}
 
 func main() {
 	var dataTopic = flag.String("topic-data", "blackrock-data", "topic for the data")
@@ -330,95 +208,14 @@ func main() {
 		body := c.Request.Body
 		defer body.Close()
 
-		var metadata JsonFrame
-		data, err := ioutil.ReadAll(body)
+		converted, err := spec.DecodeAndFlatten(body)
 		if err != nil {
+			log.Warnf("[orgrim] invalid input, err: %s", err.Error())
 			c.JSON(500, gin.H{"error": err.Error()})
 			return
 		}
 
-		err = json.Unmarshal(data, &metadata)
-		if err != nil {
-			log.Warnf("[orgrim] error decoding metadata, err: %s", err.Error())
-			c.JSON(500, gin.H{"error": err.Error()})
-			return
-		}
-
-		if metadata.EventType == "" {
-			log.Warnf("[orgrim] no type in metadata, rejecting")
-			c.JSON(500, gin.H{"error": "need event_type key in metadata"})
-			return
-		}
-
-		if metadata.ForeignId == "" {
-			log.Warnf("[orgrim] no id in metadata, rejecting")
-			c.JSON(500, gin.H{"error": "need foreign_id in metadata"})
-			return
-		}
-
-		if metadata.ForeignType == "" {
-			log.Warnf("[orgrim] no foreign_type in metadata, rejecting")
-			c.JSON(500, gin.H{"error": "need foreign_type in metadata"})
-			return
-		}
-
-		if metadata.CreatedAtNs == 0 {
-			metadata.CreatedAtNs = time.Now().UnixNano()
-		}
-
-		search := []*spec.KV{}
-		if metadata.Search != nil {
-			search, err = transform(metadata.Search, true)
-			if err != nil {
-				log.Warnf("[orgrim] unable to flatten 'search' err: %s", err.Error())
-				c.JSON(500, gin.H{"error": "unable to flatten"})
-				return
-			}
-		}
-
-		count := []*spec.KV{}
-		if metadata.Count != nil {
-			count, err = transform(metadata.Count, true)
-			if err != nil {
-				log.Warnf("[orgrim] unable to flatten 'count' err: %s", err.Error())
-				c.JSON(500, gin.H{"error": "unable to flatten"})
-				return
-			}
-		}
-
-		properties := []*spec.KV{}
-		if metadata.Count != nil {
-			count, err = transform(metadata.Properties, true)
-			if err != nil {
-				log.Warnf("[orgrim] unable to flatten 'count' err: %s", err.Error())
-				c.JSON(500, gin.H{"error": "unable to flatten"})
-				return
-			}
-		}
-
-		converted := spec.Envelope{
-			Metadata: &spec.Metadata{
-				Search:      search,
-				Count:       count,
-				Properties:  properties,
-				CreatedAtNs: metadata.CreatedAtNs,
-				EventType:   metadata.EventType,
-				ForeignId:   metadata.ForeignId,
-				ForeignType: metadata.ForeignType,
-			},
-		}
-
-		if metadata.Payload != nil {
-			payload, err := json.Marshal(&metadata.Payload)
-			if err != nil {
-				log.Warnf("[orgrim] unable to marshal payload, err: %s", err.Error())
-				c.JSON(500, gin.H{"error": err.Error()})
-				return
-			}
-			converted.Payload = payload
-		}
-
-		encoded, err := proto.Marshal(&converted)
+		encoded, err := proto.Marshal(converted)
 		if err != nil {
 			log.Warnf("[orgrim] error encoding metadata %v, err: %s", converted.Metadata, err.Error())
 			c.JSON(500, gin.H{"error": err.Error()})
@@ -430,7 +227,7 @@ func main() {
 		})
 
 		if err != nil {
-			log.Warnf("[orgrim] error sending message, metadata %v, err: %s", metadata, err.Error())
+			log.Warnf("[orgrim] error sending message, metadata %v, err: %s", converted, err.Error())
 			c.JSON(500, gin.H{"error": err.Error()})
 			return
 		}
