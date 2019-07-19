@@ -37,6 +37,16 @@ func HealthCheckKafka(brokers string, topic string) error {
 	return errors.New("failed to dial leader for partition 0, assuming we cant reach kafka")
 }
 
+func CreateTopic(brokers string, topic string, partitions int, replication int) error {
+	for _, b := range ShuffledStrings(strings.Split(brokers, ",")) {
+		conn, err := kafka.Dial("tcp", b)
+		if err == nil {
+			return conn.CreateTopics(kafka.TopicConfig{Topic: topic, NumPartitions: partitions, ReplicationFactor: replication})
+		}
+	}
+	return errors.New("failed to dial any broker")
+}
+
 func PathForTag(root string, tagKey uint64, tagValue string) (string, string) {
 	h := Hashs(tagValue)
 	dir := path.Join(root, fmt.Sprintf("%d", tagKey), fmt.Sprintf("shard_%d", h%255))

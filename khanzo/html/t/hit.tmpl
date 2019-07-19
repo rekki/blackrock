@@ -9,13 +9,24 @@
   </td>
 </tr>
 
-{{ range $m.Tags }}
+{{ range $m.Search }}
 <tr>
   <td class="left">
     {{ .Key }}
   </td>
   <td class="right">
     <a href="/scan/html/{{ $foreignType }}:{{ $foreignId }}/{{ .Key }}:{{ .Value}}">{{.Value}}</a>
+  </td>
+</tr>
+{{ end }}
+
+{{ range $m.Count }}
+<tr>
+  <td class="left">
+      {{ .Key }}
+  </td>
+  <td class="right">
+      {{.Value}}
   </td>
 </tr>
 {{ end }}

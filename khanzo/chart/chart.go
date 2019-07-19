@@ -66,7 +66,7 @@ func HorizontalBar(x []float64, y []string, symbol rune, width int, prefix strin
 		}
 	}
 
-	width -= maxLabelWidth + 10 + 8
+	width -= maxLabelWidth + 10 + 5 + len(prefix)
 	lines := []string{}
 	for i := 0; i < end; i++ {
 		v := x[i]
@@ -77,9 +77,9 @@ func HorizontalBar(x []float64, y []string, symbol rune, width int, prefix strin
 		for k := 0; k < mustPad; k++ {
 			label += " "
 		}
-		value := int((v / max) * float64(width))
+		barWidth := int((v / max) * float64(width))
 
-		bar := makeBar(symbol, value)
+		bar := makeBar(symbol, barWidth)
 		percent := 100 * (v / sum)
 
 		line := fmt.Sprintf("%s%s %8s %6s%% %s", prefix, label, Fit(x[i]), fmt.Sprintf("%.2f", percent), bar)

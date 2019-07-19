@@ -91,17 +91,19 @@ func consumeEvents(r *kafka.Reader, dictionary *disk.PersistedDictionary, forwar
 		}
 
 		persisted := &spec.PersistedMetadata{
-			Partition:   uint32(m.Partition),
-			Offset:      uint64(m.Offset),
-			CreatedAtNs: envelope.Metadata.CreatedAtNs,
-			TagKeys:     []uint64{},
-			Payload:     poff,
-			EventType:   eventType,
-			ForeignType: foreignType,
-			ForeignId:   sforeignId,
+			Partition:    uint32(m.Partition),
+			Offset:       uint64(m.Offset),
+			CreatedAtNs:  envelope.Metadata.CreatedAtNs,
+			SearchKeys:   []uint64{},
+			CountKeys:    []uint64{},
+			PropertyKeys: []uint64{},
+			Payload:      poff,
+			EventType:    eventType,
+			ForeignType:  foreignType,
+			ForeignId:    sforeignId,
 		}
 
-		for _, kv := range meta.Tags {
+		for _, kv := range meta.Search {
 			k := kv.Key
 			v := kv.Value
 			lc := depths.CleanupAllowDot(strings.ToLower(k))
@@ -113,12 +115,12 @@ func consumeEvents(r *kafka.Reader, dictionary *disk.PersistedDictionary, forwar
 			if err != nil {
 				return err
 			}
-			persisted.TagKeys = append(persisted.TagKeys, tk)
+			persisted.SearchKeys = append(persisted.SearchKeys, tk)
 			value := depths.Cleanup(strings.ToLower(v))
 			if value == "" {
 				value = "__empty"
 			}
-			persisted.TagValues = append(persisted.TagValues, value)
+			persisted.SearchValues = append(persisted.SearchValues, value)
 		}
 
 		// add some automatic tags
@@ -129,20 +131,20 @@ func consumeEvents(r *kafka.Reader, dictionary *disk.PersistedDictionary, forwar
 			year, month, day := t.Date()
 			hour, _, _ := t.Clock()
 
-			persisted.TagKeys = append(persisted.TagKeys, yearKey)
-			persisted.TagValues = append(persisted.TagValues, fmt.Sprintf("%d", year))
+			persisted.SearchKeys = append(persisted.SearchKeys, yearKey)
+			persisted.SearchValues = append(persisted.SearchValues, fmt.Sprintf("%d", year))
 
-			persisted.TagKeys = append(persisted.TagKeys, yearMonthKey)
-			persisted.TagValues = append(persisted.TagValues, fmt.Sprintf("%d-%02d", year, month))
+			persisted.SearchKeys = append(persisted.SearchKeys, yearMonthKey)
+			persisted.SearchValues = append(persisted.SearchValues, fmt.Sprintf("%d-%02d", year, month))
 
-			persisted.TagKeys = append(persisted.TagKeys, yearMonthDayKey)
-			persisted.TagValues = append(persisted.TagValues, fmt.Sprintf("%d-%02d-%02d", year, month, day))
+			persisted.SearchKeys = append(persisted.SearchKeys, yearMonthDayKey)
+			persisted.SearchValues = append(persisted.SearchValues, fmt.Sprintf("%d-%02d-%02d", year, month, day))
 
-			persisted.TagKeys = append(persisted.TagKeys, yearMonthDayHourKey)
-			persisted.TagValues = append(persisted.TagValues, fmt.Sprintf("%d-%02d-%02d-%02d", year, month, day, hour))
+			persisted.SearchKeys = append(persisted.SearchKeys, yearMonthDayHourKey)
+			persisted.SearchValues = append(persisted.SearchValues, fmt.Sprintf("%d-%02d-%02d-%02d", year, month, day, hour))
 		}
 
-		for _, kv := range meta.Properties {
+		for _, kv := range meta.Count {
 			k := kv.Key
 			v := kv.Value
 			lc := depths.CleanupAllowDot(strings.ToLower(k))
@@ -160,8 +162,25 @@ func consumeEvents(r *kafka.Reader, dictionary *disk.PersistedDictionary, forwar
 				value = "__empty"
 			}
 
+			persisted.CountKeys = append(persisted.CountKeys, pk)
+			persisted.CountValues = append(persisted.CountValues, value)
+		}
+
+		for _, kv := range meta.Properties {
+			k := kv.Key
+			v := kv.Value
+			lc := depths.CleanupAllowDot(strings.ToLower(k))
+			if lc == "event_type" || lc == "foreign_type" || lc == "foreign_id" || lc == sforeignType || lc == "" {
+				continue
+			}
+
+			pk, err := dictionary.GetUniqueTerm(lc)
+			if err != nil {
+				return err
+			}
+
 			persisted.PropertyKeys = append(persisted.PropertyKeys, pk)
-			persisted.PropertyValues = append(persisted.PropertyValues, value)
+			persisted.PropertyValues = append(persisted.PropertyValues, v)
 		}
 
 		encoded, err := proto.Marshal(persisted)
@@ -177,8 +196,8 @@ func consumeEvents(r *kafka.Reader, dictionary *disk.PersistedDictionary, forwar
 		inverted.Append(int64(docId), foreignType, sforeignId)
 		inverted.Append(int64(docId), typeKey, seventType)
 
-		for i := 0; i < len(persisted.TagKeys); i++ {
-			inverted.Append(int64(docId), persisted.TagKeys[i], persisted.TagValues[i])
+		for i := 0; i < len(persisted.SearchKeys); i++ {
+			inverted.Append(int64(docId), persisted.SearchKeys[i], persisted.SearchValues[i])
 		}
 
 		log.Infof("message at topic/partition/offset %v/%v/%v: %v\n", m.Topic, m.Partition, m.Offset, envelope.Metadata)
@@ -267,7 +286,7 @@ func main() {
 		log.Println(http.ListenAndServe("localhost:6061", nil))
 	}()
 
-	root := path.Join(*proot, *dataTopic)
+	root := *proot
 
 	os.MkdirAll(root, 0700)
 	if *verbose {

@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/signal"
 	"sort"
+	"strconv"
 	"syscall"
 
 	"github.com/gin-contrib/cors"
@@ -88,7 +89,8 @@ but also 'example.retaurant_id.ca91f7ab-13fa-46b7-9fbc-3f0276647238.updated:true
 */
 
 type JsonFrame struct {
-	Tags        map[string]interface{} `json:"tags"`
+	Search      map[string]interface{} `json:"search"`
+	Count       map[string]interface{} `json:"count"`
 	Properties  map[string]interface{} `json:"properties"`
 	CreatedAtNs int64                  `json:"created_at_ns"`
 	ForeignId   string                 `json:"foreign_id"`
@@ -160,6 +162,7 @@ func main() {
 	var dataTopic = flag.String("topic-data", "blackrock-data", "topic for the data")
 	var contextTopic = flag.String("topic-context", "blackrock-context", "topic for the context")
 	var kafkaServers = flag.String("kafka", "localhost:9092", "kafka addr")
+	var createConfig = flag.String("create-if-not-exist", "", "create topics if they dont exist, format: partitions:replication factor")
 	var verbose = flag.Bool("verbose", false, "print info level logs to stdout")
 	var statSleep = flag.Int("writer-stats", 60, "print writer stats every # seconds")
 	var bind = flag.String("bind", ":9001", "bind to")
@@ -171,6 +174,31 @@ func main() {
 		gin.SetMode(gin.ReleaseMode)
 		log.SetLevel(log.WarnLevel)
 	}
+	if *createConfig != "" {
+		splitted := strings.Split(*createConfig, ":")
+		if len(splitted) != 2 {
+			log.Fatalf("expected format digit:digit (2:0 for example), got: '%s'", *createConfig)
+		}
+		partitions, err := strconv.ParseInt(splitted[0], 10, 32)
+		if err != nil {
+			log.Fatalf("partitions is not a number, error: %s", err.Error())
+		}
+		replicas, err := strconv.ParseInt(splitted[1], 10, 32)
+		if err != nil {
+			log.Fatalf("replicas is not a number, error: %s", err.Error())
+		}
+
+		err = depths.CreateTopic(*kafkaServers, *dataTopic, int(partitions), int(replicas))
+		if err != nil {
+			log.Fatalf("error creating %s, error: %s", *dataTopic, err.Error())
+		}
+		err = depths.CreateTopic(*kafkaServers, *contextTopic, int(partitions), int(replicas))
+		if err != nil {
+			log.Fatalf("error creating %s, error: %s", *contextTopic, err.Error())
+		}
+
+	}
+
 	err := depths.HealthCheckKafka(*kafkaServers, *dataTopic)
 	if err != nil {
 		log.Fatal(err)
@@ -401,21 +429,31 @@ func main() {
 			metadata.CreatedAtNs = time.Now().UnixNano()
 		}
 
-		tags := []*spec.KV{}
-		if metadata.Tags != nil {
-			tags, err = transform(metadata.Tags, true)
+		search := []*spec.KV{}
+		if metadata.Search != nil {
+			search, err = transform(metadata.Search, true)
 			if err != nil {
-				log.Warnf("[orgrim] unable to flatten tags error: %s", err.Error())
+				log.Warnf("[orgrim] unable to flatten 'search' error: %s", err.Error())
+				c.JSON(500, gin.H{"error": "unable to flatten"})
+				return
+			}
+		}
+
+		count := []*spec.KV{}
+		if metadata.Count != nil {
+			count, err = transform(metadata.Count, true)
+			if err != nil {
+				log.Warnf("[orgrim] unable to flatten 'count' error: %s", err.Error())
 				c.JSON(500, gin.H{"error": "unable to flatten"})
 				return
 			}
 		}
 
 		properties := []*spec.KV{}
-		if metadata.Properties != nil {
-			properties, err = transform(metadata.Properties, true)
+		if metadata.Count != nil {
+			count, err = transform(metadata.Properties, true)
 			if err != nil {
-				log.Warnf("[orgrim] unable to flatten properties error: %s", err.Error())
+				log.Warnf("[orgrim] unable to flatten 'count' error: %s", err.Error())
 				c.JSON(500, gin.H{"error": "unable to flatten"})
 				return
 			}
@@ -423,7 +461,8 @@ func main() {
 
 		converted := spec.Envelope{
 			Metadata: &spec.Metadata{
-				Tags:        tags,
+				Search:      search,
+				Count:       count,
 				Properties:  properties,
 				CreatedAtNs: metadata.CreatedAtNs,
 				EventType:   metadata.EventType,

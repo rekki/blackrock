@@ -79,9 +79,14 @@ func (h Hit) String() string {
 	m := h.Metadata
 	t := time.Unix(m.CreatedAtNs/1000000000, 0)
 	out = append(out, fmt.Sprintf("%s:%s\ntype:%s\n%s", m.ForeignType, m.ForeignId, m.EventType, t.Format(time.UnixDate)))
-	for _, kv := range m.Tags {
+	for _, kv := range m.Search {
 		out = append(out, fmt.Sprintf("  %-30s: %s", kv.Key, kv.Value))
 	}
+
+	for _, kv := range m.Count {
+		out = append(out, fmt.Sprintf("  %-30s: %s", kv.Key, kv.Value))
+	}
+
 	for _, kv := range m.Properties {
 		out = append(out, fmt.Sprintf("  %-30s: %s", kv.Key, kv.Value))
 	}
@@ -130,10 +135,10 @@ func (qr *QueryResponse) VW(c *gin.Context) {
 		}
 
 		w.Write([]byte(fmt.Sprintf("%d |%s %s ", label, hit.ForeignType, depths.CleanupVW(hit.ForeignId))))
-		for _, kv := range m.Tags {
+		for _, kv := range m.Search {
 			w.Write([]byte(fmt.Sprintf("|%s %s ", kv.Key, depths.CleanupVW(kv.Value))))
 		}
-		for _, kv := range m.Properties {
+		for _, kv := range m.Count {
 			w.Write([]byte(fmt.Sprintf("|%s %s ", kv.Key, depths.CleanupVW(kv.Value))))
 		}
 		for _, ctx := range hit.Context {
@@ -171,12 +176,14 @@ func getScoredHit(contextCache *ContextCache, forward *disk.ForwardWriter, dicti
 	if err != nil {
 		return Hit{}, err
 	}
+
 	if decodeMetadata {
 		var p spec.PersistedMetadata
 		err := proto.Unmarshal(data, &p)
 		if err != nil {
 			return Hit{}, err
 		}
+
 		return toHit(contextCache, dictionary, did, foreignId, foreignType, &p), nil
 	}
 	return toHit(contextCache, dictionary, did, foreignId, foreignType, nil), nil
@@ -232,22 +239,28 @@ func toHit(contextCache *ContextCache, dictionary *disk.PersistedDictionary, did
 		ForeignId:   hit.ForeignId,
 		ForeignType: hit.ForeignType,
 		EventType:   dictionary.ReverseResolve(p.EventType),
-		Tags:        []*spec.KV{},
+		Search:      []*spec.KV{},
+		Count:       []*spec.KV{},
 		Properties:  []*spec.KV{},
 		CreatedAtNs: p.CreatedAtNs,
 	}
 	hit.KafkaOffset = &KafkaOffset{Offset: p.Offset, Partition: p.Partition}
 	seen := map[uint64]map[string]bool{}
-	for i := 0; i < len(p.TagKeys); i++ {
-		k := p.TagKeys[i]
-		v := p.TagValues[i]
+	for i := 0; i < len(p.SearchKeys); i++ {
+		k := p.SearchKeys[i]
+		v := p.SearchValues[i]
 		tk := dictionary.ReverseResolve(k)
 
-		pretty.Tags = append(pretty.Tags, &spec.KV{Key: tk, Value: v})
+		pretty.Search = append(pretty.Search, &spec.KV{Key: tk, Value: v})
 
 		if px, ok := contextCache.Lookup(k, v, p.CreatedAtNs); ok {
 			hit.Context = append(hit.Context, toContextDeep(seen, contextCache, dictionary, px)...)
 		}
+	}
+
+	for i := 0; i < len(p.CountKeys); i++ {
+		tk := dictionary.ReverseResolve(p.CountKeys[i])
+		pretty.Count = append(pretty.Count, &spec.KV{Key: tk, Value: p.CountValues[i]})
 	}
 
 	for i := 0; i < len(p.PropertyKeys); i++ {
@@ -256,7 +269,8 @@ func toHit(contextCache *ContextCache, dictionary *disk.PersistedDictionary, did
 	}
 
 	sort.Sort(ByCtxName(hit.Context))
-	sort.Sort(ByKV(pretty.Tags))
+	sort.Sort(ByKV(pretty.Search))
+	sort.Sort(ByKV(pretty.Count))
 	sort.Sort(ByKV(pretty.Properties))
 
 	hit.Metadata = pretty
@@ -288,8 +302,8 @@ func Render(c *gin.Context, x Renderable) {
 }
 
 type Counter struct {
-	Tags         map[uint64]map[string]uint32 `json:"tags"`
-	Properties   map[uint64]map[string]uint32 `json:"properties"`
+	Search       map[uint64]map[string]uint32 `json:"search"`
+	Count        map[uint64]map[string]uint32 `json:"count"`
 	Foreign      map[uint64]map[string]uint32 `json:"foreign"`
 	EventTypes   map[uint64]uint32            `json:"event_types"`
 	Sample       []Hit                        `json:"sample"`
@@ -301,8 +315,8 @@ type Counter struct {
 
 func NewCounter(pd *disk.PersistedDictionary, contextCache *ContextCache, sampleSize int) *Counter {
 	return &Counter{
-		Tags:         map[uint64]map[string]uint32{},
-		Properties:   map[uint64]map[string]uint32{},
+		Search:       map[uint64]map[string]uint32{},
+		Count:        map[uint64]map[string]uint32{},
 		Foreign:      map[uint64]map[string]uint32{},
 		EventTypes:   map[uint64]uint32{},
 		Sample:       []Hit{},
@@ -315,9 +329,10 @@ func NewCounter(pd *disk.PersistedDictionary, contextCache *ContextCache, sample
 
 func (c *Counter) Prettify() *CountedResult {
 	out := &CountedResult{}
-	out.Tags = statsForMapMap(c.pd, c.Tags)
+	out.Search = statsForMapMap(c.pd, c.Search)
+	out.Count = statsForMapMap(c.pd, c.Count)
+
 	out.Foreign = statsForMapMap(c.pd, c.Foreign)
-	out.Properties = statsForMapMap(c.pd, c.Properties)
 
 	resolved := map[string]uint32{}
 	for k, v := range c.EventTypes {
@@ -330,24 +345,24 @@ func (c *Counter) Prettify() *CountedResult {
 }
 
 func (c *Counter) Add(offset int64, foreignId, foreignType uint64, p *spec.PersistedMetadata) {
-	for i := 0; i < len(p.TagKeys); i++ {
-		k := p.TagKeys[i]
-		v := p.TagValues[i]
-		m, ok := c.Tags[k]
+	for i := 0; i < len(p.SearchKeys); i++ {
+		k := p.SearchKeys[i]
+		v := p.SearchValues[i]
+		m, ok := c.Search[k]
 		if !ok {
 			m = map[string]uint32{}
-			c.Tags[k] = m
+			c.Search[k] = m
 		}
 		m[v]++
 	}
 
-	for i := 0; i < len(p.PropertyKeys); i++ {
-		k := p.PropertyKeys[i]
-		v := p.PropertyValues[i]
-		m, ok := c.Properties[k]
+	for i := 0; i < len(p.CountKeys); i++ {
+		k := p.CountKeys[i]
+		v := p.CountValues[i]
+		m, ok := c.Count[k]
 		if !ok {
 			m = map[string]uint32{}
-			c.Properties[k] = m
+			c.Count[k] = m
 		}
 		m[v]++
 	}
@@ -380,8 +395,8 @@ type PerKey struct {
 type CountedResult struct {
 	EventTypes *PerKey   `json:"event_types"`
 	Foreign    []*PerKey `json:"foreign"`
-	Tags       []*PerKey `json:"tags"`
-	Properties []*PerKey `json:"properties"`
+	Search     []*PerKey `json:"search"`
+	Count      []*PerKey `json:"count"`
 	Sample     []Hit     `json:"sample"`
 	TotalCount int64     `json:"total"`
 }
@@ -421,8 +436,8 @@ func (cr *CountedResult) HTML(c *gin.Context) {
 func (cr CountedResult) prettyCategoryStats() string {
 	makers := prettyStats("FOREIGN", cr.Foreign)
 	types := prettyStats("EVENT_TYPES", []*PerKey{cr.EventTypes})
-	properties := prettyStats("PROPERTIES", cr.Properties)
-	tags := prettyStats("TAGS", cr.Tags)
+	properties := prettyStats("COUNT", cr.Count)
+	tags := prettyStats("SEARCH", cr.Search)
 	out := fmt.Sprintf("%s%s%s%s\n", makers, types, tags, properties)
 	out += chart.Banner("SAMPLE")
 	for _, h := range cr.Sample {
@@ -661,6 +676,7 @@ func main() {
 
 	r.POST("/search/:format", func(c *gin.Context) {
 		var qr QueryRequest
+
 		if err := c.ShouldBindJSON(&qr); err != nil {
 			c.JSON(400, gin.H{"error": err.Error()})
 			return

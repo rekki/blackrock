@@ -8,8 +8,9 @@ message KV {
 }
 
 message Metadata {
-        repeated KV tags = 1; 
-        repeated KV properties = 2;
+        repeated KV search = 1; 
+        repeated KV count = 2;
+        repeated KV properties = 3;
         int64 created_at_ns  = 5;
         string event_type = 7;
 
@@ -31,11 +32,14 @@ message Envelope {
 }
 
 message PersistedMetadata {
-        repeated uint64 tagKeys = 1; 
-        repeated string tagValues = 2; 
+        repeated uint64 searchKeys = 1; 
+        repeated string searchValues = 2; 
 
-        repeated uint64 propertyKeys = 3; 
-        repeated string propertyValues = 4; 
+        repeated uint64 countKeys = 3; 
+        repeated string countValues = 4; 
+
+        repeated uint64 propertyKeys = 13; 
+        repeated string propertyValues = 14; 
 
         int64 created_at_ns  = 5;
         uint64 event_type = 7;

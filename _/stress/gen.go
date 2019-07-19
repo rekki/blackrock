@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"log"
 	"math/rand"
 	"time"
@@ -223,10 +224,10 @@ func genEvent(users []*spec.Context, books []*spec.Context) *spec.Envelope {
 	}
 
 	action := actions[rand.Intn(len(actions))]
-	tags := []*spec.KV{}
+	search := []*spec.KV{}
 	for i := 0; i < rand.Intn(5); i++ {
 		book := books[rand.Intn(len(books))]
-		tags = append(tags, &spec.KV{Key: "book_id", Value: book.ForeignId})
+		search = append(search, &spec.KV{Key: "book_id", Value: book.ForeignId})
 	}
 
 	ua := UA[rand.Intn(len(UA))]
@@ -235,8 +236,9 @@ func genEvent(users []*spec.Context, books []*spec.Context) *spec.Envelope {
 		ForeignType: "user_id",
 		ForeignId:   user.ForeignId,
 		EventType:   action,
-		Tags:        tags,
-		Properties:  []*spec.KV{&spec.KV{Key: "currency", Value: s.Currency}, &spec.KV{Key: "timezone", Value: s.TimeZone}, &spec.KV{Key: "user_agent", Value: ua}},
+		Search:      search,
+		Count:       []*spec.KV{&spec.KV{Key: "currency", Value: s.Currency}, &spec.KV{Key: "timezone", Value: s.TimeZone}},
+		Properties:  []*spec.KV{&spec.KV{Key: "user_agent", Value: ua}, &spec.KV{Key: "random", Value: fmt.Sprintf("%d", rand.Int())}},
 	}
 
 	return &spec.Envelope{Metadata: m}

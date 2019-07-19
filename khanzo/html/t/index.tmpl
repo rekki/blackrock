@@ -69,12 +69,12 @@
       {{ end }}
       <tr><td colspan=2><pre class="banner">{{ banner "event type"}}</pre></td></tr>
       {{ template "/html/t/chart.tmpl" dict "Data" .Stats.EventTypes "GlobalTotal" $total  "BaseUrl" $base "Link" true}}
-      <tr><td colspan=2><pre class="banner">{{ banner "tag"}}</pre></td></tr>
-      {{ range .Stats.Tags }}
+      <tr><td colspan=2><pre class="banner">{{ banner "search"}}</pre></td></tr>
+      {{ range .Stats.Search }}
       {{ template "/html/t/chart.tmpl" dict "Data" . "GlobalTotal" $total  "BaseUrl" $base "Link" true}}
       {{ end }}
-      <tr><td colspan=2><pre class="banner">{{ banner "property"}}</pre></td></tr>
-      {{ range .Stats.Properties }}
+      <tr><td colspan=2><pre class="banner">{{ banner "count"}}</pre></td></tr>
+      {{ range .Stats.Count }}
       {{ template "/html/t/chart.tmpl" dict "Data" . "GlobalTotal" $total  "BaseUrl" $base "Link" false}}
       {{ end }}
       <tr><td colspan=2><pre class="banner">{{ banner "sample"}}</pre></td></tr>

@@ -19,20 +19,20 @@ func TestEverything(t *testing.T) {
 			[]string{"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "b", "c", "d"},
 			80,
 			'#',
-			`aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa...        1  10.00% #####
-b                                               2  20.00% ###########
-c                                               3  30.00% ################
-d                                               4  40.00% ######################`},
+			`aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa...        1  10.00% ######
+b                                               2  20.00% ############
+c                                               3  30.00% ##################
+d                                               4  40.00% #########################`},
 
 		{
 			[]float64{1, 2, 3, 4},
 			[]string{"a", "b", "c", "d"},
 			30,
 			'#',
-			`a        1  10.00% ##
-b        2  20.00% #####
-c        3  30.00% ########
-d        4  40.00% ###########`},
+			`a        1  10.00% ###
+b        2  20.00% #######
+c        3  30.00% ##########
+d        4  40.00% ##############`},
 	}
 
 	for i := range cases {
