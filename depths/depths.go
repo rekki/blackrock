@@ -1,7 +1,9 @@
 package depths
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -149,4 +151,17 @@ func Hash(s []byte) uint64 {
 
 func Hashs(s string) uint64 {
 	return metro.Hash64Str(s, 0)
+}
+
+func DumpObj(src interface{}) string {
+	data, err := json.Marshal(src)
+	if err != nil {
+		log.Fatalf("marshaling to JSON failed: %s", err.Error())
+	}
+	var out bytes.Buffer
+	err = json.Indent(&out, data, "", "  ")
+	if err != nil {
+		log.Fatalf("failed to dump object: %s", err.Error())
+	}
+	return string(out.Bytes())
 }

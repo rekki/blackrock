@@ -1,8 +1,6 @@
 package main
 
 import (
-	"bytes"
-	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -27,8 +25,6 @@ import (
 	"github.com/jackdoe/blackrock/orgrim/spec"
 	auth "github.com/jackdoe/gin-basic-auth-dynamic"
 	log "github.com/sirupsen/logrus"
-
-	"gopkg.in/yaml.v2"
 )
 
 type QueryRequest struct {
@@ -835,19 +831,6 @@ func setupSimpleEventAccept(root string, r *gin.Engine) {
 
 		c.JSON(200, gin.H{"success": true})
 	})
-
-}
-func dumpObj(src interface{}) string {
-	data, err := yaml.Marshal(src)
-	if err != nil {
-		log.Fatalf("marshaling to JSON failed: %s", err.Error())
-	}
-	var out bytes.Buffer
-	err = json.Indent(&out, data, "", "  ")
-	if err != nil {
-		log.Fatalf("failed to dump object: %s", err.Error())
-	}
-	return string(out.Bytes())
 }
 
 func loadTemplate() (*template.Template, error) {
@@ -860,7 +843,7 @@ func loadTemplate() (*template.Template, error) {
 			return t.Format(time.UnixDate)
 		},
 		"pretty": func(b interface{}) string {
-			return dumpObj(b)
+			return depths.DumpObj(b)
 		},
 		"format": func(value int64) string {
 			return fmt.Sprintf("%8s", chart.Fit(float64(value)))

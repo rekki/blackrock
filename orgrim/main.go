@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"flag"
@@ -24,19 +23,6 @@ import (
 	"strings"
 	"time"
 )
-
-func dumpObj(src interface{}) string {
-	data, err := json.Marshal(src)
-	if err != nil {
-		log.Fatalf("marshaling to JSON failed: %s", err.Error())
-	}
-	var out bytes.Buffer
-	err = json.Indent(&out, data, "", "  ")
-	if err != nil {
-		log.Fatalf("failed to dump object: %s", err.Error())
-	}
-	return string(out.Bytes())
-}
 
 /*
 
@@ -240,10 +226,10 @@ func main() {
 	go func() {
 		for {
 			s := kw.Stats()
-			fmt.Printf("%s\n", dumpObj(s))
+			fmt.Printf("%s\n", depths.DumpObj(s))
 
 			s = cw.Stats()
-			fmt.Printf("%s\n", dumpObj(s))
+			fmt.Printf("%s\n", depths.DumpObj(s))
 
 			time.Sleep(time.Duration(*statSleep) * time.Second)
 		}
