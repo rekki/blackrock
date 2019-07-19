@@ -4,15 +4,37 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"math/rand"
 	"path"
 	"strings"
 	"unicode"
 
 	"github.com/dgryski/go-metro"
+	"github.com/gin-gonic/gin"
+	"github.com/gogo/protobuf/jsonpb"
+	"github.com/gogo/protobuf/proto"
 	"github.com/segmentio/kafka-go"
 	log "github.com/sirupsen/logrus"
 )
+
+func UnmarshalAndClose(c *gin.Context, into proto.Message) error {
+	body := c.Request.Body
+	defer body.Close()
+
+	var err error
+	if c.Request.Header.Get("content-type") == "application/protobuf" {
+		var data []byte
+		data, err = ioutil.ReadAll(body)
+		if err == nil {
+			err = proto.Unmarshal(data, into)
+		}
+	} else {
+		err = jsonpb.Unmarshal(body, into)
+	}
+
+	return err
+}
 
 func ShuffledStrings(list []string) []string {
 	shuffledList := make([]string, len(list))

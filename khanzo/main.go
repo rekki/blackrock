@@ -21,6 +21,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/gogo/protobuf/proto"
 	"github.com/jackdoe/blackrock/depths"
+	"github.com/jackdoe/blackrock/jubei/consume"
 	"github.com/jackdoe/blackrock/jubei/disk"
 	"github.com/jackdoe/blackrock/khanzo/chart"
 	"github.com/jackdoe/blackrock/orgrim/spec"
@@ -532,6 +533,7 @@ func main() {
 	var proot = flag.String("root", "/blackrock/data-topic", "root directory for the files root/topic")
 	var basicAuth = flag.String("basic-auth", "", "basic auth user and password, leave empty for no auth [just for testing, better hide it behind nginx]")
 	var verbose = flag.Bool("verbose", false, "print info level logs to stdout")
+	var accept = flag.Bool("accept-events", false, "also accept events, super simple, so people can test in their laptops without zookeeper, kafka, orgrim, blackhand and jubei setup..")
 	var bind = flag.String("bind", ":9002", "bind to")
 	flag.Parse()
 	go func() {
@@ -539,6 +541,7 @@ func main() {
 	}()
 	root := *proot
 	os.MkdirAll(root, 0700)
+
 	forward, err := disk.NewForwardWriter(root, "main")
 	if err != nil {
 		log.Fatal(err)
@@ -753,9 +756,87 @@ func main() {
 		Render(c, counter.Prettify())
 	})
 
+	if *accept {
+		setupSimpleEventAccept(root, r)
+	}
+
 	log.Panic(r.Run(*bind))
 }
 
+func setupSimpleEventAccept(root string, r *gin.Engine) {
+	dictionary, err := disk.NewPersistedDictionary(root)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	forward, err := disk.NewForwardWriter(root, "main")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	forwardContext, err := disk.NewForwardWriter(root, "context")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	inverted, err := disk.NewInvertedWriter(root, 512)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	r.POST("/push/envelope", func(c *gin.Context) {
+		var envelope spec.Envelope
+		err := depths.UnmarshalAndClose(c, &envelope)
+		if err != nil {
+			c.JSON(500, gin.H{"error": err.Error()})
+			return
+		}
+
+		err = spec.ValidateEnvelope(&envelope)
+		if err != nil {
+			c.JSON(500, gin.H{"error": err.Error()})
+			return
+		}
+
+		if envelope.Metadata.CreatedAtNs == 0 {
+			envelope.Metadata.CreatedAtNs = time.Now().UnixNano()
+		}
+		err = consume.ConsumeEvents(0, 0, &envelope, dictionary, forward, nil, inverted)
+		if err != nil {
+			c.JSON(500, gin.H{"error": err.Error()})
+			return
+		}
+
+		c.JSON(200, gin.H{"success": true})
+	})
+
+	r.POST("/push/context", func(c *gin.Context) {
+		var ctx spec.Context
+		err := depths.UnmarshalAndClose(c, &ctx)
+		if err != nil {
+			c.JSON(500, gin.H{"error": err.Error()})
+			return
+		}
+		err = spec.ValidateContext(&ctx)
+		if err != nil {
+			c.JSON(500, gin.H{"error": err.Error()})
+			return
+		}
+
+		if ctx.CreatedAtNs == 0 {
+			ctx.CreatedAtNs = time.Now().UnixNano()
+		}
+
+		err = consume.ConsumeContext(&ctx, dictionary, forwardContext)
+		if err != nil {
+			c.JSON(500, gin.H{"error": err.Error()})
+			return
+		}
+
+		c.JSON(200, gin.H{"success": true})
+	})
+
+}
 func dumpObj(src interface{}) string {
 	data, err := yaml.Marshal(src)
 	if err != nil {

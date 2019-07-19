@@ -15,7 +15,6 @@ import (
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
-	"github.com/gogo/protobuf/jsonpb"
 	"github.com/gogo/protobuf/proto"
 	"github.com/jackdoe/blackrock/depths"
 	"github.com/jackdoe/blackrock/orgrim/spec"
@@ -264,47 +263,17 @@ func main() {
 	})
 
 	r.POST("/push/envelope", func(c *gin.Context) {
-		body := c.Request.Body
-		defer body.Close()
-
 		var envelope spec.Envelope
-		var err error
-		if c.Request.Header.Get("content-type") == "application/protobuf" {
-			var data []byte
-			data, err = ioutil.ReadAll(body)
-			if err == nil {
-				err = proto.Unmarshal(data, &envelope)
-			}
-		} else {
-			err = jsonpb.Unmarshal(body, &envelope)
-		}
-
+		err := depths.UnmarshalAndClose(c, &envelope)
 		if err != nil {
 			log.Warnf("[orgrim] error decoding envelope, err: %s", err.Error())
 			c.JSON(500, gin.H{"error": err.Error()})
 			return
 		}
-		if envelope.Metadata == nil {
-			log.Warnf("[orgrim] no metadata in envelope, rejecting")
-			c.JSON(500, gin.H{"error": "need metadata key"})
-			return
-		}
-
-		if envelope.Metadata.ForeignId == "" {
-			log.Warnf("[orgrim] no foreign_id in metadata, rejecting")
-			c.JSON(500, gin.H{"error": "need foreign_id key in metadata"})
-			return
-		}
-
-		if envelope.Metadata.ForeignType == "" {
-			log.Warnf("[orgrim] no foreign_type in metadata, rejecting")
-			c.JSON(500, gin.H{"error": "need foreign_type key in metadata"})
-			return
-		}
-
-		if envelope.Metadata.EventType == "" {
-			log.Warnf("[orgrim] no event_type in metadata, rejecting")
-			c.JSON(500, gin.H{"error": "need type key in metadata"})
+		err = spec.ValidateEnvelope(&envelope)
+		if err != nil {
+			log.Warnf("[orgrim] invalid input, err: %s", err.Error())
+			c.JSON(500, gin.H{"error": err.Error()})
 			return
 		}
 
@@ -333,35 +302,17 @@ func main() {
 	})
 
 	r.POST("/push/context", func(c *gin.Context) {
-		body := c.Request.Body
-		defer body.Close()
-
 		var ctx spec.Context
-		var err error
-		if c.Request.Header.Get("content-type") == "application/protobuf" {
-			var data []byte
-			data, err = ioutil.ReadAll(body)
-			if err == nil {
-				err = proto.Unmarshal(data, &ctx)
-			}
-		} else {
-			err = jsonpb.Unmarshal(body, &ctx)
-		}
-
+		err := depths.UnmarshalAndClose(c, &ctx)
 		if err != nil {
 			log.Warnf("[orgrim] error decoding ctx, err: %s", err.Error())
 			c.JSON(500, gin.H{"error": err.Error()})
 			return
 		}
-		if ctx.ForeignId == "" {
-			log.Warnf("[orgrim] no id in ctx, rejecting")
-			c.JSON(500, gin.H{"error": "need foreign_id key"})
-			return
-		}
-
-		if ctx.ForeignType == "" {
-			log.Warnf("[orgrim] no foreign_type in metadata, rejecting")
-			c.JSON(500, gin.H{"error": "need toreign_ype key in context"})
+		err = spec.ValidateContext(&ctx)
+		if err != nil {
+			log.Warnf("[orgrim] invalid context, err: %s", err.Error())
+			c.JSON(500, gin.H{"error": err.Error()})
 			return
 		}
 
