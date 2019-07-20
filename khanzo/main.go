@@ -782,8 +782,6 @@ func setupSimpleEventAccept(root string, r *gin.Engine) {
 	}
 
 	r.POST("/push/envelope", func(c *gin.Context) {
-		giant.Lock()
-		defer giant.Unlock()
 		var envelope spec.Envelope
 		err := depths.UnmarshalAndClose(c, &envelope)
 		if err != nil {
@@ -800,6 +798,9 @@ func setupSimpleEventAccept(root string, r *gin.Engine) {
 		if envelope.Metadata.CreatedAtNs == 0 {
 			envelope.Metadata.CreatedAtNs = time.Now().UnixNano()
 		}
+
+		giant.Lock()
+		defer giant.Unlock()
 		err = consume.ConsumeEvents(0, 0, &envelope, dictionary, forward, nil, inverted)
 		if err != nil {
 			c.JSON(500, gin.H{"error": err.Error()})
@@ -810,9 +811,6 @@ func setupSimpleEventAccept(root string, r *gin.Engine) {
 	})
 
 	r.POST("/push/flatten", func(c *gin.Context) {
-		giant.Lock()
-		defer giant.Unlock()
-
 		body := c.Request.Body
 		defer body.Close()
 
@@ -826,6 +824,10 @@ func setupSimpleEventAccept(root string, r *gin.Engine) {
 			c.JSON(500, gin.H{"error": err.Error()})
 			return
 		}
+
+		giant.Lock()
+		defer giant.Unlock()
+
 		err = consume.ConsumeEvents(0, 0, converted, dictionary, forward, nil, inverted)
 		if err != nil {
 			c.JSON(500, gin.H{"error": err.Error()})
@@ -836,9 +838,6 @@ func setupSimpleEventAccept(root string, r *gin.Engine) {
 	})
 
 	r.POST("/push/context", func(c *gin.Context) {
-		giant.Lock()
-		defer giant.Unlock()
-
 		var ctx spec.Context
 		err := depths.UnmarshalAndClose(c, &ctx)
 		if err != nil {
@@ -854,6 +853,9 @@ func setupSimpleEventAccept(root string, r *gin.Engine) {
 		if ctx.CreatedAtNs == 0 {
 			ctx.CreatedAtNs = time.Now().UnixNano()
 		}
+
+		giant.Lock()
+		defer giant.Unlock()
 
 		err = consume.ConsumeContext(&ctx, dictionary, forwardContext)
 		if err != nil {
