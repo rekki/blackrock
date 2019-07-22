@@ -33,7 +33,7 @@ func main() {
 }
 
 func IsBot(x string) bool {
-	ua, uaString := uasurfer.Parse(x)
+	ua := uasurfer.Parse(x)
 	return ua.IsBot()
 }
 
