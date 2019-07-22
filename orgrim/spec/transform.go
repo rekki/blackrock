@@ -160,7 +160,7 @@ func DecodeAndFlatten(body io.Reader) (*Envelope, error) {
 
 	properties := []*KV{}
 	if metadata.Properties != nil {
-		count, err = Transform(metadata.Properties, true)
+		properties, err = Transform(metadata.Properties, true)
 		if err != nil {
 			return nil, err
 		}

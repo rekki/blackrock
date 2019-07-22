@@ -17,6 +17,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/gogo/protobuf/proto"
 	"github.com/jackdoe/blackrock/depths"
@@ -585,7 +586,8 @@ func main() {
 	}()
 
 	r := gin.Default()
-
+	r.Use(cors.Default())
+	r.Use(gin.Recovery())
 	t, err := loadTemplate()
 	if err != nil {
 		log.Panic(err)
