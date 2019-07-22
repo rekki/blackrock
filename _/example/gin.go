@@ -6,6 +6,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/avct/uasurfer"
 	"github.com/gin-gonic/gin"
 	orgrim "github.com/jackdoe/blackrock/orgrim/client"
 	"github.com/jackdoe/blackrock/orgrim/spec"
@@ -29,6 +30,11 @@ func main() {
 	})
 
 	r.Run(":8080")
+}
+
+func IsBot(x string) bool {
+	ua, uaString := uasurfer.Parse(x)
+	return ua.IsBot()
 }
 
 func Blackrock(eventType string, foreignType string, foreignId string, og *orgrim.Client, appender func(*spec.Envelope, *gin.Context) *spec.Envelope) gin.HandlerFunc {
@@ -56,12 +62,12 @@ func Blackrock(eventType string, foreignType string, foreignId string, og *orgri
 					orgrim.KV("hostname", hostname),
 					orgrim.KV("host", c.Request.Host),
 					orgrim.KV("took_seconds", nSeconds),
+					orgrim.KV("bot", IsBot(c.Request.UserAgent())),
 				},
 				Count: []*spec.KV{
 					orgrim.KV("took_ms_round", took/100*100),
 				},
 				Properties: []*spec.KV{
-					orgrim.KV("user_agent", c.Request.UserAgent()),
 					orgrim.KV("took_ms", took),
 				},
 			},
