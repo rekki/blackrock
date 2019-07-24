@@ -30,7 +30,7 @@
           {{ range $p }}
           <tr><td><b>{{.ForeignType}}</b></td><td>{{.ForeignId}}</td></tr>
           {{ range .Properties }}
-          <tr><td>@{{.Key}}</td><td>{{ .Value}}</td></tr>
+          <tr><td>{{.Key}}</td><td>{{ .Value}}</td></tr>
           {{ end }}
           <tr><td colspan=1><hr /></td></tr>
           {{ end }}

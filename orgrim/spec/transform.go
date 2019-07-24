@@ -87,7 +87,7 @@ func Transform(m map[string]interface{}, expand bool) ([]*KV, error) {
 		out = append(out, &KV{Key: k, Value: v})
 	}
 	hasID := func(s string) bool {
-		return strings.HasSuffix(s, "_id") || strings.HasSuffix(s, "_ids")
+		return strings.HasSuffix(s, "_id") || strings.HasSuffix(s, "_ids") || strings.HasSuffix(s, "_code")
 	}
 	for k, v := range flatten {
 		if expand {

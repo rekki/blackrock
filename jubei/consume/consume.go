@@ -11,6 +11,22 @@ import (
 	"github.com/jackdoe/blackrock/orgrim/spec"
 )
 
+// hack to backfix some wrongly flattened keys
+// this should be some configurable go script
+func Fixme(k, v string) (string, string) {
+	if v == "true" {
+		splitted := strings.Split(k, ".")
+		if len(splitted) > 1 {
+			p := splitted[len(splitted)-2]
+			if strings.HasSuffix(p, "_code") {
+				k = strings.Join(splitted[:len(splitted)-1], ".")
+				v = splitted[len(splitted)-1]
+			}
+		}
+	}
+	return k, v
+}
+
 func ConsumeEvents(partition uint32, offset uint64, envelope *spec.Envelope, dictionary *disk.PersistedDictionary, forward *disk.ForwardWriter, payload *disk.ForwardWriter, inverted *disk.InvertedWriter) error {
 	typeKey, err := dictionary.GetUniqueTerm("event_type")
 	if err != nil {
@@ -85,6 +101,8 @@ func ConsumeEvents(partition uint32, offset uint64, envelope *spec.Envelope, dic
 		if lc == "event_type" || lc == "foreign_type" || lc == "foreign_id" || lc == sforeignType || lc == "" {
 			continue
 		}
+
+		lc, v = Fixme(lc, v)
 
 		tk, err := dictionary.GetUniqueTerm(lc)
 		if err != nil {

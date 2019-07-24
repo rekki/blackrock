@@ -61,6 +61,34 @@ func intOrDefault(s string, n int) int {
 	return int(v)
 }
 
+type ReloadableDictionary struct {
+	dictionary *disk.PersistedDictionary
+	root       string
+}
+
+func NewReloadableDictionary(root string) *ReloadableDictionary {
+	dictionary, err := disk.NewPersistedDictionary(root)
+	if err != nil {
+		log.Fatal(err)
+	}
+	dictionary.Close()
+	return &ReloadableDictionary{
+		dictionary: dictionary,
+		root:       root,
+	}
+}
+func (r *ReloadableDictionary) Get() *disk.PersistedDictionary {
+	return r.dictionary
+}
+func (r *ReloadableDictionary) Reload() {
+	tmp, err := disk.NewPersistedDictionary(r.root)
+	if err != nil {
+		log.Fatal(err)
+	}
+	tmp.Close()
+	r.dictionary = tmp
+}
+
 func main() {
 	var proot = flag.String("root", "/blackrock/data-topic", "root directory for the files root/topic")
 	var basicAuth = flag.String("basic-auth", "", "basic auth user and password, leave empty for no auth [just for testing, better hide it behind nginx]")
@@ -90,11 +118,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	dictionary, err := disk.NewPersistedDictionary(root)
-	if err != nil {
-		log.Fatal(err)
-	}
-	dictionary.Close()
+	dictionary := NewReloadableDictionary(root)
 
 	if *verbose {
 		log.SetLevel(log.InfoLevel)
@@ -105,13 +129,7 @@ func main() {
 
 	go func() {
 		for {
-			tmp, err := disk.NewPersistedDictionary(root)
-			if err != nil {
-				log.Fatal(err)
-			}
-			tmp.Close()
-			dictionary = tmp
-
+			dictionary.Reload()
 			contextCache.Scan()
 			runtime.GC()
 
@@ -158,7 +176,7 @@ func main() {
 
 	search := func(qr QueryRequest) (*QueryResponse, error) {
 		query, err := fromJson(qr.Query, func(k, v string) Query {
-			return NewTermQuery(inverted, dictionary, qr.ScanMaxDocuments, k, strings.ToLower(v))
+			return NewTermQuery(inverted, dictionary.Get(), qr.ScanMaxDocuments, k, strings.ToLower(v))
 		})
 
 		if err != nil {
@@ -180,7 +198,7 @@ func main() {
 			doInsert := false
 			var hit Hit
 			if len(out.Hits) < qr.Size {
-				hit, err = getScoredHit(contextCache, forward, dictionary, did, qr.DecodeMetadata)
+				hit, err = getScoredHit(contextCache, forward, dictionary.Get(), did, qr.DecodeMetadata)
 				hit.Score = score
 				if err != nil {
 					// possibly corrupt forward index, igore, error is already printed
@@ -190,7 +208,7 @@ func main() {
 				doInsert = true
 			} else if out.Hits[len(out.Hits)-1].Score < hit.Score {
 				doInsert = true
-				hit, err = getScoredHit(contextCache, forward, dictionary, did, qr.DecodeMetadata)
+				hit, err = getScoredHit(contextCache, forward, dictionary.Get(), did, qr.DecodeMetadata)
 				hit.Score = score
 				if err != nil {
 					// possibly corrupt forward index, igore, error is already printed
@@ -232,13 +250,13 @@ func main() {
 
 	r.GET("/scan/:format/*query", func(c *gin.Context) {
 		sampleSize := intOrDefault(c.Query("sample_size"), 200)
-		counter := NewCounter(dictionary, contextCache, sampleSize)
+		counter := NewCounter(dictionary.Get(), contextCache, sampleSize)
 		var p spec.PersistedMetadata
 		queryPath := strings.Trim(c.Param("query"), "/")
 
 		if queryPath != "" {
 			query, err := fromString(strings.Replace(queryPath, "/", " AND ", -1), func(k, v string) Query {
-				return NewTermQuery(inverted, dictionary, 100000, k, strings.ToLower(v))
+				return NewTermQuery(inverted, dictionary.Get(), 100000, k, strings.ToLower(v))
 			})
 			if err != nil {
 				c.JSON(400, gin.H{"error": err.Error()})
@@ -403,7 +421,7 @@ func setupSimpleEventAccept(root string, r *gin.Engine) {
 	})
 }
 
-func loadTemplate(contextCache *ContextCache, pd *disk.PersistedDictionary) (*template.Template, error) {
+func loadTemplate(contextCache *ContextCache, pd *ReloadableDictionary) (*template.Template, error) {
 	t := template.New("").Funcs(template.FuncMap{
 		"banner": func(b string) string {
 			return chart.BannerLeft(b)
@@ -422,7 +440,7 @@ func loadTemplate(contextCache *ContextCache, pd *disk.PersistedDictionary) (*te
 			return strings.Replace(a, b, c, -1)
 		},
 		"ctx": func(key, value string) []*spec.Context {
-			return LoadContextForStat(contextCache, pd, key, value, time.Now().UnixNano())
+			return LoadContextForStat(contextCache, pd.Get(), key, value, time.Now().UnixNano())
 		},
 		"minus": func(a, b int) int {
 			return a - b
