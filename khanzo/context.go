@@ -61,10 +61,11 @@ func (r *ContextCache) Lookup(t uint64, id string, from int64) (*spec.PersistedC
 	defer r.RUnlock()
 	m, ok := r.cache[t]
 	if !ok {
+
 		return nil, false
 	}
-	v, ok := m[id]
 
+	v, ok := m[id]
 	if ok {
 		if len(v) < 8 {
 			for _, vv := range v {

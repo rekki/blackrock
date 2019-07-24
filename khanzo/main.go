@@ -327,7 +327,10 @@ func NewCounter(pd *disk.PersistedDictionary, contextCache *ContextCache, sample
 }
 
 func (c *Counter) Prettify() *CountedResult {
-	out := &CountedResult{}
+	out := &CountedResult{
+		contextCache: c.contextCache,
+		pd:           c.pd,
+	}
 	out.Search = statsForMapMap(c.pd, c.Search)
 	out.Count = statsForMapMap(c.pd, c.Count)
 
@@ -380,6 +383,22 @@ func (c *Counter) Add(offset int64, foreignId, foreignType uint64, p *spec.Persi
 	}
 }
 
+func LoadContextForStat(contextCache *ContextCache, dictionary *disk.PersistedDictionary, k, v string, t int64) []*spec.Context {
+	seen := map[uint64]map[string]bool{}
+	out := []*spec.Context{}
+	key, ok := dictionary.Resolve(k)
+
+	if !ok {
+		return out
+	}
+
+	if px, ok := contextCache.Lookup(key, v, t); ok {
+		out = append(out, toContextDeep(seen, contextCache, dictionary, px)...)
+	}
+
+	return out
+}
+
 type PerValue struct {
 	Value string `json:"value" yaml:"value"`
 	Count int64  `json:"count"`
@@ -392,12 +411,14 @@ type PerKey struct {
 }
 
 type CountedResult struct {
-	EventTypes *PerKey   `json:"event_types"`
-	Foreign    []*PerKey `json:"foreign"`
-	Search     []*PerKey `json:"search"`
-	Count      []*PerKey `json:"count"`
-	Sample     []Hit     `json:"sample"`
-	TotalCount int64     `json:"total"`
+	EventTypes   *PerKey                   `json:"event_types"`
+	Foreign      []*PerKey                 `json:"foreign"`
+	Search       []*PerKey                 `json:"search"`
+	Count        []*PerKey                 `json:"count"`
+	Sample       []Hit                     `json:"sample"`
+	TotalCount   int64                     `json:"total"`
+	contextCache *ContextCache             `json:"-"`
+	pd           *disk.PersistedDictionary `json:"-"`
 }
 
 func (cr *CountedResult) VW(c *gin.Context) {
@@ -432,11 +453,11 @@ func (cr *CountedResult) HTML(c *gin.Context) {
 	c.HTML(http.StatusOK, "/html/t/index.tmpl", map[string]interface{}{"Crumbs": crumbs, "Stats": cr, "BaseUrl": url})
 }
 
-func (cr CountedResult) prettyCategoryStats() string {
-	makers := prettyStats("FOREIGN", cr.Foreign)
-	types := prettyStats("EVENT_TYPES", []*PerKey{cr.EventTypes})
-	properties := prettyStats("COUNT", cr.Count)
-	tags := prettyStats("SEARCH", cr.Search)
+func (cr *CountedResult) prettyCategoryStats() string {
+	makers := prettyStats(cr.contextCache, "FOREIGN", cr.Foreign)
+	types := prettyStats(nil, "EVENT_TYPES", []*PerKey{cr.EventTypes})
+	properties := prettyStats(nil, "COUNT", cr.Count)
+	tags := prettyStats(cr.contextCache, "SEARCH", cr.Search)
 	out := fmt.Sprintf("%s%s%s%s\n", makers, types, tags, properties)
 	out += chart.Banner("SAMPLE")
 	for _, h := range cr.Sample {
@@ -478,7 +499,7 @@ func statsForMapMap(pd *disk.PersistedDictionary, input map[uint64]map[string]ui
 	return out
 }
 
-func prettyStats(title string, stats []*PerKey) string {
+func prettyStats(c *ContextCache, title string, stats []*PerKey) string {
 	if stats == nil {
 		return ""
 	}
@@ -512,7 +533,7 @@ func prettyStats(title string, stats []*PerKey) string {
 			y = append(y, v.Value)
 		}
 		percent := float64(100) * float64(t.TotalCount) / float64(total)
-		out = append(out, fmt.Sprintf("« %s » total: %d, %.2f%%\n%s", t.Key, t.TotalCount, percent, chart.HorizontalBar(x, y, '▒', width, pad, 50)))
+		out = append(out, fmt.Sprintf("« %s (%d) » total: %d, %.2f%%\n%s", t.Key, len(y), t.TotalCount, percent, chart.HorizontalBar(x, y, '▒', width, pad, 50)))
 	}
 
 	return fmt.Sprintf("%s%s", chart.Banner(title), strings.Join(out, "\n\n--------\n\n"))
@@ -588,7 +609,7 @@ func main() {
 	r := gin.Default()
 	r.Use(cors.Default())
 	r.Use(gin.Recovery())
-	t, err := loadTemplate()
+	t, err := loadTemplate(contextCache, dictionary)
 	if err != nil {
 		log.Panic(err)
 	}
@@ -869,7 +890,7 @@ func setupSimpleEventAccept(root string, r *gin.Engine) {
 	})
 }
 
-func loadTemplate() (*template.Template, error) {
+func loadTemplate(contextCache *ContextCache, pd *disk.PersistedDictionary) (*template.Template, error) {
 	t := template.New("").Funcs(template.FuncMap{
 		"banner": func(b string) string {
 			return chart.BannerLeft(b)
@@ -886,6 +907,9 @@ func loadTemplate() (*template.Template, error) {
 		},
 		"replace": func(a, b, c string) string {
 			return strings.Replace(a, b, c, -1)
+		},
+		"ctx": func(key, value string) []*spec.Context {
+			return LoadContextForStat(contextCache, pd, key, value, time.Now().UnixNano())
 		},
 		"minus": func(a, b int) int {
 			return a - b

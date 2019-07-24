@@ -1,6 +1,6 @@
 <tr>
   <td class="left">
-    {{ .Data.Key }}
+    {{ .Data.Key }} ({{ (len .Data.Values) }})
   </td>
   <td class="right">
     total: {{ .Data.TotalCount }} {{ percent .GlobalTotal .Data.TotalCount }}
@@ -11,13 +11,36 @@
 {{ $tag := .Data.Key }}
 {{ $link := .Link }}
 
+
 {{ range $i, $val := .Data.Values }}
 {{ $p := percent $total $val.Count }}
+
 {{ if lt $i 50}}
 <tr>
   <td class="left">
     {{ if $link }}
-    <div style="padding-left: 1.5em"><a href="{{$b}}/{{$tag}}:{{$val.Value}}">{{ $val.Value }}</a></div>
+    <div style="padding-left: 1.5em">
+      <a href="{{$b}}/{{$tag}}:{{$val.Value}}">{{ $val.Value }}</a>
+    {{ $p := ctx $tag $val.Value }}
+    {{ if $p }}
+    <label class="trigger">
+      <input type="checkbox"/>
+      <span class="msg">
+        <table>
+          {{ range $p }}
+          <tr><td><b>{{.ForeignType}}</b></td><td>{{.ForeignId}}</td></tr>
+          {{ range .Properties }}
+          <tr><td>@{{.Key}}</td><td>{{ .Value}}</td></tr>
+          {{ end }}
+          <tr><td colspan=1><hr /></td></tr>
+          {{ end }}
+        </table>
+      </span>
+    </label>
+    {{ end }}
+
+    </div>
+
     {{ else }}
     <div style="padding-left: 1.5em">{{ $val.Value }}</div>
     {{ end }}
@@ -30,9 +53,10 @@
   </td>
 </tr>
 {{ end }}
+
 {{ end }}
 
-{{ if lt 49 (len .Data.Key) }}
+{{ if gt (len .Data.Values) 50 }}
 <tr>
   <td class="left" colspan=2>
     &nbsp;&nbsp;&nbsp;&nbsp;...skipping {{ minus (len .Data.Values) 50 }}
