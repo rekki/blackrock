@@ -445,6 +445,9 @@ func loadTemplate(contextCache *ContextCache, pd *ReloadableDictionary) (*templa
 		"minus": func(a, b int) int {
 			return a - b
 		},
+		"prettyFlat": func(v string) string {
+			return strings.Replace(v, ".", " ", -1)
+		},
 		"percent": func(value ...interface{}) string {
 			a := float64(value[0].(int64))
 			b := float64(value[1].(int64))
