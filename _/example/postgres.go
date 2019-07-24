@@ -57,7 +57,7 @@ func main() {
 		log.Panic(err)
 
 	}
-
+	i := 0
 	for rows.Next() {
 		p := []byte{}
 		err = rows.Scan(&p)
@@ -118,5 +118,12 @@ func main() {
 		if err != nil {
 			log.Panic(err)
 		}
+
+		fmt.Printf(".")
+		i++
+		if i%70 == 0 {
+			fmt.Printf("\n")
+		}
 	}
+	fmt.Printf("\n")
 }
