@@ -51,7 +51,7 @@ func (r *ContextCache) Insert(decoded *spec.PersistedContext) {
 		mt = map[string][]*spec.PersistedContext{}
 		r.cache[decoded.ForeignType] = mt
 	}
-	//	log.Infof("setting %d:%s to %v", decoded.ForeignType, decoded.ForeignId, decoded)
+	log.Infof("setting %d:%s [%d] to %v", decoded.ForeignType, decoded.ForeignId, decoded.CreatedAtNs, decoded)
 	mt[decoded.ForeignId] = insertSort(mt[decoded.ForeignId], decoded)
 	r.Unlock()
 }
