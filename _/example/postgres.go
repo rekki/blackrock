@@ -30,9 +30,10 @@ func main() {
 	createdAtFormat := flag.String("created-at-format", "2006-01-02T15:04:05", "textual representation of Mon Jan 2 15:04:05 -0700 MST 2006")
 	fsql := flag.String("sql", "select id, name from users", "execute query")
 	fdest := flag.String("orgrim", "http://localhost:9001", "orgrim server to upload the context to")
-	og := orgrim.NewClient(*fdest, nil)
 	pgurl := flag.String("postgres-url", "host=localhost user=postgres dbname=example password=example", "Postgres URL")
 	flag.Parse()
+
+	og := orgrim.NewClient(*fdest, nil)
 	if *ftype == "" {
 		log.Fatal("need -foreign-type")
 	}
