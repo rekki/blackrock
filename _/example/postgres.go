@@ -33,6 +33,17 @@ func main() {
 	og := orgrim.NewClient(*fdest, nil)
 	pgurl := flag.String("postgres-url", "host=localhost user=postgres dbname=example password=example", "Postgres URL")
 	flag.Parse()
+	if *ftype == "" {
+		log.Fatal("need -foreign-type")
+	}
+
+	if *fid == "" {
+		log.Fatal("need -foreign-id")
+	}
+
+	if *fcreatedAt == "" {
+		log.Fatal("need -created-at-field")
+	}
 
 	db, err := sql.Open("postgres", *pgurl)
 	if err != nil {

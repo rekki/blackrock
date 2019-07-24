@@ -105,3 +105,56 @@ func (r *ContextCache) Scan() error {
 	log.Printf("scanning finished at %d, got %d new entries", r.offset, n)
 	return err
 }
+
+func toContextDeep(seen map[uint64]map[string]bool, contextCache *ContextCache, dictionary *disk.PersistedDictionary, p *spec.PersistedContext) []*spec.Context {
+	out := []*spec.Context{toContext(dictionary, p)}
+	for i := 0; i < len(p.PropertyKeys); i++ {
+		k := p.PropertyKeys[i]
+		v := p.PropertyValues[i]
+
+		m, ok := seen[k]
+		if !ok {
+			m = map[string]bool{}
+			seen[k] = m
+		}
+		_, ok = m[v]
+		if ok {
+			continue
+		}
+		m[v] = true
+		if px, ok := contextCache.Lookup(k, v, p.CreatedAtNs); ok {
+			out = append(out, toContextDeep(seen, contextCache, dictionary, px)...)
+		}
+	}
+
+	return out
+}
+func toContext(dictionary *disk.PersistedDictionary, p *spec.PersistedContext) *spec.Context {
+	out := &spec.Context{
+		CreatedAtNs: p.CreatedAtNs,
+		ForeignId:   p.ForeignId,
+		ForeignType: dictionary.ReverseResolve(p.ForeignType),
+	}
+	for i := 0; i < len(p.PropertyKeys); i++ {
+		tk := dictionary.ReverseResolve(p.PropertyKeys[i])
+		out.Properties = append(out.Properties, &spec.KV{Key: tk, Value: p.PropertyValues[i]})
+	}
+	sort.Sort(ByKV(out.Properties))
+	return out
+}
+
+func LoadContextForStat(contextCache *ContextCache, dictionary *disk.PersistedDictionary, k, v string, t int64) []*spec.Context {
+	seen := map[uint64]map[string]bool{}
+	out := []*spec.Context{}
+	key, ok := dictionary.Resolve(k)
+
+	if !ok {
+		return out
+	}
+
+	if px, ok := contextCache.Lookup(key, v, t); ok {
+		out = append(out, toContextDeep(seen, contextCache, dictionary, px)...)
+	}
+
+	return out
+}
