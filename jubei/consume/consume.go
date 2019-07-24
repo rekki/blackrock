@@ -17,10 +17,13 @@ func Fixme(k, v string) (string, string) {
 	if v == "true" {
 		splitted := strings.Split(k, ".")
 		if len(splitted) > 1 {
-			p := splitted[len(splitted)-2]
-			if strings.HasSuffix(p, "_code") {
-				k = strings.Join(splitted[:len(splitted)-1], ".")
-				v = splitted[len(splitted)-1]
+			for i := 0; i < len(splitted)-1; i++ {
+				p := splitted[i]
+				if strings.HasSuffix(p, "_code") {
+					k = strings.Join(splitted[:i+1], ".")
+					v = strings.Join(splitted[i+1:], ".")
+					break
+				}
 			}
 		}
 	}
