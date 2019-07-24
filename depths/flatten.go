@@ -110,6 +110,17 @@ func Flatten(nested map[string]interface{}, prefix string, style SeparatorStyle)
 	return flatmap, nil
 }
 
+func FlattenArray(nested []interface{}, prefix string, style SeparatorStyle) (map[string]string, error) {
+	flatmap := make(map[string]string)
+
+	err := flatten(true, flatmap, nested, prefix, style)
+	if err != nil {
+		return nil, err
+	}
+
+	return flatmap, nil
+}
+
 // FlattenString generates a flat JSON map from a nested one.  Keys in the flat map will be a compound of
 // descending map keys and slice iterations.  The presentation of keys is set by style.  A prefix is joined
 // to each key.

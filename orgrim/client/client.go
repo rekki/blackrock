@@ -75,8 +75,7 @@ func (c *Client) Push(envelope *spec.Envelope) error {
 func (c *Client) PushContext(message *spec.Context) error {
 	return c.push(c.endpointContext, message)
 }
-
-func KV(key string, v interface{}) *spec.KV {
+func ToString(v interface{}) string {
 	var value string
 	switch v.(type) {
 	case string:
@@ -85,6 +84,8 @@ func KV(key string, v interface{}) *spec.KV {
 		value = fmt.Sprintf("%d", v.(int))
 	case int32:
 		value = fmt.Sprintf("%d", v.(int32))
+	case []byte:
+		value = string(v.([]byte))
 	case int64:
 		value = fmt.Sprintf("%d", v.(int64))
 	case int16:
@@ -99,9 +100,16 @@ func KV(key string, v interface{}) *spec.KV {
 		value = strconv.FormatFloat(float64(v.(float32)), 'f', 0, 64)
 	case float64:
 		value = strconv.FormatFloat(v.(float64), 'f', 0, 64)
+	case nil:
+		value = "nil"
 	default:
 		value = fmt.Sprintf("%v", v)
 	}
 
+	return value
+}
+
+func KV(key string, v interface{}) *spec.KV {
+	value := ToString(v)
 	return &spec.KV{Key: key, Value: value}
 }

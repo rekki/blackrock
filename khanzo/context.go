@@ -18,16 +18,16 @@ type ContextCache struct {
 }
 
 func insertSort(data []*spec.PersistedContext, el *spec.PersistedContext) []*spec.PersistedContext {
-	index := sort.Search(len(data), func(i int) bool { return data[i].CreatedAtNs < el.CreatedAtNs })
+	index := sort.Search(len(data), func(i int) bool { return data[i].CreatedAtNs <= el.CreatedAtNs })
 
 	if len(data) == 0 {
 		return []*spec.PersistedContext{el}
 	}
 
 	if index < len(data) && data[index].CreatedAtNs == el.CreatedAtNs {
+		data[index] = el
 		return data
 	}
-
 	data = append(data, &spec.PersistedContext{})
 	copy(data[index+1:], data[index:])
 	data[index] = el
@@ -51,7 +51,7 @@ func (r *ContextCache) Insert(decoded *spec.PersistedContext) {
 		mt = map[string][]*spec.PersistedContext{}
 		r.cache[decoded.ForeignType] = mt
 	}
-	log.Infof("setting %d:%s to %v", decoded.ForeignType, decoded.ForeignId, decoded)
+	//	log.Infof("setting %d:%s to %v", decoded.ForeignType, decoded.ForeignId, decoded)
 	mt[decoded.ForeignId] = insertSort(mt[decoded.ForeignId], decoded)
 	r.Unlock()
 }
