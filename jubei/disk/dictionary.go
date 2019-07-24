@@ -92,8 +92,10 @@ func (pd *PersistedDictionary) normalize(s string) string {
 }
 
 func (pd *PersistedDictionary) GetUniqueTerm(s string) (uint64, error) {
-	pd.RLock()
+	// this is used by jubei in 2 threads
+
 	s = pd.normalize(s)
+	pd.RLock()
 	v, ok := pd.resolved[s]
 	if ok {
 		pd.RUnlock()
@@ -133,6 +135,7 @@ func (pd *PersistedDictionary) GetUniqueTerm(s string) (uint64, error) {
 }
 
 func (pd *PersistedDictionary) Resolve(s string) (uint64, bool) {
+	// used in readonly more from khanzo, so no locking needed
 	s = pd.normalize(s)
 	v, ok := pd.resolved[s]
 	return v, ok
@@ -142,6 +145,7 @@ func (pd *PersistedDictionary) Close() {
 	pd.fd.Close()
 }
 func (pd *PersistedDictionary) ReverseResolve(s uint64) string {
+	// used in readonly more from khanzo, so no locking needed
 	v, ok := pd.reverse[s]
 	if ok {
 		return v
