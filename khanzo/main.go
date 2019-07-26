@@ -250,13 +250,15 @@ func main() {
 
 	r.GET("/scan/:format/*query", func(c *gin.Context) {
 		sampleSize := intOrDefault(c.Query("sample_size"), 200)
+		maxDocuments := intOrDefault(c.Query("query_max_documents"), 100000)
+		scanSize := intOrDefault(c.Query("scan_size_mb"), 100)
 		counter := NewCounter(dictionary.Get(), contextCache, sampleSize)
 		var p spec.PersistedMetadata
 		queryPath := strings.Trim(c.Param("query"), "/")
 
 		if queryPath != "" {
 			query, err := fromString(strings.Replace(queryPath, "/", " AND ", -1), func(k, v string) Query {
-				return NewTermQuery(inverted, dictionary.Get(), 100000, k, strings.ToLower(v))
+				return NewTermQuery(inverted, dictionary.Get(), int64(maxDocuments), k, strings.ToLower(v))
 			})
 
 			if err != nil {
@@ -286,7 +288,7 @@ func main() {
 				return
 			}
 
-			max := uint64(10000000)
+			max := uint64(scanSize * 1024 * 1024)
 			if size > max {
 				back = size - uint64(max)
 			}
