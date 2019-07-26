@@ -144,6 +144,17 @@ func TestModify(t *testing.T) {
 		),
 	)))
 
+	eq(t, []int64{6, 7, 8, 10}, query(NewBoolAndNotQuery(
+		NewBoolOrQuery(
+			NewTerm("x", []int64{1, 2}),
+			NewTerm("x", []int64{3, 9})),
+		NewBoolAndNotQuery(
+			NewTerm("x", []int64{4, 5}),
+			NewTerm("x", []int64{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}),
+			NewTerm("x", []int64{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}),
+		),
+	)))
+
 	eq(t, []int64{}, query(NewBoolAndNotQuery(
 		NewTerm("x", []int64{1, 2, 3, 9}),
 		NewTerm("x", []int64{1, 2, 3, 9}),

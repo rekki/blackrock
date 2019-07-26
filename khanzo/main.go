@@ -258,6 +258,7 @@ func main() {
 			query, err := fromString(strings.Replace(queryPath, "/", " AND ", -1), func(k, v string) Query {
 				return NewTermQuery(inverted, dictionary.Get(), 100000, k, strings.ToLower(v))
 			})
+
 			if err != nil {
 				c.JSON(400, gin.H{"error": err.Error()})
 				return

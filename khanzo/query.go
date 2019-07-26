@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"math"
 	"strings"
 )
@@ -14,26 +15,41 @@ const (
 // FIXME(jackdoe): this is very bad
 func fromString(text string, makeTermQuery func(string, string) Query) (Query, error) {
 	top := []Query{}
+	not := []Query{}
 	for _, and := range strings.Split(text, " AND ") {
 		sub := []Query{}
+		and = strings.Trim(and, " ")
 		if and == "" {
 			continue
 		}
 		for _, or := range strings.Split(and, " OR ") {
+			or = strings.Trim(or, " ")
 			if or == "" {
 				continue
 			}
 			t := strings.SplitN(or, ":", 2)
-			sub = append(sub, makeTermQuery(t[0], t[1]))
+
+			if strings.HasPrefix(t[0], "-") && len(t[0]) > 1 {
+				term := makeTermQuery(t[0][1:], t[1])
+				not = append(not, term)
+			} else {
+				term := makeTermQuery(t[0], t[1])
+				sub = append(sub, term)
+			}
 		}
-		if len(sub) == 1 {
-			top = append(top, sub[0])
-		} else {
-			top = append(top, NewBoolOrQuery(sub...))
+		if len(sub) > 0 {
+			if len(sub) == 1 {
+				top = append(top, sub[0])
+			} else {
+				top = append(top, NewBoolOrQuery(sub...))
+			}
 		}
 	}
-	if (len(top)) == 1 {
+	if (len(top)) == 1 && len(not) == 0 {
 		return top[0], nil
+	}
+	if len(not) > 0 {
+		return NewBoolAndNotQuery(NewBoolOrQuery(not...), top...), nil
 	}
 	return NewBoolAndQuery(top...), nil
 }
@@ -84,6 +100,7 @@ func fromJson(input interface{}, makeTermQuery func(string, string) Query) (Quer
 			if err != nil {
 				return nil, err
 			}
+
 			queries = append(queries, q)
 		}
 		if v, ok := mapped["and"]; ok && v != nil {
@@ -381,7 +398,11 @@ func (q *BoolAndQuery) String() string {
 	for _, v := range q.queries {
 		out = append(out, v.String())
 	}
-	return strings.Join(out, " AND ")
+	s := strings.Join(out, " AND ")
+	if q.not != nil {
+		s = fmt.Sprintf("%s[-(%s)]", s, q.not.String())
+	}
+	return s
 }
 
 func (q *BoolAndQuery) advance(target int64) int64 {
