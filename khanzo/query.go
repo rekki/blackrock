@@ -160,9 +160,11 @@ func NewTerm(t string, postings []int64) *Term {
 		QueryBase: QueryBase{NOT_READY},
 	}
 }
+
 func (t *Term) String() string {
 	return t.term
 }
+
 func (t *Term) Reset() {
 	t.cursor = -1
 	t.docId = NOT_READY
@@ -171,6 +173,7 @@ func (t *Term) Reset() {
 func (t *Term) Score() float32 {
 	return float32(1)
 }
+
 func (t *Term) advance(target int64) int64 {
 	if t.docId == NO_MORE || t.docId == target || target == NO_MORE {
 		t.docId = target
@@ -301,6 +304,11 @@ func (q *BoolOrQuery) Next() int64 {
 type BoolAndQuery struct {
 	BoolQueryBase
 	QueryBase
+	not Query
+}
+
+func NewBoolAndNotQuery(not Query, queries ...Query) *BoolAndQuery {
+	return NewBoolAndQuery(queries...).SetNot(not)
 }
 
 func NewBoolAndQuery(queries ...Query) *BoolAndQuery {
@@ -309,28 +317,57 @@ func NewBoolAndQuery(queries ...Query) *BoolAndQuery {
 		QueryBase:     QueryBase{NOT_READY},
 	}
 }
+
+func (q *BoolAndQuery) SetNot(not Query) *BoolAndQuery {
+	q.not = not
+	return q
+}
+
 func (q *BoolAndQuery) Score() float32 {
 	return float32(len(q.queries))
 }
 
 func (q *BoolAndQuery) nextAndedDoc(target int64) int64 {
-	// initial iteration skips queries[0]
+	start := 1
 	n := len(q.queries)
-	for i := 1; i < n; i++ {
-		sub_query := q.queries[i]
-		if sub_query.GetDocId() < target {
-			sub_query.advance(target)
+AGAIN:
+	for {
+		// initial iteration skips queries[0], because it is used in caller
+		for i := start; i < n; i++ {
+			sub_query := q.queries[i]
+			if sub_query.GetDocId() < target {
+				sub_query.advance(target)
+			}
+
+			if sub_query.GetDocId() == target {
+				continue
+			}
+
+			target = q.queries[0].advance(sub_query.GetDocId())
+
+			i = 0 //restart the loop from the first query
 		}
 
-		if sub_query.GetDocId() == target {
-			continue
+		if q.not != nil && q.not.GetDocId() != NO_MORE && target != NO_MORE {
+			if q.not.advance(target) == target {
+				// the not query is matching, so we have to move on
+				// advance everything, set the new target to the highest doc, and start again
+				newTarget := target + 1
+				for i := 0; i < n; i++ {
+					current := q.queries[i].advance(newTarget)
+					if current > newTarget {
+						newTarget = current
+					}
+				}
+				target = newTarget
+				start = 0
+				continue AGAIN
+			}
 		}
 
-		target = q.queries[0].advance(sub_query.GetDocId())
-		i = 0 //restart the loop from the first query
+		q.docId = target
+		return q.docId
 	}
-	q.docId = target
-	return q.docId
 }
 func (q *BoolAndQuery) Reset() {
 	q.docId = NOT_READY

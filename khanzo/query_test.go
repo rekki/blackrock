@@ -22,7 +22,7 @@ func query(query Query) []int64 {
 
 func eq(t *testing.T, a, b []int64) {
 	if len(a) != len(b) {
-		t.Logf("len(a) != len(b) ; len(a) = %d, len(b) = %d", len(a), len(b))
+		t.Logf("len(a) != len(b) ; len(a) = %d, len(b) = %d [%v %v]", len(a), len(b), a, b)
 		t.FailNow()
 	}
 
@@ -126,6 +126,36 @@ func TestModify(t *testing.T) {
 		NewTerm("x", c),
 		NewTerm("x", d),
 		NewTerm("x", e),
+	)))
+
+	eq(t, []int64{4, 6, 7, 8, 10}, query(NewBoolAndNotQuery(
+		NewTerm("x", []int64{1, 2, 3, 9}),
+		NewBoolOrQuery(
+			NewTerm("x", []int64{3, 4}),
+			NewTerm("x", []int64{1, 2, 3, 6, 7, 8, 9, 10}),
+		),
+	)))
+	eq(t, []int64{6, 7, 8, 10}, query(NewBoolAndNotQuery(
+		NewTerm("x", []int64{1, 2, 3, 9}),
+		NewBoolAndNotQuery(
+			NewTerm("x", []int64{4, 5}),
+			NewTerm("x", []int64{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}),
+			NewTerm("x", []int64{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}),
+		),
+	)))
+
+	eq(t, []int64{}, query(NewBoolAndNotQuery(
+		NewTerm("x", []int64{1, 2, 3, 9}),
+		NewTerm("x", []int64{1, 2, 3, 9}),
+	)))
+
+	eq(t, []int64{}, query(NewBoolAndNotQuery(
+		NewTerm("x", []int64{1, 2, 3, 9}),
+	)))
+
+	eq(t, []int64{1, 2, 3, 9}, query(NewBoolAndNotQuery(
+		NewTerm("x", []int64{}),
+		NewTerm("x", []int64{1, 2, 3, 9}),
 	)))
 
 	eq(t, b, query(NewBoolAndQuery(
