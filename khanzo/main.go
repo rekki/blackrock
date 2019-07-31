@@ -251,7 +251,7 @@ func main() {
 	r.GET("/scan/:format/*query", func(c *gin.Context) {
 		sampleSize := intOrDefault(c.Query("sample_size"), 200)
 		maxDocuments := intOrDefault(c.Query("query_max_documents"), 100000)
-		scanSize := intOrDefault(c.Query("scan_size_mb"), 100)
+		scanSize := intOrDefault(c.Query("scan_size_mb"), 10)
 		counter := NewCounter(dictionary.Get(), contextCache, sampleSize)
 		var p spec.PersistedMetadata
 		queryPath := strings.Trim(c.Param("query"), "/")

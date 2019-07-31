@@ -1,6 +1,9 @@
 package main
 
 import (
+	"encoding/binary"
+	"io/ioutil"
+	"os"
 	"testing"
 )
 
@@ -10,6 +13,24 @@ func postingsList(n int) []int64 {
 		list[i] = int64(i) * 3
 	}
 	return list
+}
+
+func postingsListFile(root string, n int) *os.File {
+	data := make([]byte, n*8)
+	for i := 0; i < n; i++ {
+		v := int64(i) * 3
+		binary.LittleEndian.PutUint64(data[i*8:], uint64(v))
+	}
+
+	f, err := ioutil.TempFile(root, "postings_")
+	if err != nil {
+		panic(err)
+	}
+	_, err = f.Write(data)
+	if err != nil {
+		panic(err)
+	}
+	return f
 }
 
 func query(query Query) []int64 {
@@ -34,7 +55,27 @@ func eq(t *testing.T, a, b []int64) {
 	}
 }
 
+func BenchmarkNextFile1000(b *testing.B) {
+	tmp, err := ioutil.TempDir("", "query_test")
+	if err != nil {
+		panic(err)
+	}
+
+	x := postingsListFile(tmp, 1000)
+	defer x.Close()
+	defer os.RemoveAll(tmp)
+
+	for n := 0; n < b.N; n++ {
+		sum := int64(0)
+		q := NewTermFile("", x)
+		for q.Next() != NO_MORE {
+			sum += q.GetDocId()
+		}
+	}
+}
+
 func BenchmarkNext1000(b *testing.B) {
+
 	x := postingsList(1000)
 
 	for n := 0; n < b.N; n++ {
@@ -86,6 +127,21 @@ func TestModify(t *testing.T) {
 	c := postingsList(10000)
 	d := postingsList(100000)
 	e := postingsList(1000000)
+	tmp, err := ioutil.TempDir("", "query_test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	af := postingsListFile(tmp, 100)
+	bf := postingsListFile(tmp, 1000)
+	cf := postingsListFile(tmp, 10000)
+	df := postingsListFile(tmp, 100000)
+	ef := postingsListFile(tmp, 1000000)
+	defer af.Close()
+	defer bf.Close()
+	defer cf.Close()
+	defer df.Close()
+	defer ef.Close()
+	defer os.RemoveAll(tmp)
 
 	eq(t, a, query(NewTerm("x", a)))
 	eq(t, b, query(NewTerm("x", b)))
@@ -93,9 +149,20 @@ func TestModify(t *testing.T) {
 	eq(t, d, query(NewTerm("x", d)))
 	eq(t, e, query(NewTerm("x", e)))
 
+	eq(t, a, query(NewTermFile("x", af)))
+	eq(t, b, query(NewTermFile("x", bf)))
+	eq(t, c, query(NewTermFile("x", cf)))
+	eq(t, d, query(NewTermFile("x", df)))
+	eq(t, e, query(NewTermFile("x", ef)))
+
 	eq(t, b, query(NewBoolOrQuery(
 		NewTerm("x", a),
 		NewTerm("x", b),
+	)))
+
+	eq(t, b, query(NewBoolOrQuery(
+		NewTerm("x", a),
+		NewTermFile("x", bf),
 	)))
 
 	eq(t, c, query(NewBoolOrQuery(
@@ -104,10 +171,16 @@ func TestModify(t *testing.T) {
 		NewTerm("x", c),
 	)))
 
+	eq(t, c, query(NewBoolOrQuery(
+		NewTerm("x", a),
+		NewTermFile("x", bf),
+		NewTerm("x", c),
+	)))
+
 	eq(t, e, query(NewBoolOrQuery(
 		NewTerm("x", a),
 		NewTerm("x", b),
-		NewTerm("x", c),
+		NewTermFile("x", cf),
 		NewTerm("x", d),
 		NewTerm("x", e),
 	)))
@@ -182,10 +255,10 @@ func TestModify(t *testing.T) {
 
 	eq(t, c, query(NewBoolAndQuery(
 		NewBoolOrQuery(
-			NewTerm("x", a),
+			NewTermFile("x", af),
 			NewTerm("x", b),
 			NewBoolAndQuery(
-				NewTerm("x", c),
+				NewTermFile("x", cf),
 				NewTerm("x", d),
 			),
 		),

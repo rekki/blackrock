@@ -1,9 +1,11 @@
 package main
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"math"
+	"os"
 	"strings"
 )
 
@@ -422,4 +424,93 @@ func (q *BoolAndQuery) Next() int64 {
 
 	// XXX: pick cheapest leading query
 	return q.nextAndedDoc(q.queries[0].Next())
+}
+
+type TermFile struct {
+	cursor int64
+	size   int64
+	file   *os.File
+	term   string
+	QueryBase
+}
+
+func NewTermFile(t string, f *os.File) *TermFile {
+	fs, err := f.Stat()
+	size := int64(0)
+	if err == nil {
+		size = fs.Size()
+	}
+	return &TermFile{
+		term:      t,
+		cursor:    -1,
+		size:      size / 8,
+		file:      f,
+		QueryBase: QueryBase{NOT_READY},
+	}
+}
+
+func (t *TermFile) String() string {
+	return t.term
+}
+
+func (t *TermFile) Reset() {
+	t.cursor = -1
+	t.docId = NOT_READY
+}
+
+func (t *TermFile) Score() float32 {
+	return float32(1)
+}
+
+func (t *TermFile) read(pos int64) int64 {
+	data := make([]byte, 8)
+	_, err := t.file.ReadAt(data, pos)
+	if err != nil {
+		return NO_MORE
+	}
+	return int64(binary.LittleEndian.Uint64(data))
+}
+
+func (t *TermFile) advance(target int64) int64 {
+	// FIXME(jackdoe): add buffer with few hundred integers to dramatically reduce the reads
+	if t.docId == NO_MORE || t.docId == target || target == NO_MORE {
+		t.docId = target
+		return t.docId
+	}
+
+	if t.cursor < 0 {
+		t.cursor = 0
+	}
+
+	start := t.cursor
+	end := t.size
+
+	for start < end {
+		mid := start + ((end - start) / 2)
+		current := t.read(mid * 8)
+		if current == target {
+			t.cursor = mid
+			t.docId = target
+			return target
+		}
+
+		if current < target {
+			start = mid + 1
+		} else {
+			end = mid
+		}
+	}
+	if start >= t.size {
+		t.docId = NO_MORE
+		return NO_MORE
+	}
+	t.cursor = start
+	t.docId = t.read(start * 8)
+	return t.docId
+}
+
+func (t *TermFile) Next() int64 {
+	t.cursor++
+	t.docId = t.read(t.cursor * 8)
+	return t.docId
 }
