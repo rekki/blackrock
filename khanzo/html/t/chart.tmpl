@@ -1,3 +1,4 @@
+
 <tr>
   <td class="left">
     {{ .Data.Key }} ({{ (len .Data.Values) }})
@@ -8,6 +9,7 @@
 </tr>
 {{ $total := .Data.TotalCount }}
 {{ $b := .BaseUrl }}
+{{ $qs := .QueryString }}
 {{ $tag := .Data.Key }}
 {{ $link := .Link }}
 
@@ -20,7 +22,7 @@
   <td class="left">
     {{ if $link }}
     <div style="padding-left: 1.5em">
-      <a href="{{$b}}/{{$tag}}:{{$val.Value}}">{{ $val.Value }}</a>
+      <a href="{{$b}}/{{$tag}}:{{$val.Value}}?{{$qs}}">{{ $val.Value }}</a>
     {{ $p := ctx $tag $val.Value }}
     {{ if $p }}
     <label class="trigger">

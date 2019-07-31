@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"html/template"
 	"net/http"
 	"sort"
 	"strings"
@@ -157,7 +158,7 @@ func (cr *CountedResult) HTML(c *gin.Context) {
 		url = "/scan/html/"
 	}
 
-	c.HTML(http.StatusOK, "/html/t/index.tmpl", map[string]interface{}{"Crumbs": crumbs, "Stats": cr, "BaseUrl": url})
+	c.HTML(http.StatusOK, "/html/t/index.tmpl", map[string]interface{}{"Crumbs": crumbs, "Stats": cr, "BaseUrl": url, "QueryString": template.URL(c.Request.URL.RawQuery)})
 }
 
 func (cr *CountedResult) prettyCategoryStats() string {

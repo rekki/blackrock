@@ -436,6 +436,21 @@ func loadTemplate(contextCache *ContextCache, pd *ReloadableDictionary) (*templa
 		"pretty": func(b interface{}) string {
 			return depths.DumpObj(b)
 		},
+		"add": func(b template.URL, a string) template.URL {
+			if string(b) == "" {
+				return template.URL(a)
+			}
+
+			return template.URL(string(b) + "&" + a)
+		},
+		"remove": func(b template.URL, a string) template.URL {
+			x := strings.Replace(string(b), "&"+a, "", -1)
+			x = strings.Replace(x, a, "", -1)
+			return template.URL(x)
+		},
+		"has": func(b template.URL, a string) bool {
+			return strings.Contains(string(b), a)
+		},
 		"format": func(value int64) string {
 			return fmt.Sprintf("%8s", chart.Fit(float64(value)))
 		},

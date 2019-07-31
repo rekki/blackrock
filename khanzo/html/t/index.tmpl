@@ -68,12 +68,13 @@
   </head>
   <body>
     {{ $base := .BaseUrl }}
+    {{ $query := .QueryString }}
     <div style="line-height: 25px;">
       <a href="{{ replace $base "/html/" "/text/" }}">text</a>
       <br>
-      <a href="/scan/html/">/scan/html/</a><br>
+      <a href="/scan/html/?{{$query}}">/scan/html/</a><br>
       {{ range .Crumbs }}
-      <a href="{{ .Base }}/{{.Exact}}">{{.Exact}}</a> <a href="/scan/html/{{.Exact}}">=</a>
+      <a href="{{ .Base }}/{{.Exact}}?{{$query}}">{{.Exact}}</a> <a href="/scan/html/{{.Exact}}?{{$query}}">=</a>
       <br>
       {{ end }}
     </div>
@@ -82,21 +83,30 @@
     <table border=0>
       <tr><td colspan=2><pre class="banner">{{ banner "foreign id"}}</pre></td></tr>
       {{ range .Stats.Foreign }}
-      {{ template "/html/t/chart.tmpl" dict "Data" . "GlobalTotal" $total "BaseUrl" $base "Link" true}}
+      {{ template "/html/t/chart.tmpl" dict "Data" . "GlobalTotal" $total "BaseUrl" $base "Link" true "QueryString" $query}}
       {{ end }}
       <tr><td colspan=2><pre class="banner">{{ banner "event type"}}</pre></td></tr>
-      {{ template "/html/t/chart.tmpl" dict "Data" .Stats.EventTypes "GlobalTotal" $total  "BaseUrl" $base "Link" true}}
+      {{ template "/html/t/chart.tmpl" dict "Data" .Stats.EventTypes "GlobalTotal" $total  "BaseUrl" $base "Link" true "QueryString" $query}}
       <tr><td colspan=2><pre class="banner">{{ banner "search"}}</pre></td></tr>
       {{ range .Stats.Search }}
-      {{ template "/html/t/chart.tmpl" dict "Data" . "GlobalTotal" $total  "BaseUrl" $base "Link" true}}
+      {{ template "/html/t/chart.tmpl" dict "Data" . "GlobalTotal" $total  "BaseUrl" $base "Link" true "QueryString" $query}}
       {{ end }}
       <tr><td colspan=2><pre class="banner">{{ banner "count"}}</pre></td></tr>
       {{ range .Stats.Count }}
-      {{ template "/html/t/chart.tmpl" dict "Data" . "GlobalTotal" $total  "BaseUrl" $base "Link" false}}
+      {{ template "/html/t/chart.tmpl" dict "Data" . "GlobalTotal" $total  "BaseUrl" $base "Link" false "QueryString" $query}}
       {{ end }}
-      <tr><td colspan=2><pre class="banner">{{ banner "sample"}}</pre></td></tr>
+      <tr><td colspan=2><pre id="sample" class="banner">{{ banner "sample"}}</pre></td></tr>
+      <tr><td colspan=2>
+          {{ if has $query "expand=true" }}
+          <a href="{{$base}}?{{remove $query "expand=true"}}#sample">collapse samples</a>
+          {{ else }}
+          <a href="{{$base}}?{{add $query "expand=true"}}#sample">expand samples</a>
+          {{ end }}
+          <hr>
+
+      </td></tr>
       {{ range .Stats.Sample }}
-      {{ template "/html/t/hit.tmpl" . }}
+      {{ template "/html/t/hit.tmpl" dict "Data" . "QueryString" $query "BaseUrl" $base }}
       {{ end  }}
     </table>
   </body>
