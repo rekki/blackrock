@@ -76,7 +76,8 @@ func main() {
 	var dataTopic = flag.String("topic-data", "blackrock-data", "topic for the data")
 	var contextTopic = flag.String("topic-context", "blackrock-context", "topic for the context")
 	var proot = flag.String("root", "/blackrock", "root directory for the files")
-	var pconsumerId = flag.String("consumer-id", "", "kafka consumer id")
+	var pqueuelen = flag.Int("kafka-queue-capacity", 1000, "internal queue capacity")
+	var pconsumerId = flag.String("consumer-id", "jubei", "kafka consumer id")
 	var kafkaServers = flag.String("kafka", "localhost:9092,localhost:9092", "kafka addrs")
 	var verbose = flag.Bool("verbose", false, "print info level logs to stdout")
 	var maxDescriptors = flag.Int("max-descriptors", 1000, "max open descriptors")
@@ -110,6 +111,7 @@ func main() {
 		GroupID:        consumerId,
 		CommitInterval: 1 * time.Second,
 		MaxWait:        1 * time.Second,
+		QueueCapacity:  *pqueuelen,
 	})
 	defer rd.Close()
 	cd := kafka.NewReader(kafka.ReaderConfig{
