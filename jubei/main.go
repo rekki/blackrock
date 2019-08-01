@@ -69,7 +69,7 @@ func consumeContext(r *kafka.Reader, dictionary *disk.PersistedDictionary, forwa
 		if err != nil {
 			return err
 		}
-		log.Infof("context message at topic/partition/offset %v/%v/%v: %v\n", m.Topic, m.Partition, m.Offset, envelope)
+		log.Warnf("context message at topic/partition/offset %v/%v/%v: %v\n", m.Topic, m.Partition, m.Offset, envelope)
 	}
 }
 
@@ -166,9 +166,8 @@ func main() {
 		log.Fatal(err)
 	}
 
-	sigs := make(chan os.Signal, 1)
+	sigs := make(chan os.Signal, 100)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
-
 	cleanup := func() {
 		// no need to close the files, as they are closed on exit
 		log.Warnf("closing the readers...")

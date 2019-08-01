@@ -89,7 +89,7 @@ func (r *ContextCache) Lookup(t uint64, id string, from int64) (*spec.PersistedC
 }
 
 func (r *ContextCache) Scan() error {
-	log.Printf("scanning from %d", r.offset)
+	log.Warnf("scanning from %d", r.offset)
 	n := 0
 	err := r.forward.Scan(r.offset, true, func(offset uint64, foreignId uint64, foreignType uint64, data []byte) error {
 		decoded := &spec.PersistedContext{}
@@ -103,7 +103,7 @@ func (r *ContextCache) Scan() error {
 		n++
 		return nil
 	})
-	log.Printf("scanning finished at %d, got %d new entries", r.offset, n)
+	log.Warnf("scanning finished at %d, got %d new entries", r.offset, n)
 	return err
 }
 
