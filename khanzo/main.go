@@ -90,6 +90,11 @@ func (r *ReloadableDictionary) Reload() {
 	r.dictionary = tmp
 }
 
+func yyyymmdd(t time.Time) string {
+	year, month, day := t.Date()
+	return fmt.Sprintf("%d-%02d-%02d", year, month, day)
+}
+
 func main() {
 	var proot = flag.String("root", "/blackrock/data-topic", "root directory for the files root/topic")
 	var basicAuth = flag.String("basic-auth", "", "basic auth user and password, leave empty for no auth [just for testing, better hide it behind nginx]")
@@ -252,64 +257,71 @@ func main() {
 	r.GET("/scan/:format/*query", func(c *gin.Context) {
 		sampleSize := intOrDefault(c.Query("sample_size"), 200)
 		maxDocuments := intOrDefault(c.Query("query_max_documents"), 100000)
-		scanSize := intOrDefault(c.Query("scan_size_mb"), 10)
 		counter := NewCounter(dictionary.Get(), contextCache, sampleSize)
 		var p spec.PersistedMetadata
 		queryPath := strings.Trim(c.Param("query"), "/")
 
-		if queryPath != "" {
-			and := strings.Replace(queryPath, "/", " AND ", -1)
-			andor := strings.Replace(and, "|", " OR ", -1)
-			query, err := fromString(andor, func(k, v string) Query {
-				return NewTermQuery(inverted, dictionary.Get(), int64(maxDocuments), k, strings.ToLower(v))
-			})
+		fromTime := time.Now().UTC().AddDate(0, 0, -7)
+		toTime := time.Now().UTC()
 
-			if err != nil {
-				c.JSON(400, gin.H{"error": err.Error()})
-				return
-			}
-			for query.Next() != NO_MORE {
-				did := query.GetDocId()
-				foreignId, foreignType, data, offset, err := forward.Read(uint64(did), true)
-				if err != nil {
-					c.JSON(400, gin.H{"error": err.Error()})
-					return
-				}
-
-				err = proto.Unmarshal(data, &p)
-				if err != nil {
-					c.JSON(400, gin.H{"error": err.Error()})
-					return
-				}
-				counter.Add(int64(offset), foreignId, foreignType, &p)
-			}
-		} else {
-			back := uint64(0)
-			size, err := forward.Size()
-			if err != nil {
-				c.JSON(400, gin.H{"error": err.Error()})
-				return
-			}
-
-			max := uint64(scanSize * 1024 * 1024)
-			if size > max {
-				back = size - uint64(max)
-			}
-
-			err = forward.Scan(back, true, func(offset uint64, foreignId, foreignType uint64, data []byte) error {
-				err := proto.Unmarshal(data, &p)
-				if err != nil {
-					return err
-				}
-				counter.Add(int64(offset), foreignId, foreignType, &p)
-				return nil
-			})
-
-			if err != nil {
-				c.JSON(400, gin.H{"error": err.Error()})
-				return
+		from := c.Query("from")
+		to := c.Query("to")
+		if (from == "" || to == "") && c.Param("format") != "text" {
+			c.Redirect(302, fmt.Sprintf("%s?from=%s&to=%s", c.Request.URL.Path, yyyymmdd(fromTime), yyyymmdd(toTime)))
+			return
+		}
+		if from != "" {
+			d, err := time.Parse("2006-01-02", from)
+			if err == nil {
+				fromTime = d
 			}
 		}
+
+		if to != "" {
+			d, err := time.Parse("2006-01-02", to)
+			if err == nil {
+				toTime = d
+			}
+		}
+
+		dateQuery := []string{}
+		start := fromTime.AddDate(0, 0, 0)
+		for {
+			dateQuery = append(dateQuery, fmt.Sprintf("year-month-day:%s", yyyymmdd(start)))
+			start = start.AddDate(0, 0, 1)
+			log.Printf("%v  end %v sub %v", start, toTime, start.Sub(toTime))
+			if start.Sub(toTime) > 0 {
+				break
+			}
+		}
+		queryPath += "/" + strings.Join(dateQuery, "|")
+
+		and := strings.Replace(queryPath, "/", " AND ", -1)
+		andor := strings.Replace(and, "|", " OR ", -1)
+		query, err := fromString(andor, func(k, v string) Query {
+			return NewTermQuery(inverted, dictionary.Get(), int64(maxDocuments), k, strings.ToLower(v))
+		})
+
+		if err != nil {
+			c.JSON(400, gin.H{"error": err.Error()})
+			return
+		}
+		for query.Next() != NO_MORE {
+			did := query.GetDocId()
+			foreignId, foreignType, data, offset, err := forward.Read(uint64(did), true)
+			if err != nil {
+				c.JSON(400, gin.H{"error": err.Error()})
+				return
+			}
+
+			err = proto.Unmarshal(data, &p)
+			if err != nil {
+				c.JSON(400, gin.H{"error": err.Error()})
+				return
+			}
+			counter.Add(int64(offset), foreignId, foreignType, &p)
+		}
+
 		Render(c, counter.Prettify())
 	})
 
@@ -457,6 +469,13 @@ func loadTemplate(contextCache *ContextCache, pd *ReloadableDictionary) (*templa
 			off := intOrDefault(v.Get(key), n)
 			return off
 		},
+		"getS": func(qs template.URL, key string) string {
+			v, err := url.ParseQuery(string(qs))
+			if err != nil {
+				return ""
+			}
+			return v.Get(key)
+		},
 		"removeQuery": func(base string, kv string) string {
 			base = strings.TrimPrefix(base, "/scan/html/")
 			out := []string{}
@@ -465,44 +484,6 @@ func loadTemplate(contextCache *ContextCache, pd *ReloadableDictionary) (*templa
 					out = append(out, termAnd)
 				}
 			}
-			return "/scan/html/" + strings.Join(out, "/")
-		},
-
-		"addOrQuery": func(base string, key, value string) string {
-			base = strings.TrimPrefix(base, "/scan/html/")
-			out := []string{}
-			found := false
-			kv := key + ":" + value
-			splittedAnd := strings.Split(base, "/")
-		AND:
-			for idx, termAnd := range splittedAnd {
-				or := []string{}
-				for _, termOr := range strings.Split(termAnd, "|") {
-					splitted := strings.SplitN(termOr, ":", 2)
-					if len(splitted) != 2 {
-						continue AND
-					}
-					tk := splitted[0]
-					or = append(or, termOr)
-					if tk == key {
-						if !found {
-							or = append(or, kv)
-						}
-						found = true
-					}
-				}
-				if idx == len(splittedAnd)-1 && !found {
-					or = append(or, kv)
-					found = true
-				}
-
-				out = append(out, strings.Join(or, "|"))
-			}
-
-			if !found {
-				out = append(out, kv)
-			}
-
 			return "/scan/html/" + strings.Join(out, "/")
 		},
 		"addN": func(qs template.URL, key string, n int) template.URL {

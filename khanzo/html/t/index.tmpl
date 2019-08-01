@@ -75,6 +75,12 @@
       <a href="{{ .Base }}/{{.Exact}}?{{$query}}">{{.Exact}}</a> <a href="/scan/html/{{.Exact}}?{{$query}}">=</a> <a href="{{ removeQuery .Base .Exact}}?{{$query}}">-</a>
       <br>
       {{ end }}
+      <form method=get action='?'>
+        <input type=hidden name='query_max_documents' value='{{getS $query "query_max_documents"}}'>
+        <input name="from" type=date value='{{getS $query "from"}}'>
+        <input name="to" type=date value='{{getS $query "to"}}'>
+        <input type=submit value=filter>
+      </form>
     </div>
     {{ $total := .Stats.TotalCount }}
 
