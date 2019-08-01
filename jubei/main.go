@@ -4,9 +4,11 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"os"
 	"os/signal"
+	"path"
 	"syscall"
 	"time"
 
@@ -77,7 +79,6 @@ func main() {
 	var contextTopic = flag.String("topic-context", "blackrock-context", "topic for the context")
 	var proot = flag.String("root", "/blackrock", "root directory for the files")
 	var pqueuelen = flag.Int("kafka-queue-capacity", 1000, "internal queue capacity")
-	var pconsumerId = flag.String("consumer-id", "jubei", "kafka consumer id")
 	var kafkaServers = flag.String("kafka", "localhost:9092,localhost:9092", "kafka addrs")
 	var verbose = flag.Bool("verbose", false, "print info level logs to stdout")
 	var maxDescriptors = flag.Int("max-descriptors", 1000, "max open descriptors")
@@ -102,7 +103,25 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	consumerId := *pconsumerId
+	cidb, err := ioutil.ReadFile(path.Join(root, "consumer_id"))
+	var consumerId string
+	if err != nil {
+		log.Warnf("error reading consumer id, generating new one, error: %s", err)
+		hostname, err := os.Hostname()
+		suffix := time.Now().UnixNano()
+		if err == nil {
+			consumerId = fmt.Sprintf("%s_%d", depths.Cleanup(hostname), suffix)
+		} else {
+
+			consumerId = fmt.Sprintf("__nohost__%d", suffix)
+		}
+		err = ioutil.WriteFile(path.Join(root, "consumer_id"), []byte(consumerId), 0600)
+		if err != nil {
+			log.Fatal(err)
+		}
+	} else {
+		consumerId = string(cidb)
+	}
 	log.Warnf("connecting as consumer '%s'", consumerId)
 	brokers := strings.Split(*kafkaServers, ",")
 	rd := kafka.NewReader(kafka.ReaderConfig{
