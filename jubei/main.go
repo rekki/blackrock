@@ -1,7 +1,7 @@
 package main
 
 import (
-	"errors"
+	"context"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -13,62 +13,63 @@ import (
 	"time"
 
 	_ "net/http/pprof"
+	"strings"
 
 	"github.com/gogo/protobuf/proto"
 	"github.com/jackdoe/blackrock/depths"
 	"github.com/jackdoe/blackrock/jubei/consume"
 	"github.com/jackdoe/blackrock/jubei/disk"
 	"github.com/jackdoe/blackrock/orgrim/spec"
+	"github.com/segmentio/kafka-go"
 	log "github.com/sirupsen/logrus"
-	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
 )
 
-func consumeEvents(dataTopic string, close chan bool, r *kafka.Consumer, dictionary *disk.PersistedDictionary, forward *disk.ForwardWriter, forwardContext *disk.ForwardWriter, payload *disk.ForwardWriter, inverted *disk.InvertedWriter) error {
+func consumeEvents(r *kafka.Reader, dictionary *disk.PersistedDictionary, forward *disk.ForwardWriter, payload *disk.ForwardWriter, inverted *disk.InvertedWriter) error {
 	log.Warnf("waiting... ")
+	ctx := context.Background()
 	for {
-		select {
-		case <-close:
-			r.Close()
-			return errors.New("closing")
-		default:
-			m, err := r.ReadMessage(1 * time.Second)
-			if err != nil && err.(kafka.Error).Code() == kafka.ErrTimedOut {
-				continue
-			}
-
-			if err != nil {
-				r.Close()
-				return err
-			}
-			if *m.TopicPartition.Topic == dataTopic {
-				envelope := spec.Envelope{}
-				err = proto.Unmarshal(m.Value, &envelope)
-				if err != nil {
-					log.Warnf("failed to unmarshal, data: %s, error: %s", string(m.Value), err.Error())
-					continue
-				}
-
-				err = consume.ConsumeEvents(uint32(m.TopicPartition.Partition), uint64(m.TopicPartition.Offset), &envelope, dictionary, forward, payload, inverted)
-				if err != nil {
-					r.Close()
-					return err
-				}
-			} else {
-				envelope := spec.Context{}
-				err = proto.Unmarshal(m.Value, &envelope)
-				if err != nil {
-					log.Warnf("context failed to unmarshal, data: %s, error: %s", string(m.Value), err.Error())
-					continue
-				}
-
-				err = consume.ConsumeContext(&envelope, dictionary, forwardContext)
-				if err != nil {
-					r.Close()
-					return err
-				}
-			}
-			log.Infof("message at %v\n", m.TopicPartition)
+		m, err := r.ReadMessage(ctx)
+		if err != nil {
+			return err
 		}
+
+		envelope := spec.Envelope{}
+		err = proto.Unmarshal(m.Value, &envelope)
+		if err != nil {
+			log.Warnf("failed to unmarshal, data: %s, error: %s", string(m.Value), err.Error())
+			continue
+		}
+
+		err = consume.ConsumeEvents(uint32(m.Partition), uint64(m.Offset), &envelope, dictionary, forward, payload, inverted)
+		if err != nil {
+			return err
+		}
+
+		log.Infof("message at topic/partition/offset %v/%v/%v: %v\n", m.Topic, m.Partition, m.Offset, envelope.Metadata)
+	}
+}
+
+func consumeContext(r *kafka.Reader, dictionary *disk.PersistedDictionary, forward *disk.ForwardWriter) error {
+	log.Warnf("context waiting...")
+	ctx := context.Background()
+	for {
+		m, err := r.ReadMessage(ctx)
+		if err != nil {
+			return err
+		}
+
+		envelope := spec.Context{}
+		err = proto.Unmarshal(m.Value, &envelope)
+		if err != nil {
+			log.Warnf("context failed to unmarshal, data: %s, error: %s", string(m.Value), err.Error())
+			continue
+		}
+
+		err = consume.ConsumeContext(&envelope, dictionary, forward)
+		if err != nil {
+			return err
+		}
+		log.Infof("context message at topic/partition/offset %v/%v/%v: %v\n", m.Topic, m.Partition, m.Offset, envelope)
 	}
 }
 
@@ -121,21 +122,24 @@ func main() {
 		consumerId = string(cidb)
 	}
 
-	rd, err := kafka.NewConsumer(&kafka.ConfigMap{
-		"bootstrap.servers": *kafkaServers,
-		"group.id":          consumerId,
-		"auto.offset.reset": "earliest",
-	})
-
-	if err != nil {
-		log.Fatal(err)
-	}
-	err = rd.SubscribeTopics([]string{*dataTopic, *contextTopic}, nil)
-	if err != nil {
-		log.Fatal(err)
-	}
-
 	log.Warnf("connecting as consumer %s", consumerId)
+	brokers := strings.Split(*kafkaServers, ",")
+	rd := kafka.NewReader(kafka.ReaderConfig{
+		Brokers:        brokers,
+		Topic:          *dataTopic,
+		GroupID:        consumerId,
+		CommitInterval: 1 * time.Second,
+		MaxWait:        1 * time.Second,
+	})
+	defer rd.Close()
+	cd := kafka.NewReader(kafka.ReaderConfig{
+		Brokers:        brokers,
+		Topic:          *contextTopic,
+		GroupID:        consumerId,
+		CommitInterval: 1 * time.Second,
+		MaxWait:        1 * time.Second,
+	})
+	defer cd.Close()
 
 	forward, err := disk.NewForwardWriter(root, "main")
 	if err != nil {
@@ -164,23 +168,37 @@ func main() {
 
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
-	closeRD := make(chan bool, 1)
+
 	cleanup := func() {
 		// no need to close the files, as they are closed on exit
 		log.Warnf("closing the readers...")
-		closeRD <- true
+		rd.Close()
+		cd.Close()
+		log.Warnf("closing the files...")
+		inverted.Close()
+		dictionary.Close()
+		forward.Close()
+		os.Exit(0)
 	}
 
 	go func() {
 		<-sigs
+
 		cleanup()
 	}()
 
-	err = consumeEvents(*dataTopic, closeRD, rd, dictionary, forward, forwardContext, payload, inverted)
-	log.Warnf("error consuming: %s", err.Error())
-	log.Warnf("closing the files...")
-	inverted.Close()
-	dictionary.Close()
-	forward.Close()
+	go func() {
+		err := consumeEvents(rd, dictionary, forward, payload, inverted)
+		log.Warnf("error consuming events: %s", err.Error())
+		sigs <- syscall.SIGTERM
+	}()
+	go func() {
+		err = consumeContext(cd, dictionary, forwardContext)
+		log.Warnf("error consuming context: %s", err.Error())
+		sigs <- syscall.SIGTERM
+	}()
 
+	for {
+		time.Sleep(1 * time.Minute)
+	}
 }

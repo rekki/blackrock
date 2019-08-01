@@ -1,5 +1,5 @@
 FROM golang:alpine
 
-RUN apk update && apk add bash git librdkafka-dev pkgconf
+RUN apk update && apk add bash git
 
 
