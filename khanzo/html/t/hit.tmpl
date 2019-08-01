@@ -4,7 +4,6 @@
 {{ $m := $hit.Metadata }}
 {{ $foreignId := $hit.ForeignId }}
 {{ $foreignType := $hit.ForeignType }}
-{{ if has $qs "expand=true" }}
 <tr>
   <td colspan=2>
     <a href="/scan/html/event_type:{{ $m.EventType }}?{{$qs}}">{{$m.EventType }}</a><br>
@@ -70,15 +69,3 @@
 <tr>
 <td colspan=2 class="hit-sep">&nbsp;</td>
 </tr>
-
-{{ else }}
-<tr>
-  <td colspan=2>
-    <a href="/scan/html/event_type:{{ $m.EventType }}?{{$qs}}">{{$m.EventType }}</a><br>
-    <a href="/scan/html/{{$hit.ForeignType}}:{{ $hit.ForeignId }}?{{$qs}}">{{$hit.ForeignType}}:{{$hit.ForeignId}}</a><br>
-    {{ time $m.CreatedAtNs }}
-    <hr>
-  </td>
-</tr>
-
-{{ end }}

@@ -128,8 +128,9 @@ func main() {
 		Brokers:        brokers,
 		Topic:          *dataTopic,
 		GroupID:        consumerId,
-		CommitInterval: 1 * time.Second,
-		MaxWait:        1 * time.Second,
+		CommitInterval: 10 * time.Second,
+		MaxWait:        10 * time.Second,
+		MinBytes:       100 * 1024 * 1024, // 100mb
 	})
 	defer rd.Close()
 	cd := kafka.NewReader(kafka.ReaderConfig{

@@ -144,7 +144,7 @@ type Breadcrumb struct {
 }
 
 func (cr *CountedResult) HTML(c *gin.Context) {
-	url := strings.TrimRight(c.Request.URL.Path, "/")
+	url := c.Request.URL.Path
 	splitted := strings.Split(url, "/")
 	crumbs := []Breadcrumb{}
 	for i := 0; i < len(splitted[3:]); i++ {

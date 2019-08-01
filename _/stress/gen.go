@@ -229,6 +229,13 @@ func genEvent(users []*spec.Context, books []*spec.Context) *spec.Envelope {
 		book := books[rand.Intn(len(books))]
 		search = append(search, &spec.KV{Key: "book_id", Value: book.ForeignId})
 	}
+	if rand.Intn(3) == 1 {
+		search = append(search, &spec.KV{Key: "env", Value: "staging"})
+	} else {
+		search = append(search, &spec.KV{Key: "env", Value: "live"})
+	}
+
+	search = append(search, &spec.KV{Key: "product", Value: "amazon.com"})
 
 	ua := UA[rand.Intn(len(UA))]
 	m := &spec.Metadata{

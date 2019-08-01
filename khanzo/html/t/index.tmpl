@@ -21,7 +21,6 @@
       font-size: 14px;
       margin: auto;
       }
- 
       .trigger input[type=checkbox] + span {
       visibility: hidden;
       display: none;
@@ -36,7 +35,6 @@
 
       .msg {
       display: block;
-
       }
 
       pre {
@@ -74,13 +72,18 @@
       <br>
       <a href="/scan/html/?{{$query}}">/scan/html/</a><br>
       {{ range .Crumbs }}
-      <a href="{{ .Base }}/{{.Exact}}?{{$query}}">{{.Exact}}</a> <a href="/scan/html/{{.Exact}}?{{$query}}">=</a>
+      <a href="{{ .Base }}/{{.Exact}}?{{$query}}">{{.Exact}}</a> <a href="/scan/html/{{.Exact}}?{{$query}}">=</a> <a href="{{ removeQuery .Base .Exact}}?{{$query}}">-</a>
       <br>
       {{ end }}
     </div>
     {{ $total := .Stats.TotalCount }}
 
     <table border=0>
+      <tr><td colspan=2><pre class="banner">{{ banner "basic"}}</pre></td></tr>
+      {{ range pick .Stats.Search "env" "product" "year-month" }}
+      {{ template "/html/t/chart.tmpl" dict "Data" . "GlobalTotal" $total "BaseUrl" $base "Link" true "QueryString" $query}}
+      {{ end }}
+
       <tr><td colspan=2><pre class="banner">{{ banner "foreign id"}}</pre></td></tr>
       {{ range .Stats.Foreign }}
       {{ template "/html/t/chart.tmpl" dict "Data" . "GlobalTotal" $total "BaseUrl" $base "Link" true "QueryString" $query}}
@@ -96,15 +99,6 @@
       {{ template "/html/t/chart.tmpl" dict "Data" . "GlobalTotal" $total  "BaseUrl" $base "Link" false "QueryString" $query}}
       {{ end }}
       <tr><td colspan=2><pre id="sample" class="banner">{{ banner "sample"}}</pre></td></tr>
-      <tr><td colspan=2>
-          {{ if has $query "expand=true" }}
-          <a href="{{$base}}?{{remove $query "expand=true"}}#sample">collapse samples</a>
-          {{ else }}
-          <a href="{{$base}}?{{add $query "expand=true"}}#sample">expand samples</a>
-          {{ end }}
-          <hr>
-
-      </td></tr>
       {{ range .Stats.Sample }}
       {{ template "/html/t/hit.tmpl" dict "Data" . "QueryString" $query "BaseUrl" $base }}
       {{ end  }}

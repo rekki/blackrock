@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	_ "net/http/pprof"
+	"net/url"
 	"os"
 	"reflect"
 	"runtime"
@@ -257,7 +258,9 @@ func main() {
 		queryPath := strings.Trim(c.Param("query"), "/")
 
 		if queryPath != "" {
-			query, err := fromString(strings.Replace(queryPath, "/", " AND ", -1), func(k, v string) Query {
+			and := strings.Replace(queryPath, "/", " AND ", -1)
+			andor := strings.Replace(and, "|", " OR ", -1)
+			query, err := fromString(andor, func(k, v string) Query {
 				return NewTermQuery(inverted, dictionary.Get(), int64(maxDocuments), k, strings.ToLower(v))
 			})
 
@@ -436,21 +439,6 @@ func loadTemplate(contextCache *ContextCache, pd *ReloadableDictionary) (*templa
 		"pretty": func(b interface{}) string {
 			return depths.DumpObj(b)
 		},
-		"add": func(b template.URL, a string) template.URL {
-			if string(b) == "" {
-				return template.URL(a)
-			}
-
-			return template.URL(string(b) + "&" + a)
-		},
-		"remove": func(b template.URL, a string) template.URL {
-			x := strings.Replace(string(b), "&"+a, "", -1)
-			x = strings.Replace(x, a, "", -1)
-			return template.URL(x)
-		},
-		"has": func(b template.URL, a string) bool {
-			return strings.Contains(string(b), a)
-		},
 		"format": func(value int64) string {
 			return fmt.Sprintf("%8s", chart.Fit(float64(value)))
 		},
@@ -459,6 +447,97 @@ func loadTemplate(contextCache *ContextCache, pd *ReloadableDictionary) (*templa
 		},
 		"ctx": func(key, value string) []*spec.Context {
 			return LoadContextForStat(contextCache, pd.Get(), key, value, time.Now().UnixNano())
+		},
+		"getN": func(qs template.URL, key string, n int) int {
+			v, err := url.ParseQuery(string(qs))
+			if err != nil {
+				return n
+			}
+
+			off := intOrDefault(v.Get(key), n)
+			return off
+		},
+		"removeQuery": func(base string, kv string) string {
+			base = strings.TrimPrefix(base, "/scan/html/")
+			out := []string{}
+			for _, termAnd := range strings.Split(base, "/") {
+				if termAnd != kv {
+					out = append(out, termAnd)
+				}
+			}
+			return "/scan/html/" + strings.Join(out, "/")
+		},
+
+		"addOrQuery": func(base string, key, value string) string {
+			base = strings.TrimPrefix(base, "/scan/html/")
+			out := []string{}
+			found := false
+			kv := key + ":" + value
+			splittedAnd := strings.Split(base, "/")
+		AND:
+			for idx, termAnd := range splittedAnd {
+				or := []string{}
+				for _, termOr := range strings.Split(termAnd, "|") {
+					splitted := strings.SplitN(termOr, ":", 2)
+					if len(splitted) != 2 {
+						continue AND
+					}
+					tk := splitted[0]
+					or = append(or, termOr)
+					if tk == key {
+						if !found {
+							or = append(or, kv)
+						}
+						found = true
+					}
+				}
+				if idx == len(splittedAnd)-1 && !found {
+					or = append(or, kv)
+					found = true
+				}
+
+				out = append(out, strings.Join(or, "|"))
+			}
+
+			if !found {
+				out = append(out, kv)
+			}
+
+			return "/scan/html/" + strings.Join(out, "/")
+		},
+		"addN": func(qs template.URL, key string, n int) template.URL {
+			v, err := url.ParseQuery(string(qs))
+			if err != nil {
+				return template.URL("")
+			}
+
+			off := intOrDefault(v.Get(key), 0)
+			off += n
+			v.Set(key, fmt.Sprintf("%d", off))
+			return template.URL(v.Encode())
+		},
+		"pick": func(from []*PerKey, which ...string) []*PerKey {
+			out := []*PerKey{}
+			for _, v := range from {
+			WHICH:
+				for _, k := range which {
+					if v.Key == k {
+						out = append(out, v)
+						break WHICH
+					}
+				}
+			}
+			return out
+		},
+		"findFirstNameOrDefault": func(ctx []*spec.Context, def string) string {
+			for _, c := range ctx {
+				for _, p := range c.Properties {
+					if p.Key == "name" {
+						return p.Value
+					}
+				}
+			}
+			return def
 		},
 		"minus": func(a, b int) int {
 			return a - b
