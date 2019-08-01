@@ -15,6 +15,7 @@ import (
 	"github.com/jackdoe/blackrock/depths"
 	"github.com/jackdoe/blackrock/orgrim/spec"
 	"github.com/segmentio/kafka-go"
+	"github.com/segmentio/kafka-go/snappy"
 	log "github.com/sirupsen/logrus"
 
 	"strings"
@@ -74,20 +75,22 @@ func main() {
 
 	brokers := strings.Split(*kafkaServers, ",")
 	kw := kafka.NewWriter(kafka.WriterConfig{
-		Brokers:      brokers,
-		Topic:        *dataTopic,
-		Balancer:     &kafka.LeastBytes{},
-		BatchTimeout: 1 * time.Second,
-		Async:        true,
+		Brokers:          brokers,
+		Topic:            *dataTopic,
+		Balancer:         &kafka.LeastBytes{},
+		BatchTimeout:     1 * time.Second,
+		CompressionCodec: snappy.NewCompressionCodec(),
+		Async:            true,
 	})
 	defer kw.Close()
 
 	cw := kafka.NewWriter(kafka.WriterConfig{
-		Brokers:      brokers,
-		Topic:        *contextTopic,
-		Balancer:     &kafka.LeastBytes{},
-		BatchTimeout: 1 * time.Second,
-		Async:        true,
+		Brokers:          brokers,
+		Topic:            *contextTopic,
+		Balancer:         &kafka.LeastBytes{},
+		BatchTimeout:     1 * time.Second,
+		CompressionCodec: snappy.NewCompressionCodec(),
+		Async:            true,
 	})
 	defer cw.Close()
 

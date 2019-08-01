@@ -4,11 +4,9 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"os/signal"
-	"path"
 	"syscall"
 	"time"
 
@@ -21,6 +19,7 @@ import (
 	"github.com/jackdoe/blackrock/jubei/disk"
 	"github.com/jackdoe/blackrock/orgrim/spec"
 	"github.com/segmentio/kafka-go"
+	_ "github.com/segmentio/kafka-go/snappy"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -69,7 +68,7 @@ func consumeContext(r *kafka.Reader, dictionary *disk.PersistedDictionary, forwa
 		if err != nil {
 			return err
 		}
-		log.Warnf("context message at topic/partition/offset %v/%v/%v: %v\n", m.Topic, m.Partition, m.Offset, envelope)
+		log.Infof("context message at topic/partition/offset %v/%v/%v: %v\n", m.Topic, m.Partition, m.Offset, envelope)
 	}
 }
 
@@ -77,6 +76,7 @@ func main() {
 	var dataTopic = flag.String("topic-data", "blackrock-data", "topic for the data")
 	var contextTopic = flag.String("topic-context", "blackrock-context", "topic for the context")
 	var proot = flag.String("root", "/blackrock", "root directory for the files")
+	var pconsumerId = flag.String("consumer-id", "", "kafka consumer id")
 	var kafkaServers = flag.String("kafka", "localhost:9092,localhost:9092", "kafka addrs")
 	var verbose = flag.Bool("verbose", false, "print info level logs to stdout")
 	var maxDescriptors = flag.Int("max-descriptors", 1000, "max open descriptors")
@@ -101,28 +101,8 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-
-	cidb, err := ioutil.ReadFile(path.Join(root, "consumer_id"))
-	var consumerId string
-	if err != nil {
-		log.Warnf("error reading consumer id, generating new one, error: %s", err)
-		hostname, err := os.Hostname()
-		suffix := time.Now().UnixNano()
-		if err == nil {
-			consumerId = fmt.Sprintf("%s_%d", depths.Cleanup(hostname), suffix)
-		} else {
-
-			consumerId = fmt.Sprintf("__nohost__%d", suffix)
-		}
-		err = ioutil.WriteFile(path.Join(root, "consumer_id"), []byte(consumerId), 0600)
-		if err != nil {
-			log.Fatal(err)
-		}
-	} else {
-		consumerId = string(cidb)
-	}
-
-	log.Warnf("connecting as consumer %s", consumerId)
+	consumerId := *pconsumerId
+	log.Warnf("connecting as consumer '%s'", consumerId)
 	brokers := strings.Split(*kafkaServers, ",")
 	rd := kafka.NewReader(kafka.ReaderConfig{
 		Brokers:        brokers,
@@ -173,10 +153,6 @@ func main() {
 		log.Warnf("closing the readers...")
 		rd.Close()
 		cd.Close()
-		log.Warnf("closing the files...")
-		inverted.Close()
-		dictionary.Close()
-		forward.Close()
 		os.Exit(0)
 	}
 
@@ -198,6 +174,12 @@ func main() {
 	}()
 
 	for {
+		s := rd.Stats()
+		fmt.Printf("%s\n", depths.DumpObj(s))
+
+		s = cd.Stats()
+		fmt.Printf("%s\n", depths.DumpObj(s))
+
 		time.Sleep(1 * time.Minute)
 	}
 }
