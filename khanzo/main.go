@@ -106,7 +106,7 @@ type Cached struct {
 func main() {
 	var proot = flag.String("root", "/blackrock/data-topic", "root directory for the files root/topic")
 	var basicAuth = flag.String("basic-auth", "", "basic auth user and password, leave empty for no auth [just for testing, better hide it behind nginx]")
-	var lruSize = flag.Int("lru-size", 10000000, "lru cache size for the forward index")
+	var lruSize = flag.Int("lru-size", 100000, "lru cache size for the forward index")
 	var verbose = flag.Bool("verbose", false, "print info level logs to stdout")
 	var accept = flag.Bool("not-production-accept-events", false, "also accept events, super simple, so people can test in their laptops without zookeeper, kafka, orgrim, blackhand and jubei setup..")
 	var bind = flag.String("bind", ":9002", "bind to")
@@ -274,7 +274,7 @@ func main() {
 
 		queryPath := strings.Trim(c.Param("query"), "/")
 
-		fromTime := time.Now().UTC().AddDate(0, 0, -7)
+		fromTime := time.Now().UTC().AddDate(0, 0, -1)
 		toTime := time.Now().UTC()
 
 		from := c.Query("from")
