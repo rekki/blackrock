@@ -86,7 +86,7 @@
 
     <table border=0>
       <tr><td colspan=2><pre class="banner">{{ banner "basic"}}</pre></td></tr>
-      {{ range pick .Stats.Search "env" "product" "year-month" }}
+      {{ range pick .Stats.Search "env" "product" "year-month-day" }}
       {{ template "/html/t/chart.tmpl" dict "Data" . "GlobalTotal" $total "BaseUrl" $base "Link" true "QueryString" $query}}
       {{ end }}
 

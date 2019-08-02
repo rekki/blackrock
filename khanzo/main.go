@@ -20,6 +20,7 @@ import (
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/gogo/protobuf/proto"
+	lru "github.com/hashicorp/golang-lru"
 	"github.com/jackdoe/blackrock/depths"
 	"github.com/jackdoe/blackrock/jubei/consume"
 	"github.com/jackdoe/blackrock/jubei/disk"
@@ -95,9 +96,17 @@ func yyyymmdd(t time.Time) string {
 	return fmt.Sprintf("%d-%02d-%02d", year, month, day)
 }
 
+type Cached struct {
+	foreignId   uint64
+	foreignType uint64
+	data        spec.PersistedMetadata
+	offset      uint64
+}
+
 func main() {
 	var proot = flag.String("root", "/blackrock/data-topic", "root directory for the files root/topic")
 	var basicAuth = flag.String("basic-auth", "", "basic auth user and password, leave empty for no auth [just for testing, better hide it behind nginx]")
+	var lruSize = flag.Int("lru-size", 10000000, "lru cache size for the forward index")
 	var verbose = flag.Bool("verbose", false, "print info level logs to stdout")
 	var accept = flag.Bool("not-production-accept-events", false, "also accept events, super simple, so people can test in their laptops without zookeeper, kafka, orgrim, blackhand and jubei setup..")
 	var bind = flag.String("bind", ":9002", "bind to")
@@ -132,13 +141,17 @@ func main() {
 		gin.SetMode(gin.ReleaseMode)
 		log.SetLevel(log.WarnLevel)
 	}
+	cache, err := lru.NewARC(*lruSize)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	go func() {
 		for {
 			dictionary.Reload()
 			contextCache.Scan()
 			runtime.GC()
-
+			log.Warnf("lru cache size: %d", cache.Len())
 			time.Sleep(1 * time.Minute)
 		}
 	}()
@@ -258,7 +271,7 @@ func main() {
 		sampleSize := intOrDefault(c.Query("sample_size"), 200)
 		maxDocuments := intOrDefault(c.Query("query_max_documents"), 100000)
 		counter := NewCounter(dictionary.Get(), contextCache, sampleSize)
-		var p spec.PersistedMetadata
+
 		queryPath := strings.Trim(c.Param("query"), "/")
 
 		fromTime := time.Now().UTC().AddDate(0, 0, -7)
@@ -306,20 +319,32 @@ func main() {
 			c.JSON(400, gin.H{"error": err.Error()})
 			return
 		}
+
 		for query.Next() != NO_MORE {
 			did := query.GetDocId()
-			foreignId, foreignType, data, offset, err := forward.Read(uint64(did), true)
-			if err != nil {
-				c.JSON(400, gin.H{"error": err.Error()})
-				return
+			cached, ok := cache.Get(did)
+			if !ok {
+				foreignId, foreignType, data, offset, err := forward.Read(uint64(did), true)
+				if err != nil {
+					c.JSON(400, gin.H{"error": err.Error()})
+					return
+				}
+				var p spec.PersistedMetadata
+				err = proto.Unmarshal(data, &p)
+				if err != nil {
+					c.JSON(400, gin.H{"error": err.Error()})
+					return
+				}
+				cached = Cached{
+					offset:      offset,
+					foreignId:   foreignId,
+					foreignType: foreignType,
+					data:        p,
+				}
+				cache.Add(did, cached)
 			}
-
-			err = proto.Unmarshal(data, &p)
-			if err != nil {
-				c.JSON(400, gin.H{"error": err.Error()})
-				return
-			}
-			counter.Add(int64(offset), foreignId, foreignType, &p)
+			cx := cached.(Cached)
+			counter.Add(int64(cx.offset), cx.foreignId, cx.foreignType, &cx.data)
 		}
 
 		Render(c, counter.Prettify())
