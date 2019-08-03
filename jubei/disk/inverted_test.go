@@ -72,4 +72,12 @@ func TestInverted(t *testing.T) {
 			t.Fatalf("mismatch got %v expected %v", data, v.data)
 		}
 	}
+
+	segment, err := ReadAllTermsInField(dir, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(segment) != 2 {
+		t.Fatalf("expected 2 got %d", len(segment))
+	}
 }

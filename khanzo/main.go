@@ -279,7 +279,7 @@ func main() {
 
 		from := c.Query("from")
 		to := c.Query("to")
-		if (from == "" || to == "") && c.Param("format") != "text" {
+		if (from == "" || to == "") && c.Param("format") == "html" {
 			c.Redirect(302, fmt.Sprintf("%s?from=%s&to=%s", c.Request.URL.Path, yyyymmdd(fromTime), yyyymmdd(toTime)))
 			return
 		}
