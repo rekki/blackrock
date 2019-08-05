@@ -430,7 +430,7 @@ func main() {
 	log.Panic(r.Run(*bind))
 }
 
-func dice(exp string, id string, variants uint32) uint32 {
+func dice(id, exp string, variants uint32) uint32 {
 	b := make([]byte, len(exp)+1+len(id))
 	copy(b[0:], []byte(id))
 	b[len(id)] = byte('/')
