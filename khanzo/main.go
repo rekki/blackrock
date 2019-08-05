@@ -28,6 +28,7 @@ import (
 	"github.com/jackdoe/blackrock/orgrim/spec"
 	auth "github.com/jackdoe/gin-basic-auth-dynamic"
 	log "github.com/sirupsen/logrus"
+	"github.com/spaolacci/murmur3"
 )
 
 type Renderable interface {
@@ -94,6 +95,33 @@ func (r *ReloadableDictionary) Reload() {
 func yyyymmdd(t time.Time) string {
 	year, month, day := t.Date()
 	return fmt.Sprintf("%d-%02d-%02d", year, month, day)
+}
+func expandYYYYMMDD(from string, to string) []string {
+	fromTime := time.Now().UTC().AddDate(0, 0, -3)
+	toTime := time.Now().UTC()
+
+	if from != "" {
+		d, err := time.Parse("2006-01-02", from)
+		if err == nil {
+			fromTime = d
+		}
+	}
+	if to != "" {
+		d, err := time.Parse("2006-01-02", to)
+		if err == nil {
+			toTime = d
+		}
+	}
+	dateQuery := []string{}
+	start := fromTime.AddDate(0, 0, 0)
+	for {
+		dateQuery = append(dateQuery, fmt.Sprintf("year-month-day:%s", yyyymmdd(start)))
+		start = start.AddDate(0, 0, 1)
+		if start.Sub(toTime) > 0 {
+			break
+		}
+	}
+	return dateQuery
 }
 
 type Cached struct {
@@ -272,43 +300,16 @@ func main() {
 		maxDocuments := intOrDefault(c.Query("query_max_documents"), 100000)
 		counter := NewCounter(dictionary.Get(), contextCache, sampleSize)
 
-		queryPath := strings.Trim(c.Param("query"), "/")
-
-		fromTime := time.Now().UTC().AddDate(0, 0, -1)
-		toTime := time.Now().UTC()
-
 		from := c.Query("from")
 		to := c.Query("to")
 		if (from == "" || to == "") && c.Param("format") == "html" {
-			c.Redirect(302, fmt.Sprintf("%s?from=%s&to=%s", c.Request.URL.Path, yyyymmdd(fromTime), yyyymmdd(toTime)))
+			c.Redirect(302, fmt.Sprintf("%s?from=%s&to=%s", c.Request.URL.Path, yyyymmdd(time.Now().UTC().AddDate(0, 0, -1)), yyyymmdd(time.Now().UTC())))
 			return
 		}
-		if from != "" {
-			d, err := time.Parse("2006-01-02", from)
-			if err == nil {
-				fromTime = d
-			}
-		}
-
-		if to != "" {
-			d, err := time.Parse("2006-01-02", to)
-			if err == nil {
-				toTime = d
-			}
-		}
-
-		dateQuery := []string{}
-		start := fromTime.AddDate(0, 0, 0)
-		for {
-			dateQuery = append(dateQuery, fmt.Sprintf("year-month-day:%s", yyyymmdd(start)))
-			start = start.AddDate(0, 0, 1)
-			log.Printf("%v  end %v sub %v", start, toTime, start.Sub(toTime))
-			if start.Sub(toTime) > 0 {
-				break
-			}
-		}
+		// FIXME: this needs major cleanup
+		queryPath := strings.Trim(c.Param("query"), "/")
+		dateQuery := expandYYYYMMDD(from, to)
 		queryPath += "/" + strings.Join(dateQuery, "|")
-
 		and := strings.Replace(queryPath, "/", " AND ", -1)
 		andor := strings.Replace(and, "|", " OR ", -1)
 		query, err := fromString(andor, func(k, v string) Query {
@@ -350,11 +351,92 @@ func main() {
 		Render(c, counter.Prettify())
 	})
 
+	r.GET("/exp/csv/*query", func(c *gin.Context) {
+		maxDocuments := intOrDefault(c.Query("query_max_documents"), -1)
+		exp := c.Query("exp")
+		from := c.Query("from")
+		to := c.Query("to")
+		types := c.Query("types")
+		filter := map[uint64]bool{}
+		for _, f := range strings.Split(types, ",") {
+			if f != "" {
+				v, _ := dictionary.dictionary.Resolve(f)
+				filter[v] = true
+			}
+		}
+
+		onlyForeignType, _ := dictionary.dictionary.Resolve(c.Query("foreign_type"))
+
+		variants := uint32(intOrDefault(c.Query("variants"), 2))
+		if exp == "" {
+			c.JSON(400, gin.H{"error": "need exp"})
+			return
+		}
+
+		// FIXME: this needs major cleanup
+		queryPath := strings.Trim(c.Param("query"), "/")
+		dateQuery := expandYYYYMMDD(from, to)
+		queryPath += "/" + strings.Join(dateQuery, "|")
+		and := strings.Replace(queryPath, "/", " AND ", -1)
+		andor := strings.Replace(and, "|", " OR ", -1)
+		query, err := fromString(andor, func(k, v string) Query {
+			return NewTermQuery(inverted, dictionary.Get(), int64(maxDocuments), k, strings.ToLower(v))
+		})
+
+		if err != nil {
+			c.JSON(400, gin.H{"error": err.Error()})
+			return
+		}
+
+		for query.Next() != NO_MORE {
+			did := query.GetDocId()
+			cached, ok := cache.Get(did)
+			if !ok {
+				// XXX: dont cache or use another cache?
+				foreignId, foreignType, data, offset, err := forward.Read(uint64(did), true)
+				if err != nil {
+					c.JSON(400, gin.H{"error": err.Error()})
+					return
+				}
+				var p spec.PersistedMetadata
+				err = proto.Unmarshal(data, &p)
+				if err != nil {
+					c.JSON(400, gin.H{"error": err.Error()})
+					return
+				}
+				cached = Cached{
+					offset:      offset,
+					foreignId:   foreignId,
+					foreignType: foreignType,
+					data:        p,
+				}
+
+				cache.Add(did, cached)
+			}
+			cx := cached.(Cached)
+			if cx.foreignType == onlyForeignType {
+				if len(filter) == 0 || filter[cx.data.EventType] {
+					variant := dice(cx.data.ForeignId, exp, variants)
+					c.Writer.Write([]byte(fmt.Sprintf("%d,%s,%s,%d\n", cx.data.CreatedAtNs/1000000000, dictionary.dictionary.ReverseResolve(cx.data.EventType), cx.data.ForeignId, variant)))
+				}
+			}
+		}
+	})
+
 	if *accept {
 		setupSimpleEventAccept(root, r)
 	}
 
 	log.Panic(r.Run(*bind))
+}
+
+func dice(exp string, id string, variants uint32) uint32 {
+	b := make([]byte, len(exp)+1+len(id))
+	copy(b[0:], []byte(id))
+	b[len(id)] = byte('/')
+	copy(b[len(id)+1:], []byte(exp))
+	// XXX: config the seed
+	return murmur3.Sum32WithSeed(b, 0) % variants
 }
 
 func setupSimpleEventAccept(root string, r *gin.Engine) {
