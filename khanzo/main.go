@@ -414,7 +414,9 @@ func main() {
 				}
 			}
 			if variant >= 0 {
-				c.Writer.Write([]byte(fmt.Sprintf("%d,%s,%s,%s,%d\n", cx.data.CreatedAtNs/1000000000, dictionary.dictionary.ReverseResolve(cx.data.EventType), cx.data.ForeignId, value, variant)))
+				epoch := cx.data.CreatedAtNs / 1000000000
+				row := fmt.Sprintf("%d,%s,%s,%s,%d\n", epoch, dictionary.dictionary.ReverseResolve(cx.data.EventType), cx.data.ForeignId, value, variant)
+				c.Writer.Write([]byte(row))
 			}
 		}
 	})
