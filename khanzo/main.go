@@ -393,26 +393,28 @@ func main() {
 			}
 			cx := cached.(Cached)
 			variant := -1
+			value := ""
 			if cx.data.ForeignType == onlyKey {
 				variant = int(dice(cx.data.ForeignId, qr.Exp, variants))
+				value = cx.data.ForeignId
 			} else {
 				for i, t := range cx.data.SearchKeys {
 					if t == onlyKey {
+						value = cx.data.SearchValues[i]
 						if hasCohort {
-							v, ok := qr.Cohort[cx.data.SearchValues[i]]
+							v, ok := qr.Cohort[value]
 							if ok {
 								variant = v
-								break
 							}
 						} else {
-							variant = int(dice(cx.data.SearchValues[i], qr.Exp, variants))
+							variant = int(dice(value, qr.Exp, variants))
 						}
 						break
 					}
 				}
 			}
 			if variant >= 0 {
-				c.Writer.Write([]byte(fmt.Sprintf("%d,%s,%s,%d\n", cx.data.CreatedAtNs/1000000000, dictionary.dictionary.ReverseResolve(cx.data.EventType), cx.data.ForeignId, variant)))
+				c.Writer.Write([]byte(fmt.Sprintf("%d,%s,%s,%s,%d\n", cx.data.CreatedAtNs/1000000000, dictionary.dictionary.ReverseResolve(cx.data.EventType), cx.data.ForeignId, value, variant)))
 			}
 		}
 	})
