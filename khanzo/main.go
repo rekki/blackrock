@@ -96,33 +96,6 @@ func yyyymmdd(t time.Time) string {
 	year, month, day := t.Date()
 	return fmt.Sprintf("%d-%02d-%02d", year, month, day)
 }
-func expandYYYYMMDD(from string, to string) []string {
-	fromTime := time.Now().UTC().AddDate(0, 0, -3)
-	toTime := time.Now().UTC()
-
-	if from != "" {
-		d, err := time.Parse("2006-01-02", from)
-		if err == nil {
-			fromTime = d
-		}
-	}
-	if to != "" {
-		d, err := time.Parse("2006-01-02", to)
-		if err == nil {
-			toTime = d
-		}
-	}
-	dateQuery := []string{}
-	start := fromTime.AddDate(0, 0, 0)
-	for {
-		dateQuery = append(dateQuery, fmt.Sprintf("year-month-day:%s", yyyymmdd(start)))
-		start = start.AddDate(0, 0, 1)
-		if start.Sub(toTime) > 0 {
-			break
-		}
-	}
-	return dateQuery
-}
 
 type Cached struct {
 	foreignId   uint64
@@ -222,7 +195,7 @@ func main() {
 	}
 
 	search := func(qr QueryRequest) (*QueryResponse, error) {
-		query, err := fromJson(qr.Query, func(k, v string) Query {
+		query, _, err := fromJson(qr.Query, func(k, v string) Query {
 			return NewTermQuery(inverted, dictionary.Get(), qr.ScanMaxDocuments, k, strings.ToLower(v))
 		})
 
@@ -303,19 +276,25 @@ func main() {
 		from := c.Query("from")
 		to := c.Query("to")
 		if (from == "" || to == "") && c.Param("format") == "html" {
-			c.Redirect(302, fmt.Sprintf("%s?from=%s&to=%s", c.Request.URL.Path, yyyymmdd(time.Now().UTC().AddDate(0, 0, -1)), yyyymmdd(time.Now().UTC())))
+			c.Redirect(302, fmt.Sprintf("%s?from=%s&to=%s", c.Request.URL.Path, yyyymmdd(time.Now().UTC().AddDate(0, 0, -3)), yyyymmdd(time.Now().UTC())))
 			return
 		}
 		// FIXME: this needs major cleanup
 		queryPath := strings.Trim(c.Param("query"), "/")
-		dateQuery := expandYYYYMMDD(from, to)
-		queryPath += "/" + strings.Join(dateQuery, "|")
 		and := strings.Replace(queryPath, "/", " AND ", -1)
 		andor := strings.Replace(and, "|", " OR ", -1)
-		query, err := fromString(andor, func(k, v string) Query {
+		make := func(k, v string) Query {
 			return NewTermQuery(inverted, dictionary.Get(), int64(maxDocuments), k, strings.ToLower(v))
-		})
+		}
+		query, nQueries, err := fromString(andor, make)
 
+		dateQuery := expandYYYYMMDD(from, to, make)
+		if nQueries == 0 {
+			query = dateQuery
+		} else {
+			query = NewBoolAndQuery(query, dateQuery)
+		}
+		log.Warnf("query: %s", query.String())
 		if err != nil {
 			c.JSON(400, gin.H{"error": err.Error()})
 			return
@@ -351,41 +330,37 @@ func main() {
 		Render(c, counter.Prettify())
 	})
 
-	r.GET("/exp/csv/*query", func(c *gin.Context) {
-		maxDocuments := intOrDefault(c.Query("query_max_documents"), -1)
-		exp := c.Query("exp")
-		from := c.Query("from")
-		to := c.Query("to")
-		types := c.Query("types")
-		filter := map[uint64]bool{}
-		for _, f := range strings.Split(types, ",") {
-			if f != "" {
-				v, _ := dictionary.dictionary.Resolve(f)
-				filter[v] = true
-			}
-		}
+	r.POST("/exp/csv", func(c *gin.Context) {
+		var qr ExpQueryRequest
 
-		onlyForeignType, _ := dictionary.dictionary.Resolve(c.Query("foreign_type"))
-
-		variants := uint32(intOrDefault(c.Query("variants"), 2))
-		if exp == "" {
-			c.JSON(400, gin.H{"error": "need exp"})
+		if err := c.ShouldBindJSON(&qr); err != nil {
+			c.JSON(400, gin.H{"error": err.Error()})
 			return
 		}
-
-		// FIXME: this needs major cleanup
-		queryPath := strings.Trim(c.Param("query"), "/")
-		dateQuery := expandYYYYMMDD(from, to)
-		queryPath += "/" + strings.Join(dateQuery, "|")
-		and := strings.Replace(queryPath, "/", " AND ", -1)
-		andor := strings.Replace(and, "|", " OR ", -1)
-		query, err := fromString(andor, func(k, v string) Query {
-			return NewTermQuery(inverted, dictionary.Get(), int64(maxDocuments), k, strings.ToLower(v))
-		})
-
+		mx := qr.ScanMaxDocuments
+		if mx == 0 {
+			mx = -1
+		}
+		make := func(k, v string) Query {
+			return NewTermQuery(inverted, dictionary.Get(), int64(mx), k, strings.ToLower(v))
+		}
+		query, nQueries, err := fromJson(qr.Query, make)
 		if err != nil {
 			c.JSON(400, gin.H{"error": err.Error()})
 			return
+		}
+
+		onlyKey, _ := dictionary.dictionary.Resolve(qr.ExperimentKey)
+		variants := uint32(qr.Variants)
+		if variants == 0 {
+			variants = 2
+		}
+
+		dateQuery := expandYYYYMMDD(qr.From, qr.To, make)
+		if nQueries == 0 {
+			query = dateQuery
+		} else {
+			query = NewBoolAndQuery(query, dateQuery)
 		}
 
 		for query.Next() != NO_MORE {
@@ -414,10 +389,16 @@ func main() {
 				cache.Add(did, cached)
 			}
 			cx := cached.(Cached)
-			if cx.foreignType == onlyForeignType {
-				if len(filter) == 0 || filter[cx.data.EventType] {
-					variant := dice(cx.data.ForeignId, exp, variants)
-					c.Writer.Write([]byte(fmt.Sprintf("%d,%s,%s,%d\n", cx.data.CreatedAtNs/1000000000, dictionary.dictionary.ReverseResolve(cx.data.EventType), cx.data.ForeignId, variant)))
+			if cx.data.ForeignType == onlyKey {
+				variant := dice(cx.data.ForeignId, qr.Exp, variants)
+				c.Writer.Write([]byte(fmt.Sprintf("%d,%s,%s,%d\n", cx.data.CreatedAtNs/1000000000, dictionary.dictionary.ReverseResolve(cx.data.EventType), cx.data.ForeignId, variant)))
+			} else {
+				for _, t := range cx.data.SearchKeys {
+					if t == onlyKey {
+						variant := dice(cx.data.ForeignId, qr.Exp, variants)
+						c.Writer.Write([]byte(fmt.Sprintf("%d,%s,%s,%d\n", cx.data.CreatedAtNs/1000000000, dictionary.dictionary.ReverseResolve(cx.data.EventType), cx.data.ForeignId, variant)))
+						break
+					}
 				}
 			}
 		}

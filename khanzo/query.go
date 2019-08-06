@@ -7,6 +7,7 @@ import (
 	"math"
 	"os"
 	"strings"
+	"time"
 )
 
 const (
@@ -15,7 +16,7 @@ const (
 )
 
 // FIXME(jackdoe): this is very bad
-func fromString(text string, makeTermQuery func(string, string) Query) (Query, error) {
+func fromString(text string, makeTermQuery func(string, string) Query) (Query, int, error) {
 	top := []Query{}
 	not := []Query{}
 	for _, and := range strings.Split(text, " AND ") {
@@ -48,12 +49,40 @@ func fromString(text string, makeTermQuery func(string, string) Query) (Query, e
 		}
 	}
 	if (len(top)) == 1 && len(not) == 0 {
-		return top[0], nil
+		return top[0], len(top), nil
 	}
 	if len(not) > 0 {
-		return NewBoolAndNotQuery(NewBoolOrQuery(not...), top...), nil
+		return NewBoolAndNotQuery(NewBoolOrQuery(not...), top...), len(top), nil
 	}
-	return NewBoolAndQuery(top...), nil
+	return NewBoolAndQuery(top...), len(top), nil
+}
+
+func expandYYYYMMDD(from string, to string, makeTermQuery func(string, string) Query) Query {
+	fromTime := time.Now().UTC().AddDate(0, 0, -3)
+	toTime := time.Now().UTC()
+
+	if from != "" {
+		d, err := time.Parse("2006-01-02", from)
+		if err == nil {
+			fromTime = d
+		}
+	}
+	if to != "" {
+		d, err := time.Parse("2006-01-02", to)
+		if err == nil {
+			toTime = d
+		}
+	}
+	dateQuery := []Query{}
+	start := fromTime.AddDate(0, 0, 0)
+	for {
+		dateQuery = append(dateQuery, makeTermQuery("year-month-day", yyyymmdd(start)))
+		start = start.AddDate(0, 0, 1)
+		if start.Sub(toTime) > 0 {
+			break
+		}
+	}
+	return NewBoolOrQuery(dateQuery...)
 }
 
 /*
@@ -64,43 +93,43 @@ func fromString(text string, makeTermQuery func(string, string) Query) (Query, e
 
 */
 
-func fromJson(input interface{}, makeTermQuery func(string, string) Query) (Query, error) {
+func fromJson(input interface{}, makeTermQuery func(string, string) Query) (Query, int, error) {
 	mapped, ok := input.(map[string]interface{})
 	queries := []Query{}
 	if ok {
 		if v, ok := mapped["tag"]; ok && v != nil {
 			kv, ok := v.(map[string]interface{})
 			if !ok {
-				return nil, errors.New("[tag] must be map containing {key, value}")
+				return nil, 0, errors.New("[tag] must be map containing {key, value}")
 			}
 			added := false
 			if tk, ok := kv["key"]; ok && tk != nil {
 				if tv, ok := kv["value"]; ok && tv != nil {
 					sk, ok := tk.(string)
 					if !ok {
-						return nil, errors.New("[tag][key] must be string")
+						return nil, 0, errors.New("[tag][key] must be string")
 					}
 					sv, ok := tv.(string)
 					if !ok {
-						return nil, errors.New("[tag][value] must be string")
+						return nil, 0, errors.New("[tag][value] must be string")
 					}
 					queries = append(queries, makeTermQuery(sk, sv))
 					added = true
 				}
 			}
 			if !added {
-				return nil, errors.New("[tag] must be map containing {key, value}")
+				return nil, 0, errors.New("[tag] must be map containing {key, value}")
 			}
 		}
 		if v, ok := mapped["text"]; ok && v != nil {
 			sk, ok := v.(string)
 			if !ok {
-				return nil, errors.New("[text] must be string")
+				return nil, 0, errors.New("[text] must be string")
 			}
 
-			q, err := fromString(sk, makeTermQuery)
+			q, _, err := fromString(sk, makeTermQuery)
 			if err != nil {
-				return nil, err
+				return nil, 0, err
 			}
 
 			queries = append(queries, q)
@@ -110,15 +139,15 @@ func fromJson(input interface{}, makeTermQuery func(string, string) Query) (Quer
 			if ok {
 				and := NewBoolAndQuery([]Query{}...)
 				for _, subQuery := range list {
-					q, err := fromJson(subQuery, makeTermQuery)
+					q, _, err := fromJson(subQuery, makeTermQuery)
 					if err != nil {
-						return nil, err
+						return nil, 0, err
 					}
 					and.AddSubQuery(q)
 				}
 				queries = append(queries, and)
 			} else {
-				return nil, errors.New("[or] takes array of subqueries")
+				return nil, 0, errors.New("[or] takes array of subqueries")
 			}
 		}
 
@@ -127,24 +156,24 @@ func fromJson(input interface{}, makeTermQuery func(string, string) Query) (Quer
 			if ok {
 				or := NewBoolOrQuery([]Query{}...)
 				for _, subQuery := range list {
-					q, err := fromJson(subQuery, makeTermQuery)
+					q, _, err := fromJson(subQuery, makeTermQuery)
 					if err != nil {
-						return nil, err
+						return nil, 0, err
 					}
 					or.AddSubQuery(q)
 				}
 				queries = append(queries, or)
 			} else {
-				return nil, errors.New("[and] takes array of subqueries")
+				return nil, 0, errors.New("[and] takes array of subqueries")
 			}
 		}
 	}
 
 	if len(queries) == 1 {
-		return queries[0], nil
+		return queries[0], len(queries), nil
 	}
 
-	return NewBoolAndQuery(queries...), nil
+	return NewBoolAndQuery(queries...), len(queries), nil
 }
 
 type Query interface {

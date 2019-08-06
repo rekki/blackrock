@@ -9,6 +9,16 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+type ExpQueryRequest struct {
+	ScanMaxDocuments int         `form:"scan_max_documents"`
+	Exp              string      `json:"exp"`
+	Query            interface{} `json:"query"`
+	Variants         int         `json:"variants"`
+	ExperimentKey    string      `json:"key"`
+	From             string      `json:"from"`
+	To               string      `json:"to"`
+}
+
 type QueryRequest struct {
 	Query            interface{} `json:"query"`
 	Size             int         `json:"size"`
@@ -63,7 +73,6 @@ func (qr *QueryResponse) VW(c *gin.Context) {
 		}
 		w.Write([]byte{'\n'})
 	}
-
 }
 
 func (qr *QueryResponse) HTML(c *gin.Context) {
