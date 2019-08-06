@@ -362,7 +362,10 @@ func main() {
 		} else {
 			query = NewBoolAndQuery(query, dateQuery)
 		}
-
+		if len(qr.Cohort) != 0 && qr.Variants > 0 {
+			c.JSON(400, gin.H{"error": errors.New("cant use both cohort and variants, specify the variants in the cohort key")})
+		}
+		hasCohort := len(qr.Cohort)
 		for query.Next() != NO_MORE {
 			did := query.GetDocId()
 			cached, ok := cache.Get(did)
@@ -389,17 +392,27 @@ func main() {
 				cache.Add(did, cached)
 			}
 			cx := cached.(Cached)
+			variant := -1
 			if cx.data.ForeignType == onlyKey {
-				variant := dice(cx.data.ForeignId, qr.Exp, variants)
-				c.Writer.Write([]byte(fmt.Sprintf("%d,%s,%s,%d\n", cx.data.CreatedAtNs/1000000000, dictionary.dictionary.ReverseResolve(cx.data.EventType), cx.data.ForeignId, variant)))
+				variant = int(dice(cx.data.ForeignId, qr.Exp, variants))
 			} else {
-				for _, t := range cx.data.SearchKeys {
+				for i, t := range cx.data.SearchKeys {
 					if t == onlyKey {
-						variant := dice(cx.data.ForeignId, qr.Exp, variants)
-						c.Writer.Write([]byte(fmt.Sprintf("%d,%s,%s,%d\n", cx.data.CreatedAtNs/1000000000, dictionary.dictionary.ReverseResolve(cx.data.EventType), cx.data.ForeignId, variant)))
+						if hasCohort {
+							v, ok := qr.Cohort[cx.data.SearchValues[i]]
+							if ok {
+								variant = v
+								break
+							}
+						} else {
+							variant = int(dice(cx.data.SearchValues[i], qr.Exp, variants))
+						}
 						break
 					}
 				}
+			}
+			if variant >= 0 {
+				c.Writer.Write([]byte(fmt.Sprintf("%d,%s,%s,%d\n", cx.data.CreatedAtNs/1000000000, dictionary.dictionary.ReverseResolve(cx.data.EventType), cx.data.ForeignId, variant)))
 			}
 		}
 	})

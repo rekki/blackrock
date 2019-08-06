@@ -10,13 +10,14 @@ import (
 )
 
 type ExpQueryRequest struct {
-	ScanMaxDocuments int         `form:"scan_max_documents"`
-	Exp              string      `json:"exp"`
-	Query            interface{} `json:"query"`
-	Variants         int         `json:"variants"`
-	ExperimentKey    string      `json:"key"`
-	From             string      `json:"from"`
-	To               string      `json:"to"`
+	ScanMaxDocuments int            `form:"scan_max_documents"`
+	Exp              string         `json:"exp"`
+	Cohort           map[string]int `json:"cohort"`
+	Query            interface{}    `json:"query"`
+	Variants         int            `json:"variants"`
+	ExperimentKey    string         `json:"key"`
+	From             string         `json:"from"`
+	To               string         `json:"to"`
 }
 
 type QueryRequest struct {
