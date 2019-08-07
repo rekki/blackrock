@@ -2,9 +2,11 @@ package disk
 
 import (
 	"encoding/binary"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path"
+	"sync"
 
 	"github.com/jackdoe/blackrock/depths"
 	log "github.com/sirupsen/logrus"
@@ -12,14 +14,17 @@ import (
 
 type InvertedWriter struct {
 	descriptors        map[string]*os.File
+	cache              map[string][]int64
 	maxOpenDescriptors int
 	root               string
+	sync.Mutex
 }
 
 func NewInvertedWriter(root string, maxOpenDescriptors int) (*InvertedWriter, error) {
 	return &InvertedWriter{
 		maxOpenDescriptors: maxOpenDescriptors,
 		descriptors:        map[string]*os.File{},
+		cache:              map[string][]int64{},
 		root:               root,
 	}, nil
 }
@@ -29,8 +34,48 @@ func (fw *InvertedWriter) Close() {
 		delete(fw.descriptors, k)
 	}
 }
-func (fw *InvertedWriter) Read(maxDocuments int64, tagKey uint64, tagValue string) []int64 {
-	dir, filename := depths.PathForTag(fw.root, tagKey, tagValue)
+
+func (fw *InvertedWriter) Size(segmentId string, tagKey uint64, tagValue string) int64 {
+	dir, filename := depths.PathForTag(fw.root, segmentId, tagKey, tagValue)
+	fn := path.Join(dir, filename)
+	file, err := os.OpenFile(fn, os.O_RDONLY, 0600)
+	if os.IsNotExist(err) {
+		return 0
+	}
+	fi, err := file.Stat()
+	if err != nil {
+		return 0
+	}
+	total := fi.Size() / int64(8)
+	return total
+}
+
+func (fw *InvertedWriter) Read(segmentId string, tk uint64, tagValue string) []int64 {
+
+	size := fw.Size(segmentId, tk, tagValue)
+	s := fmt.Sprintf("%s:%d:%s", segmentId, tk, tagValue)
+
+	fw.Lock()
+	list, _ := fw.cache[s]
+	fw.Unlock()
+
+	maxDocuments := size - int64(len(list))
+	complete := list
+	if maxDocuments > 0 {
+		extra := fw.ReadRaw(segmentId, maxDocuments, tk, tagValue)
+		complete = append(complete, extra...)
+		if maxDocuments > 100000 {
+			fw.Lock()
+			fw.cache[s] = complete
+			fw.Unlock()
+		}
+	}
+	return complete
+
+}
+
+func (fw *InvertedWriter) ReadRaw(segmentId string, maxDocuments int64, tagKey uint64, tagValue string) []int64 {
+	dir, filename := depths.PathForTag(fw.root, segmentId, tagKey, tagValue)
 	fn := path.Join(dir, filename)
 	file, err := os.OpenFile(fn, os.O_RDONLY, 0600)
 	if os.IsNotExist(err) {
@@ -67,8 +112,8 @@ func (fw *InvertedWriter) Read(maxDocuments int64, tagKey uint64, tagValue strin
 	return longed
 }
 
-func (fw *InvertedWriter) Append(docId int64, tagKey uint64, tagValue string) error {
-	dir, fn := depths.PathForTag(fw.root, tagKey, tagValue)
+func (fw *InvertedWriter) Append(segmentId string, docId int64, tagKey uint64, tagValue string) error {
+	dir, fn := depths.PathForTag(fw.root, segmentId, tagKey, tagValue)
 	filename := path.Join(dir, fn)
 	f, ok := fw.descriptors[filename]
 	if !ok {

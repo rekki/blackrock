@@ -59,6 +59,8 @@ func ConsumeEvents(partition uint32, offset uint64, envelope *spec.Envelope, dic
 		envelope.Metadata.CreatedAtNs = time.Now().UnixNano()
 	}
 
+	segmentId := depths.SegmentFromNs(envelope.Metadata.CreatedAtNs)
+
 	meta := envelope.Metadata
 	sforeignId := depths.Cleanup(strings.ToLower(meta.ForeignId))
 	foreignId, err := dictionary.GetUniqueTerm(sforeignId)
@@ -189,11 +191,11 @@ func ConsumeEvents(partition uint32, offset uint64, envelope *spec.Envelope, dic
 		return err
 	}
 
-	inverted.Append(int64(docId), foreignType, sforeignId)
-	inverted.Append(int64(docId), typeKey, seventType)
+	inverted.Append(segmentId, int64(docId), foreignType, sforeignId)
+	inverted.Append(segmentId, int64(docId), typeKey, seventType)
 
 	for i := 0; i < len(persisted.SearchKeys); i++ {
-		inverted.Append(int64(docId), persisted.SearchKeys[i], persisted.SearchValues[i])
+		inverted.Append(segmentId, int64(docId), persisted.SearchKeys[i], persisted.SearchValues[i])
 	}
 	return nil
 }

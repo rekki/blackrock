@@ -5,6 +5,9 @@ import (
 	"io/ioutil"
 	"os"
 	"testing"
+	"time"
+
+	"github.com/jackdoe/blackrock/depths"
 )
 
 type InvertedCase struct {
@@ -56,9 +59,10 @@ func TestInverted(t *testing.T) {
 		},
 	}
 
+	segmentId := depths.SegmentFromNs(time.Now().UnixNano())
 	for _, v := range cases {
 		for _, id := range v.data {
-			err := inv.Append(id, v.key, fmt.Sprintf("%d", v.value))
+			err := inv.Append(segmentId, id, v.key, fmt.Sprintf("%d", v.value))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -66,7 +70,7 @@ func TestInverted(t *testing.T) {
 	}
 
 	for _, v := range cases {
-		data := inv.Read(int64(0), v.key, fmt.Sprintf("%d", v.value))
+		data := inv.Read(segmentId, v.key, fmt.Sprintf("%d", v.value))
 
 		if !Equal(data, v.data) {
 			t.Fatalf("mismatch got %v expected %v", data, v.data)

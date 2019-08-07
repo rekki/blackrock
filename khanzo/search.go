@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackdoe/blackrock/depths"
@@ -10,21 +11,21 @@ import (
 )
 
 type ExpQueryRequest struct {
-	ScanMaxDocuments int            `form:"scan_max_documents"`
-	Exp              string         `json:"exp"`
-	Cohort           map[string]int `json:"cohort"`
-	Query            interface{}    `json:"query"`
-	Variants         int            `json:"variants"`
-	ExperimentKey    string         `json:"key"`
-	From             string         `json:"from"`
-	To               string         `json:"to"`
+	Exp           string         `json:"exp"`
+	Cohort        map[string]int `json:"cohort"`
+	Query         interface{}    `json:"query"`
+	Variants      int            `json:"variants"`
+	ExperimentKey string         `json:"key"`
+	From          string         `json:"from"`
+	To            string         `json:"to"`
 }
 
 type QueryRequest struct {
-	Query            interface{} `json:"query"`
-	Size             int         `json:"size"`
-	DecodeMetadata   bool        `json:"decode_metadata"`
-	ScanMaxDocuments int64       `json:"scan_max_documents"`
+	Query          interface{} `json:"query"`
+	Size           int         `json:"size"`
+	DecodeMetadata bool        `json:"decode_metadata"`
+	From           string      `json:"from"`
+	To             string      `json:"to"`
 }
 
 type QueryResponse struct {
@@ -80,18 +81,23 @@ func (qr *QueryResponse) HTML(c *gin.Context) {
 	c.YAML(200, qr)
 }
 
-func NewTermQuery(inverted *disk.InvertedWriter, dictionary *disk.PersistedDictionary, maxDocuments int64, tagKey string, tagValue string) Query {
+func NewTermQuery(dates []time.Time, inverted *disk.InvertedWriter, dictionary *disk.PersistedDictionary, tagKey string, tagValue string) Query {
 	s := fmt.Sprintf("%s:%s", tagKey, tagValue)
 	tk, ok := dictionary.Resolve(tagKey)
 	if !ok {
 		log.Warnf("error reading key for %s", tagKey)
 		return NewTerm(s, []int64{})
 	}
-	if maxDocuments == 0 {
-		maxDocuments = 1000000
+	queries := []Query{}
+
+	for _, d := range dates {
+		seg := depths.SegmentFromNs(d.UnixNano())
+		s := fmt.Sprintf("%s:%s:%s", seg, tagKey, tagValue)
+		queries = append(queries, NewTerm(s, inverted.Read(seg, tk, tagValue)))
 	}
-	if maxDocuments == -1 {
-		maxDocuments = 0
+
+	if len(queries) == 1 {
+		return queries[1]
 	}
-	return NewTerm(s, inverted.Read(maxDocuments, tk, tagValue))
+	return NewBoolOrQuery(queries...)
 }

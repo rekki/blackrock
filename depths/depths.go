@@ -70,10 +70,19 @@ func CreateTopic(brokers string, topic string, partitions int, replication int) 
 	}
 	return errors.New("failed to dial any broker")
 }
+func epochDayFromNs(ns int64) string {
+	s := ns / 1000000000
+	d := s / (3600 * 24)
+	return fmt.Sprintf("%d", d)
+}
 
-func PathForTag(root string, tagKey uint64, tagValue string) (string, string) {
+func SegmentFromNs(ns int64) string {
+	return epochDayFromNs(ns)
+}
+
+func PathForTag(root string, segmentId string, tagKey uint64, tagValue string) (string, string) {
 	h := Hashs(tagValue)
-	dir := path.Join(root, fmt.Sprintf("%d", tagKey), fmt.Sprintf("shard_%d", h%255))
+	dir := path.Join(root, segmentId, fmt.Sprintf("%d", tagKey), fmt.Sprintf("shard_%d", h%255))
 	return dir, fmt.Sprintf("%s.p", Cleanup(tagValue))
 }
 func Cleanup(s string) string {

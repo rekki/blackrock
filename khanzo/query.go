@@ -57,7 +57,16 @@ func fromString(text string, makeTermQuery func(string, string) Query) (Query, i
 	return NewBoolAndQuery(top...), len(top), nil
 }
 
-func expandYYYYMMDD(from string, to string, makeTermQuery func(string, string) Query) Query {
+func expandTimeToQuery(dates []time.Time, makeTermQuery func(string, string) Query) Query {
+	out := []Query{}
+	for _, start := range dates {
+		out = append(out, makeTermQuery("year-month-day", yyyymmdd(start)))
+	}
+
+	return NewBoolOrQuery(out...)
+}
+
+func expandYYYYMMDD(from string, to string) []time.Time {
 	fromTime := time.Now().UTC().AddDate(0, 0, -3)
 	toTime := time.Now().UTC()
 
@@ -73,16 +82,16 @@ func expandYYYYMMDD(from string, to string, makeTermQuery func(string, string) Q
 			toTime = d
 		}
 	}
-	dateQuery := []Query{}
+	dateQuery := []time.Time{}
 	start := fromTime.AddDate(0, 0, 0)
 	for {
-		dateQuery = append(dateQuery, makeTermQuery("year-month-day", yyyymmdd(start)))
+		dateQuery = append(dateQuery, start)
 		start = start.AddDate(0, 0, 1)
 		if start.Sub(toTime) > 0 {
 			break
 		}
 	}
-	return NewBoolOrQuery(dateQuery...)
+	return dateQuery
 }
 
 /*

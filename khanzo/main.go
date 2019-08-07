@@ -195,8 +195,9 @@ func main() {
 	}
 
 	search := func(qr QueryRequest) (*QueryResponse, error) {
+		dates := expandYYYYMMDD(qr.From, qr.To)
 		query, _, err := fromJson(qr.Query, func(k, v string) Query {
-			return NewTermQuery(inverted, dictionary.Get(), qr.ScanMaxDocuments, k, strings.ToLower(v))
+			return NewTermQuery(dates, inverted, dictionary.Get(), k, strings.ToLower(v))
 		})
 
 		if err != nil {
@@ -270,7 +271,6 @@ func main() {
 
 	r.GET("/scan/:format/*query", func(c *gin.Context) {
 		sampleSize := intOrDefault(c.Query("sample_size"), 200)
-		maxDocuments := intOrDefault(c.Query("query_max_documents"), 100000)
 		counter := NewCounter(dictionary.Get(), contextCache, sampleSize)
 
 		from := c.Query("from")
@@ -279,25 +279,23 @@ func main() {
 			c.Redirect(302, fmt.Sprintf("%s?from=%s&to=%s", c.Request.URL.Path, yyyymmdd(time.Now().UTC().AddDate(0, 0, -3)), yyyymmdd(time.Now().UTC())))
 			return
 		}
+		dates := expandYYYYMMDD(from, to)
+
 		// FIXME: this needs major cleanup
 		queryPath := strings.Trim(c.Param("query"), "/")
 		and := strings.Replace(queryPath, "/", " AND ", -1)
 		andor := strings.Replace(and, "|", " OR ", -1)
 		make := func(k, v string) Query {
-			return NewTermQuery(inverted, dictionary.Get(), int64(maxDocuments), k, strings.ToLower(v))
+			return NewTermQuery(dates, inverted, dictionary.Get(), k, strings.ToLower(v))
 		}
 		query, nQueries, err := fromString(andor, make)
-
-		dateQuery := expandYYYYMMDD(from, to, make)
-		if nQueries == 0 {
-			query = dateQuery
-		} else {
-			query = NewBoolAndQuery(query, dateQuery)
-		}
-		log.Warnf("query: %s", query.String())
 		if err != nil {
 			c.JSON(400, gin.H{"error": err.Error()})
 			return
+		}
+
+		if nQueries == 0 {
+			query = expandTimeToQuery(dates, make)
 		}
 
 		for query.Next() != NO_MORE {
@@ -337,17 +335,17 @@ func main() {
 			c.JSON(400, gin.H{"error": err.Error()})
 			return
 		}
-		mx := qr.ScanMaxDocuments
-		if mx == 0 {
-			mx = -1
-		}
+		dates := expandYYYYMMDD(qr.From, qr.To)
 		make := func(k, v string) Query {
-			return NewTermQuery(inverted, dictionary.Get(), int64(mx), k, strings.ToLower(v))
+			return NewTermQuery(dates, inverted, dictionary.Get(), k, strings.ToLower(v))
 		}
 		query, nQueries, err := fromJson(qr.Query, make)
 		if err != nil {
 			c.JSON(400, gin.H{"error": err.Error()})
 			return
+		}
+		if nQueries == 0 {
+			query = expandTimeToQuery(dates, make)
 		}
 
 		onlyKey, _ := dictionary.dictionary.Resolve(qr.ExperimentKey)
@@ -356,12 +354,6 @@ func main() {
 			variants = 2
 		}
 
-		dateQuery := expandYYYYMMDD(qr.From, qr.To, make)
-		if nQueries == 0 {
-			query = dateQuery
-		} else {
-			query = NewBoolAndQuery(query, dateQuery)
-		}
 		if len(qr.Cohort) != 0 && qr.Variants > 0 {
 			c.JSON(400, gin.H{"error": errors.New("cant use both cohort and variants, specify the variants in the cohort key")})
 		}

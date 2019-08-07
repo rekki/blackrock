@@ -142,14 +142,14 @@ type Book struct {
 	PublishDate string `faker:"date"`
 }
 
-func genUser() *spec.Context {
+func genUser(times []time.Time) *spec.Context {
 	var s User
 	err := faker.FakeData(&s)
 	if err != nil {
 		panic(err)
 	}
 	c := &spec.Context{
-		CreatedAtNs: time.Now().UnixNano(),
+		CreatedAtNs: times[rand.Intn(len(times))].UnixNano(),
 		ForeignType: "user_id",
 		ForeignId:   s.UUID,
 	}
@@ -162,7 +162,7 @@ func genUser() *spec.Context {
 	return c
 }
 
-func genAuthor() *spec.Context {
+func genAuthor(times []time.Time) *spec.Context {
 	var s Author
 	err := faker.FakeData(&s)
 	if err != nil {
@@ -170,7 +170,7 @@ func genAuthor() *spec.Context {
 	}
 
 	c := &spec.Context{
-		CreatedAtNs: time.Now().UnixNano(),
+		CreatedAtNs: times[rand.Intn(len(times))].UnixNano(),
 		ForeignType: "author_id",
 		ForeignId:   s.UUID,
 	}
@@ -179,7 +179,7 @@ func genAuthor() *spec.Context {
 	return c
 }
 
-func genBook(author ...*spec.Context) *spec.Context {
+func genBook(times []time.Time, author ...*spec.Context) *spec.Context {
 	var s Book
 	err := faker.FakeData(&s)
 	if err != nil {
@@ -187,7 +187,7 @@ func genBook(author ...*spec.Context) *spec.Context {
 	}
 
 	c := &spec.Context{
-		CreatedAtNs: time.Now().UnixNano(),
+		CreatedAtNs: times[rand.Intn(len(times))].UnixNano(),
 		ForeignType: "book_id",
 		ForeignId:   s.UUID,
 	}
@@ -215,7 +215,7 @@ func pickAuthors(authors []*spec.Context) []*spec.Context {
 
 var actions = []string{"buy", "click", "skip", "ignore", "click", "click", "ignore", "ignore", "skip"}
 
-func genEvent(users []*spec.Context, books []*spec.Context) *spec.Envelope {
+func genEvent(days []time.Time, users []*spec.Context, books []*spec.Context) *spec.Envelope {
 	user := users[rand.Intn(len(users))]
 	var s SomeAction
 	err := faker.FakeData(&s)
@@ -239,7 +239,7 @@ func genEvent(users []*spec.Context, books []*spec.Context) *spec.Envelope {
 
 	ua := UA[rand.Intn(len(UA))]
 	m := &spec.Metadata{
-		CreatedAtNs: time.Now().UnixNano(),
+		CreatedAtNs: days[rand.Intn(len(days))].UnixNano(),
 		ForeignType: "user_id",
 		ForeignId:   user.ForeignId,
 		EventType:   action,
@@ -269,25 +269,56 @@ func pushManyEvents(orgrim *client.Client, x ...*spec.Envelope) {
 	}
 }
 
+func expandYYYYMMDD(from string, to string) []time.Time {
+	fromTime := time.Now().UTC().AddDate(0, 0, -3)
+	toTime := time.Now().UTC()
+
+	if from != "" {
+		d, err := time.Parse("2006-01-02", from)
+		if err == nil {
+			fromTime = d
+		}
+	}
+	if to != "" {
+		d, err := time.Parse("2006-01-02", to)
+		if err == nil {
+			toTime = d
+		}
+	}
+	dateQuery := []time.Time{}
+	start := fromTime.AddDate(0, 0, 0)
+	for {
+		dateQuery = append(dateQuery, start)
+		start = start.AddDate(0, 0, 1)
+		if start.Sub(toTime) > 0 {
+			break
+		}
+	}
+	return dateQuery
+}
+
 func main() {
 	nUsers := flag.Int("n-users", 100, "number of users")
 	nAuthors := flag.Int("n-authors", 100, "number of authors")
 	nBooks := flag.Int("n-books", 100, "number of books")
+	from := flag.String("from", "", "from")
+	to := flag.String("to", "", "to")
 	nEvents := flag.Int("n-events", 100, "number of events")
+	times := expandYYYYMMDD(*from, *to)
 	flag.Parse()
 	users := []*spec.Context{}
 	authors := []*spec.Context{}
 	books := []*spec.Context{}
 
 	for i := 0; i < *nUsers; i++ {
-		users = append(users, genUser())
+		users = append(users, genUser(times))
 	}
 	for i := 0; i < *nAuthors; i++ {
-		authors = append(authors, genAuthor())
+		authors = append(authors, genAuthor(times))
 	}
 
 	for i := 0; i < *nBooks; i++ {
-		books = append(books, genBook(pickAuthors(authors)...))
+		books = append(books, genBook(times, pickAuthors(authors)...))
 	}
 
 	orgrim := client.NewClient("http://localhost:9001/", nil)
@@ -298,10 +329,10 @@ func main() {
 	for i := 0; i < *nEvents/4; i++ {
 		pushManyEvents(
 			orgrim,
-			genEvent(users, books),
-			genEvent(users[:*nUsers/50], books[:*nBooks/20]),
-			genEvent(users[:*nUsers/20], books[:*nBooks/10]),
-			genEvent(users[:*nUsers/10], books[:*nBooks/5]),
+			genEvent(times, users, books),
+			genEvent(times, users[:*nUsers/50], books[:*nBooks/20]),
+			genEvent(times, users[:*nUsers/20], books[:*nBooks/10]),
+			genEvent(times, users[:*nUsers/10], books[:*nBooks/5]),
 		)
 	}
 }
