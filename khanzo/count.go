@@ -32,11 +32,12 @@ type Counter struct {
 	Sample       []Hit                        `json:"sample"`
 	Total        uint64                       `json:"total"`
 	pd           *disk.PersistedDictionary
+	config       *ViewConfig
 	contextCache *ContextCache
 	sampleSize   int
 }
 
-func NewCounter(pd *disk.PersistedDictionary, contextCache *ContextCache, sampleSize int) *Counter {
+func NewCounter(config *ViewConfig, pd *disk.PersistedDictionary, contextCache *ContextCache, sampleSize int) *Counter {
 	return &Counter{
 		Search:       map[uint64]map[string]uint32{},
 		Count:        map[uint64]map[string]uint32{},
@@ -47,6 +48,7 @@ func NewCounter(pd *disk.PersistedDictionary, contextCache *ContextCache, sample
 		sampleSize:   sampleSize,
 		pd:           pd,
 		contextCache: contextCache,
+		config:       config,
 	}
 }
 
@@ -55,16 +57,15 @@ func (c *Counter) Prettify() *CountedResult {
 		contextCache: c.contextCache,
 		pd:           c.pd,
 	}
-	out.Search = statsForMapMap(c.pd, c.Search)
-	out.Count = statsForMapMap(c.pd, c.Count)
-
-	out.Foreign = statsForMapMap(c.pd, c.Foreign)
+	out.Search = statsForMapMap(c.config, c.pd, c.Search)
+	out.Count = statsForMapMap(c.config, c.pd, c.Count)
+	out.Foreign = statsForMapMap(c.config, c.pd, c.Foreign)
 
 	resolved := map[string]uint32{}
 	for k, v := range c.EventTypes {
 		resolved[c.pd.ReverseResolve(k)] = v
 	}
-	out.EventTypes = statsForMap("event_type", resolved)
+	out.EventTypes = statsForMap(c.config.PerKey["event_type"], "event_type", resolved)
 	out.Sample = c.Sample
 	out.TotalCount = int64(c.Total)
 	return out
@@ -174,7 +175,7 @@ func (cr *CountedResult) prettyCategoryStats() string {
 	return out
 }
 
-func statsForMap(key string, values map[string]uint32) *PerKey {
+func statsForMap(config *DisplayConfig, key string, values map[string]uint32) *PerKey {
 	tk := &PerKey{
 		Key: key,
 	}
@@ -182,20 +183,38 @@ func statsForMap(key string, values map[string]uint32) *PerKey {
 		tk.TotalCount += int64(count)
 		tk.Values = append(tk.Values, PerValue{Value: value, Count: int64(count)})
 	}
-	sort.Slice(tk.Values, func(i, j int) bool {
-		if tk.Values[j].Count == tk.Values[i].Count {
-			return tk.Values[i].Value < tk.Values[j].Value
-		}
-		return tk.Values[j].Count < tk.Values[i].Count
-	})
-
+	if config != nil && config.SortByName {
+		sort.Slice(tk.Values, func(i, j int) bool {
+			a := tk.Values[i].Value
+			b := tk.Values[j].Value
+			diff := strings.Compare(a, b)
+			if diff == 0 {
+				return tk.Values[j].Count < tk.Values[i].Count
+			}
+			return diff > 0
+		})
+	} else {
+		sort.Slice(tk.Values, func(i, j int) bool {
+			if tk.Values[j].Count == tk.Values[i].Count {
+				return tk.Values[i].Value < tk.Values[j].Value
+			}
+			return tk.Values[j].Count < tk.Values[i].Count
+		})
+	}
 	return tk
 }
 
-func statsForMapMap(pd *disk.PersistedDictionary, input map[uint64]map[string]uint32) []*PerKey {
+func statsForMapMap(config *ViewConfig, pd *disk.PersistedDictionary, input map[uint64]map[string]uint32) []*PerKey {
 	out := []*PerKey{}
 	for key, values := range input {
-		out = append(out, statsForMap(pd.ReverseResolve(key), values))
+		resolved := pd.ReverseResolve(key)
+		d, ok := config.PerKey[resolved]
+		if ok {
+			if d.Hide {
+				continue
+			}
+		}
+		out = append(out, statsForMap(d, resolved, values))
 	}
 	sort.Slice(out, func(i, j int) bool {
 		if out[j].TotalCount == out[i].TotalCount {

@@ -32,11 +32,12 @@
       opacity: 1;
       transition-delay: 0s;
       }
-
+      .hit-details {
+      display: none;
+      }
       .msg {
       display: block;
       }
-
       pre {
       font-family: "blackrock", Monaco, monospace;
       }
@@ -45,7 +46,7 @@
       text-decoration: none;
       }
       .hit-sep {
-      background-color: gray;
+        background-color: gray;
       }
       .left {
       width: 30%;
@@ -63,6 +64,15 @@
       color: white;
       }
     </style>
+    <script>
+  var toggle = function(id) {
+    var elements = document.getElementsByClassName('hit-' + id)
+    if (elements)
+      for (var i = 0; i < elements.length; i++) 
+        elements[i].style.display = "table-row"
+
+  }
+    </script>
   </head>
   <body>
     {{ $base := .BaseUrl }}
@@ -71,8 +81,9 @@
       <a href="{{ replace $base "/html/" "/text/" }}">text</a>
       <br>
       <a href="/scan/html/?{{$query}}">/scan/html/</a><br>
+      {{ $crumbs := .Crumbs }}
       {{ range .Crumbs }}
-      <a href="{{ .Base }}/{{.Exact}}?{{$query}}">{{.Exact}}</a> <a href="/scan/html/{{.Exact}}?{{$query}}">=</a> <a href="{{ removeQuery .Base .Exact}}?{{$query}}">-</a>
+      <a href="{{ .Base }}/{{.Exact}}?{{$query}}">{{.Exact}}</a> <a href="/scan/html/{{.Exact}}?{{$query}}">=</a> <a href="{{ removeQuery $crumbs .Exact}}?{{$query}}">d</a>{{ if gt (len $crumbs) 1 }} <a href="{{ negateQuery $crumbs .Exact}}?{{$query}}">-</a> {{end}}
       <br>
       {{ end }}
       <form method=get action='?'>

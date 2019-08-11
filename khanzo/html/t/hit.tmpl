@@ -4,16 +4,19 @@
 {{ $m := $hit.Metadata }}
 {{ $foreignId := $hit.ForeignId }}
 {{ $foreignType := $hit.ForeignType }}
-<tr>
-  <td colspan=2>
-    <a href="/scan/html/event_type:{{ $m.EventType }}?{{$qs}}">{{$m.EventType }}</a><br>
+<tr id="#{{$hit.ID}}" class="hit-header">
+  <td>
+    <a style="font-size: 18px" href="/scan/html/event_type:{{ $m.EventType }}?{{$qs}}">{{$m.EventType }}</a><br>
     <a href="/scan/html/{{$hit.ForeignType}}:{{ $hit.ForeignId }}?{{$qs}}">{{$hit.ForeignType}}:{{$hit.ForeignId}}</a><br>
     {{ time $m.CreatedAtNs }}
     <br>
   </td>
+  <td align="right">
+ <a href="javascript: toggle({{$hit.ID}})">show</a>
+  </td>
 </tr>
 {{ range $m.Search }}
-<tr>
+<tr class="hit-details hit-{{$hit.ID}}">
   <td class="left">
     {{ .Key }}
   </td>
@@ -24,7 +27,7 @@
 {{ end }}
 
 {{ range $m.Count }}
-<tr>
+<tr class="hit-details hit-{{$hit.ID}}">
   <td class="left">
       {{ .Key }}
   </td>
@@ -36,7 +39,7 @@
 
 
 {{ range $m.Properties }}
-<tr>
+<tr class="hit-details hit-{{$hit.ID}}">
   <td class="left">
       {{ .Key }}
   </td>
@@ -47,13 +50,13 @@
 {{ end }}
 
   {{ range $hit.Context }}
-    <tr>
+    <tr class="hit-details hit-{{$hit.ID}}">
       <td class="left" colspan=2>
         @{{.ForeignType}}:{{ .ForeignId }}
       </td>
     </tr>
     {{ range .Properties }}
-    <tr>
+    <tr class="hit-details hit-{{$hit.ID}}">
       <td class="left">
         &nbsp;&nbsp;{{.Key }}
       </td>
@@ -63,9 +66,6 @@
     </tr>
     {{ end }}
   {{ end }}
-
-
-
 <tr>
-<td colspan=2 class="hit-sep">&nbsp;</td>
+<td colspan=2><hr></td>
 </tr>

@@ -111,13 +111,18 @@ func main() {
 	var verbose = flag.Bool("verbose", false, "print info level logs to stdout")
 	var accept = flag.Bool("not-production-accept-events", false, "also accept events, super simple, so people can test in their laptops without zookeeper, kafka, orgrim, blackhand and jubei setup..")
 	var bind = flag.String("bind", ":9002", "bind to")
+	var pconfig = flag.String("config", "", "config key:limit:sortByName:hide|key...")
 	flag.Parse()
 	go func() {
 		log.Println(http.ListenAndServe("localhost:6060", nil))
 	}()
 	root := *proot
 	os.MkdirAll(root, 0700)
-
+	config, err := LoadConfigFromString(*pconfig)
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Warnf("config: %s", depths.DumpObj(config))
 	forward, err := disk.NewForwardWriter(root, "main")
 	if err != nil {
 		log.Fatal(err)
@@ -271,7 +276,7 @@ func main() {
 
 	r.GET("/scan/:format/*query", func(c *gin.Context) {
 		sampleSize := intOrDefault(c.Query("sample_size"), 200)
-		counter := NewCounter(dictionary.Get(), contextCache, sampleSize)
+		counter := NewCounter(config, dictionary.Get(), contextCache, sampleSize)
 
 		from := c.Query("from")
 		to := c.Query("to")
@@ -573,16 +578,31 @@ func loadTemplate(contextCache *ContextCache, pd *ReloadableDictionary) (*templa
 			}
 			return v.Get(key)
 		},
-		"removeQuery": func(base string, kv string) string {
-			base = strings.TrimPrefix(base, "/scan/html/")
+		"removeQuery": func(base []Breadcrumb, kv string) string {
 			out := []string{}
-			for _, termAnd := range strings.Split(base, "/") {
-				if termAnd != kv {
-					out = append(out, termAnd)
+			for _, crumb := range base {
+				if crumb.Exact != kv {
+					out = append(out, crumb.Exact)
 				}
 			}
 			return "/scan/html/" + strings.Join(out, "/")
 		},
+		"negateQuery": func(base []Breadcrumb, kv string) string {
+			out := []string{}
+			toggle := "-"
+			if strings.HasPrefix(kv, "-") {
+				toggle = ""
+			}
+			for _, crumb := range base {
+				if crumb.Exact == kv {
+					out = append(out, toggle+strings.TrimLeft(crumb.Exact, "-"))
+				} else {
+					out = append(out, crumb.Exact)
+				}
+			}
+			return "/scan/html/" + strings.Join(out, "/")
+		},
+
 		"addN": func(qs template.URL, key string, n int) template.URL {
 			v, err := url.ParseQuery(string(qs))
 			if err != nil {
