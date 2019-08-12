@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -270,18 +271,64 @@ func main() {
 		Render(c, out)
 	})
 
+	r.POST("/v0/fetch/", func(c *gin.Context) {
+		var qr QueryRequest
+
+		if err := c.ShouldBindJSON(&qr); err != nil {
+			c.JSON(400, gin.H{"error": err.Error()})
+			return
+		}
+
+		dates := expandYYYYMMDD(qr.From, qr.To)
+		query, _, err := fromJson(qr.Query, func(k, v string) Query {
+			return NewTermQuery(dates, inverted, dictionary.Get(), k, strings.ToLower(v))
+		})
+
+		if err != nil {
+			c.JSON(400, gin.H{"error": err.Error()})
+			return
+		}
+
+		w := c.Writer
+		nl := []byte{'\n'}
+		left := qr.Size
+		for query.Next() != NO_MORE {
+			did := query.GetDocId()
+			hit, err := getScoredHit(contextCache, forward, dictionary.Get(), did, qr.DecodeMetadata)
+			hit.Score = query.Score()
+			if err != nil {
+				c.JSON(400, gin.H{"error": err.Error()})
+				return
+			}
+			b, err := json.Marshal(&hit)
+			if err != nil {
+				c.JSON(400, gin.H{"error": err.Error()})
+				return
+			}
+			w.Write(b)
+			w.Write(nl)
+
+			if qr.Size > 0 {
+				left--
+				if left == 0 {
+					break
+				}
+			}
+		}
+	})
+
 	r.GET("/", func(c *gin.Context) {
 		c.Redirect(302, "/scan/html/")
 	})
 
 	r.GET("/scan/:format/*query", func(c *gin.Context) {
-		sampleSize := intOrDefault(c.Query("sample_size"), 200)
+		sampleSize := intOrDefault(c.Query("sample_size"), 100)
 		counter := NewCounter(config, dictionary.Get(), contextCache, sampleSize)
 
 		from := c.Query("from")
 		to := c.Query("to")
 		if (from == "" || to == "") && c.Param("format") == "html" {
-			c.Redirect(302, fmt.Sprintf("%s?from=%s&to=%s", c.Request.URL.Path, yyyymmdd(time.Now().UTC().AddDate(0, 0, -3)), yyyymmdd(time.Now().UTC())))
+			c.Redirect(302, fmt.Sprintf("%s?from=%s&to=%s", c.Request.URL.Path, yyyymmdd(time.Now().UTC().AddDate(0, 0, -1)), yyyymmdd(time.Now().UTC())))
 			return
 		}
 		dates := expandYYYYMMDD(from, to)
@@ -302,10 +349,10 @@ func main() {
 		if nQueries == 0 {
 			query = expandTimeToQuery(dates, make)
 		}
-
 		for query.Next() != NO_MORE {
 			did := query.GetDocId()
 			cached, ok := cache.Get(did)
+
 			if !ok {
 				foreignId, foreignType, data, offset, err := forward.Read(uint64(did), true)
 				if err != nil {
@@ -326,6 +373,7 @@ func main() {
 				}
 				cache.Add(did, cached)
 			}
+
 			cx := cached.(Cached)
 			counter.Add(int64(cx.offset), cx.foreignId, cx.foreignType, &cx.data)
 		}

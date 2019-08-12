@@ -497,3 +497,22 @@ total feature number = 73008
 ```
 
 fun times
+
+
+# fetching many (one event per line)
+size:0 means unlimited
+
+```
+ curl -d '{
+  "size": 5000,
+  "from":"2019-08-08",
+  "to":"2019-08-10",
+  "query": {
+        "tag": {
+          "key": "product",
+          "value": "amazon_com"
+        }
+   },
+   "decode_metadata": true
+ }' http://localhost:9001/v0/fetch/
+```
