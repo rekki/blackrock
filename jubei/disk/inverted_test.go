@@ -77,11 +77,11 @@ func TestInverted(t *testing.T) {
 		}
 	}
 
-	segment, err := ReadAllTermsInField(dir, 1)
+	segment, err := ReadAllTermsInSegment(dir, segmentId)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(segment) != 2 {
-		t.Fatalf("expected 2 got %d", len(segment))
+	if len(segment) != 4 {
+		t.Fatalf("expected 4 got %d", len(segment))
 	}
 }

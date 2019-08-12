@@ -9,29 +9,28 @@ import (
 	"strings"
 )
 
-func ReadAllTermsInField(root string, ifield uint64) (map[string][]uint64, error) {
-	field := fmt.Sprintf("%d", ifield)
-	segments, err := ioutil.ReadDir(root)
+func ReadAllTermsInSegment(root string, segmentId string) (map[string][]uint64, error) {
+	fields, err := ioutil.ReadDir(path.Join(root, segmentId))
 	if err != nil {
 		return nil, err
 	}
 	segment := map[string][]uint64{}
-	for _, segmentId := range segments {
-		shards, err := ioutil.ReadDir(path.Join(root, segmentId.Name(), field))
+	for _, field := range fields {
+		shards, err := ioutil.ReadDir(path.Join(root, segmentId, field.Name()))
 		if err != nil {
 			return nil, err
 		}
 
 		for _, shardDir := range shards {
 			if strings.HasPrefix(shardDir.Name(), "shard_") {
-				lists, err := ioutil.ReadDir(path.Join(root, segmentId.Name(), field, shardDir.Name()))
+				lists, err := ioutil.ReadDir(path.Join(root, segmentId, field.Name(), shardDir.Name()))
 				if err != nil {
 					return nil, err
 				}
 
 				for _, term := range lists {
 					if strings.HasSuffix(term.Name(), ".p") {
-						file, err := os.OpenFile(path.Join(root, segmentId.Name(), field, shardDir.Name(), term.Name()), os.O_RDONLY, 0600)
+						file, err := os.OpenFile(path.Join(root, segmentId, field.Name(), shardDir.Name(), term.Name()), os.O_RDONLY, 0600)
 						if err != nil {
 							return nil, err
 						}
@@ -45,7 +44,7 @@ func ReadAllTermsInField(root string, ifield uint64) (map[string][]uint64, error
 							j++
 						}
 						t := strings.TrimSuffix(term.Name(), ".p")
-						segment[t] = longed
+						segment[fmt.Sprintf("%s:%s", field.Name(), t)] = longed
 						file.Close()
 					}
 				}
