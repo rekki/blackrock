@@ -13,9 +13,11 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+const PAD = 64
+
 type ForwardWriter struct {
 	forward *os.File
-	offset  uint64
+	offset  uint32
 }
 
 func NewForwardWriter(root string, name string) (*ForwardWriter, error) {
@@ -29,19 +31,19 @@ func NewForwardWriter(root string, name string) (*ForwardWriter, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	log.Infof("forward %s with %d size", filename, off)
+	log.Infof("forward %s with %d offset", filename, off)
 	return &ForwardWriter{
 		forward: fd,
-		offset:  uint64(off),
+		offset:  uint32((off + PAD - 1) / PAD),
 	}, nil
 }
 
 var EBADSLT = errors.New("checksum mismatch")
+var EBADRQC = errors.New("bad length")
 
-func (fw *ForwardWriter) Scan(offset uint64, readData bool, cb func(uint64, uint64, uint64, []byte) error) error {
+func (fw *ForwardWriter) Scan(offset uint32, cb func(uint32, []byte) error) error {
 	for {
-		id, ftype, data, next, err := fw.Read(offset, readData)
+		data, next, err := fw.Read(offset)
 		if err == io.EOF {
 			return nil
 		}
@@ -52,7 +54,7 @@ func (fw *ForwardWriter) Scan(offset uint64, readData bool, cb func(uint64, uint
 		if err != nil {
 			return err
 		}
-		err = cb(offset, id, ftype, data)
+		err = cb(next, data)
 		if err != nil {
 			return err
 		}
@@ -60,78 +62,67 @@ func (fw *ForwardWriter) Scan(offset uint64, readData bool, cb func(uint64, uint
 	}
 }
 
-func (fw *ForwardWriter) Read(offset uint64, readData bool) (uint64, uint64, []byte, uint64, error) {
-	header := make([]byte, 28)
-	_, err := fw.forward.ReadAt(header, int64(offset))
+func (fw *ForwardWriter) Read(offset uint32) ([]byte, uint32, error) {
+	header := make([]byte, 8)
+	_, err := fw.forward.ReadAt(header, int64(offset*PAD))
 	if err != nil {
-		return 0, 0, nil, 0, err
+		return nil, 0, err
 	}
 
-	id := binary.LittleEndian.Uint64(header[0:])
-	ftype := binary.LittleEndian.Uint64(header[8:])
-	metadataLen := binary.LittleEndian.Uint32(header[16:])
-	nextOffset := offset + uint64(len(header)) + (uint64(metadataLen))
-
-	checksumHeader := binary.LittleEndian.Uint32(header[20:])
-	computedChecksumHeader := uint32(depths.Hash(header[:20]))
-
-	if checksumHeader != computedChecksumHeader {
-		return 0, 0, nil, 0, EBADSLT
+	metadataLen := binary.LittleEndian.Uint32(header)
+	nextOffset := (offset + ((uint32(len(header))+(uint32(metadataLen)))+PAD-1)/PAD)
+	if metadataLen > 102400 {
+		return nil, 0, EBADRQC
 	}
-	if !readData {
-		return id, ftype, nil, nextOffset, nil
-	}
-
 	readInto := make([]byte, metadataLen)
-	_, err = fw.forward.ReadAt(readInto, int64(offset)+int64(len(header)))
+	_, err = fw.forward.ReadAt(readInto, int64(offset*PAD)+int64(len(header)))
 	if err != nil {
-		return 0, 0, nil, 0, err
+		return nil, 0, err
 	}
-	checksumData := binary.LittleEndian.Uint32(header[24:])
+	checksumHeader := binary.LittleEndian.Uint32(header[4:])
 	computedChecksumData := uint32(depths.Hash(readInto))
-	if checksumData != computedChecksumData {
-		return 0, 0, nil, 0, EBADSLT
+
+	if checksumHeader != computedChecksumData {
+		return nil, 0, EBADSLT
 	}
-	return id, ftype, readInto, nextOffset, nil
+	return readInto, nextOffset, nil
 }
 
 func (fw *ForwardWriter) Close() {
 	fw.forward.Close()
 }
 
-func (fw *ForwardWriter) Size() (uint64, error) {
+func (fw *ForwardWriter) Size() (uint32, error) {
 	s, err := fw.forward.Stat()
 	if err != nil {
 		return 0, err
 	}
-	return uint64(s.Size()), nil
+	return uint32(s.Size()), nil
 }
 
 func (fw *ForwardWriter) Sync() {
 	fw.forward.Sync()
 }
 
-func (fw *ForwardWriter) Offset() uint64 {
+func (fw *ForwardWriter) Offset() uint32 {
 	return fw.offset
 }
 
-func (fw *ForwardWriter) Append(id, t uint64, encoded []byte) (uint64, error) {
-	// id, len, checksum of the header, checksum of the data
-	blobSize := 8 + 8 + 4 + 4 + 4 + len(encoded)
+func (fw *ForwardWriter) Append(encoded []byte) (uint32, error) {
+	blobSize := 8 + len(encoded)
 	blob := make([]byte, blobSize)
-	copy(blob[28:], encoded)
-	binary.LittleEndian.PutUint64(blob[0:], id)
-	binary.LittleEndian.PutUint64(blob[8:], t)
-	binary.LittleEndian.PutUint32(blob[16:], uint32(len(encoded)))
-	binary.LittleEndian.PutUint32(blob[20:], uint32(depths.Hash(blob[:20])))
-	binary.LittleEndian.PutUint32(blob[24:], uint32(depths.Hash(encoded)))
-	current := atomic.AddUint64(&fw.offset, uint64(blobSize))
-	current -= uint64(blobSize)
+	copy(blob[8:], encoded)
+	binary.LittleEndian.PutUint32(blob[0:], uint32(len(encoded)))
+	binary.LittleEndian.PutUint32(blob[4:], uint32(depths.Hash(encoded)))
 
-	_, err := fw.forward.WriteAt(blob, int64(current))
+	padded := ((uint32(blobSize) + PAD - 1) / PAD)
+
+	current := atomic.AddUint32(&fw.offset, padded)
+
+	current -= uint32(padded)
+	_, err := fw.forward.WriteAt(blob, int64(current*PAD))
 	if err != nil {
 		return 0, err
 	}
-
-	return current, nil
+	return uint32(current), nil
 }

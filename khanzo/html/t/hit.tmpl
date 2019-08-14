@@ -2,12 +2,12 @@
 {{ $qs := .QueryString }}
 {{ $base := .BaseUrl }}
 {{ $m := $hit.Metadata }}
-{{ $foreignId := $hit.ForeignId }}
-{{ $foreignType := $hit.ForeignType }}
+{{ $foreignId := $m.ForeignId }}
+{{ $foreignType := $m.ForeignType }}
 <tr id="#{{$hit.ID}}" class="hit-header">
   <td>
     <a style="font-size: 18px" href="/scan/html/event_type:{{ $m.EventType }}?{{$qs}}">{{$m.EventType }}</a><br>
-    <a href="/scan/html/{{$hit.ForeignType}}:{{ $hit.ForeignId }}?{{$qs}}">{{$hit.ForeignType}}:{{$hit.ForeignId}}</a><br>
+    <a href="/scan/html/{{$m.ForeignType}}:{{ $m.ForeignId }}?{{$qs}}">{{$m.ForeignType}}:{{$m.ForeignId}}</a><br>
     {{ time $m.CreatedAtNs }}
     <br>
   </td>

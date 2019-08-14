@@ -25,7 +25,6 @@ Composed of the following characters:
 * [orgrim ](orgrim/) - consume events
 * [jubei](jubei/) - create indexes
 * [khanzo](khanzo/) - search
-* [blackhand](blackhand/) - fetch specific offset
 
 # do not use in production, it is 1 day old
 

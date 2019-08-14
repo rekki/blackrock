@@ -7,7 +7,7 @@ import (
 
 type DisplayConfig struct {
 	SortByName bool `json:"sort_by_name"`
-	Hide       bool `json:"sort_by_name"`
+	Hide       bool `json:"hide"`
 }
 
 type ViewConfig struct {

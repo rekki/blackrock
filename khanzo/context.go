@@ -11,24 +11,24 @@ import (
 )
 
 type ContextCache struct {
-	cache   map[uint64]map[string][]*spec.PersistedContext
-	offset  uint64
+	cache   map[string]map[string][]*spec.Context
+	offset  uint32
 	forward *disk.ForwardWriter
 	sync.RWMutex
 }
 
-func insertSort(data []*spec.PersistedContext, el *spec.PersistedContext) []*spec.PersistedContext {
+func insertSort(data []*spec.Context, el *spec.Context) []*spec.Context {
 	index := sort.Search(len(data), func(i int) bool { return data[i].CreatedAtNs <= el.CreatedAtNs })
 
 	if len(data) == 0 {
-		return []*spec.PersistedContext{el}
+		return []*spec.Context{el}
 	}
 
 	if index < len(data) && data[index].CreatedAtNs == el.CreatedAtNs {
 		data[index] = el
 		return data
 	}
-	data = append(data, &spec.PersistedContext{})
+	data = append(data, &spec.Context{})
 	copy(data[index+1:], data[index:])
 	data[index] = el
 
@@ -37,32 +37,31 @@ func insertSort(data []*spec.PersistedContext, el *spec.PersistedContext) []*spe
 
 func NewContextCache(forward *disk.ForwardWriter) *ContextCache {
 	return &ContextCache{
-		cache:   map[uint64]map[string][]*spec.PersistedContext{},
+		cache:   map[string]map[string][]*spec.Context{},
 		forward: forward,
 		offset:  0,
 	}
 }
 
-func (r *ContextCache) Insert(decoded *spec.PersistedContext) {
+func (r *ContextCache) Insert(decoded *spec.Context) {
 	r.Lock()
 	mt, ok := r.cache[decoded.ForeignType]
 	if !ok {
-		log.Infof("creating new type %d", decoded.ForeignType)
-		mt = map[string][]*spec.PersistedContext{}
+		log.Infof("creating new type %s", decoded.ForeignType)
+		mt = map[string][]*spec.Context{}
 		r.cache[decoded.ForeignType] = mt
 	}
 	mt[decoded.ForeignId] = insertSort(mt[decoded.ForeignId], decoded)
 	r.Unlock()
 
-	log.Infof("setting %d:%s [%d] to %v", decoded.ForeignType, decoded.ForeignId, decoded.CreatedAtNs, decoded)
+	log.Infof("setting %s:%s [%d] to %v", decoded.ForeignType, decoded.ForeignId, decoded.CreatedAtNs, decoded)
 }
 
-func (r *ContextCache) Lookup(t uint64, id string, from int64) (*spec.PersistedContext, bool) {
+func (r *ContextCache) Lookup(t string, id string, from uint64) (*spec.Context, bool) {
 	r.RLock()
 	defer r.RUnlock()
 	m, ok := r.cache[t]
 	if !ok {
-
 		return nil, false
 	}
 
@@ -91,8 +90,8 @@ func (r *ContextCache) Lookup(t uint64, id string, from int64) (*spec.PersistedC
 func (r *ContextCache) Scan() error {
 	log.Warnf("scanning from %d", r.offset)
 	n := 0
-	err := r.forward.Scan(r.offset, true, func(offset uint64, foreignId uint64, foreignType uint64, data []byte) error {
-		decoded := &spec.PersistedContext{}
+	err := r.forward.Scan(r.offset, func(offset uint32, data []byte) error {
+		decoded := &spec.Context{}
 		err := proto.Unmarshal(data, decoded)
 		if err != nil {
 			log.Warnf("rend failed to unmarshal, data: %s, error: %s", string(data), err.Error())
@@ -107,11 +106,11 @@ func (r *ContextCache) Scan() error {
 	return err
 }
 
-func toContextDeep(seen map[uint64]map[string]bool, contextCache *ContextCache, dictionary *disk.PersistedDictionary, p *spec.PersistedContext) []*spec.Context {
-	out := []*spec.Context{toContext(dictionary, p)}
-	for i := 0; i < len(p.PropertyKeys); i++ {
-		k := p.PropertyKeys[i]
-		v := p.PropertyValues[i]
+func toContextDeep(seen map[string]map[string]bool, contextCache *ContextCache, p *spec.Context) []*spec.Context {
+	out := []*spec.Context{p}
+	for _, kv := range p.Properties {
+		k := kv.Key
+		v := kv.Value
 
 		m, ok := seen[k]
 		if !ok {
@@ -124,37 +123,19 @@ func toContextDeep(seen map[uint64]map[string]bool, contextCache *ContextCache, 
 		}
 		m[v] = true
 		if px, ok := contextCache.Lookup(k, v, p.CreatedAtNs); ok {
-			out = append(out, toContextDeep(seen, contextCache, dictionary, px)...)
+			out = append(out, toContextDeep(seen, contextCache, px)...)
 		}
 	}
 
 	return out
 }
-func toContext(dictionary *disk.PersistedDictionary, p *spec.PersistedContext) *spec.Context {
-	out := &spec.Context{
-		CreatedAtNs: p.CreatedAtNs,
-		ForeignId:   p.ForeignId,
-		ForeignType: dictionary.ReverseResolve(p.ForeignType),
-	}
-	for i := 0; i < len(p.PropertyKeys); i++ {
-		tk := dictionary.ReverseResolve(p.PropertyKeys[i])
-		out.Properties = append(out.Properties, &spec.KV{Key: tk, Value: p.PropertyValues[i]})
-	}
-	sort.Sort(ByKV(out.Properties))
-	return out
-}
 
-func LoadContextForStat(contextCache *ContextCache, dictionary *disk.PersistedDictionary, k, v string, t int64) []*spec.Context {
-	seen := map[uint64]map[string]bool{}
+func LoadContextForStat(contextCache *ContextCache, k, v string, t uint64) []*spec.Context {
+	seen := map[string]map[string]bool{}
 	out := []*spec.Context{}
-	key, ok := dictionary.Resolve(k)
 
-	if !ok {
-		return out
-	}
-
-	if px, ok := contextCache.Lookup(key, v, t); ok {
-		out = append(out, toContextDeep(seen, contextCache, dictionary, px)...)
+	if px, ok := contextCache.Lookup(k, v, t); ok {
+		out = append(out, toContextDeep(seen, contextCache, px)...)
 	}
 
 	return out

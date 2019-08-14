@@ -30,219 +30,72 @@ func Fixme(k, v string) (string, string) {
 	return k, v
 }
 
-func ConsumeEvents(partition uint32, offset uint64, envelope *spec.Envelope, dictionary *disk.PersistedDictionary, forward *disk.ForwardWriter, payload *disk.ForwardWriter, inverted *disk.InvertedWriter) error {
-	typeKey, err := dictionary.GetUniqueTerm("event_type")
-	if err != nil {
-		return err
-	}
-
-	yearKey, err := dictionary.GetUniqueTerm("year")
-	if err != nil {
-		return err
-	}
-	yearMonthKey, err := dictionary.GetUniqueTerm("year-month")
-	if err != nil {
-		return err
-	}
-
-	yearMonthDayKey, err := dictionary.GetUniqueTerm("year-month-day")
-	if err != nil {
-		return err
-	}
-
-	yearMonthDayHourKey, err := dictionary.GetUniqueTerm("year-month-day-hour")
-	if err != nil {
-		return err
-	}
-
-	if envelope.Metadata.CreatedAtNs == 0 {
-		envelope.Metadata.CreatedAtNs = time.Now().UnixNano()
-	}
-
-	segmentId := depths.SegmentFromNs(envelope.Metadata.CreatedAtNs)
-
+func ConsumeEvents(segmentId string, envelope *spec.Envelope, forward *disk.ForwardWriter, inverted *disk.InvertedWriter) error {
 	meta := envelope.Metadata
-	sforeignId := depths.Cleanup(strings.ToLower(meta.ForeignId))
-	foreignId, err := dictionary.GetUniqueTerm(sforeignId)
-	if err != nil {
-		return err
-	}
-	sforeignType := depths.Cleanup(strings.ToLower(meta.ForeignType))
-	foreignType, err := dictionary.GetUniqueTerm(sforeignType)
-	if err != nil {
-		return err
-	}
-	poff := uint64(0)
-	if payload != nil {
-		poff, err = payload.Append(foreignId, foreignType, envelope.Payload)
-		if err != nil {
-			return err
-		}
-	}
+	foreignId := depths.Cleanup(strings.ToLower(meta.ForeignId))
+	foreignType := depths.Cleanup(strings.ToLower(meta.ForeignType))
+	eventType := depths.Cleanup(strings.ToLower(meta.EventType))
 
-	seventType := depths.Cleanup(strings.ToLower(meta.EventType))
-	eventType, err := dictionary.GetUniqueTerm(seventType)
-	if err != nil {
-		return err
-	}
-
-	persisted := &spec.PersistedMetadata{
-		Partition:    uint32(partition),
-		Offset:       uint64(offset),
-		CreatedAtNs:  envelope.Metadata.CreatedAtNs,
-		SearchKeys:   []uint64{},
-		CountKeys:    []uint64{},
-		PropertyKeys: []uint64{},
-		Payload:      poff,
-		EventType:    eventType,
-		ForeignType:  foreignType,
-		ForeignId:    sforeignId,
-	}
-
-	for _, kv := range meta.Search {
+	for i, kv := range meta.Search {
 		k := kv.Key
 		v := kv.Value
 		lc := depths.CleanupAllowDot(strings.ToLower(k))
-		if lc == "event_type" || lc == "foreign_type" || lc == "foreign_id" || lc == sforeignType || lc == "" {
+		if lc == "event_type" || lc == "foreign_type" || lc == "foreign_id" || lc == foreignType || lc == "" {
 			continue
 		}
 
 		lc, v = Fixme(lc, v)
 
-		tk, err := dictionary.GetUniqueTerm(lc)
-		if err != nil {
-			return err
-		}
-		persisted.SearchKeys = append(persisted.SearchKeys, tk)
 		value := depths.Cleanup(strings.ToLower(v))
 		if value == "" {
 			value = "__empty"
 		}
-		persisted.SearchValues = append(persisted.SearchValues, value)
+		meta.Search[i] = spec.KV{Key: lc, Value: value}
 	}
 
 	// add some automatic tags
 	{
 		ns := meta.CreatedAtNs
 		second := ns / 1000000000
-		t := time.Unix(second, 0).UTC()
+		t := time.Unix(int64(second), 0).UTC()
 		year, month, day := t.Date()
 		hour, _, _ := t.Clock()
-
-		persisted.SearchKeys = append(persisted.SearchKeys, yearKey)
-		persisted.SearchValues = append(persisted.SearchValues, fmt.Sprintf("%d", year))
-
-		persisted.SearchKeys = append(persisted.SearchKeys, yearMonthKey)
-		persisted.SearchValues = append(persisted.SearchValues, fmt.Sprintf("%d-%02d", year, month))
-
-		persisted.SearchKeys = append(persisted.SearchKeys, yearMonthDayKey)
-		persisted.SearchValues = append(persisted.SearchValues, fmt.Sprintf("%d-%02d-%02d", year, month, day))
-
-		persisted.SearchKeys = append(persisted.SearchKeys, yearMonthDayHourKey)
-		persisted.SearchValues = append(persisted.SearchValues, fmt.Sprintf("%d-%02d-%02d-%02d", year, month, day, hour))
+		meta.Search = append(meta.Search, spec.KV{Key: "year", Value: fmt.Sprintf("%d", year)})
+		meta.Search = append(meta.Search, spec.KV{Key: "year-month", Value: fmt.Sprintf("%d-%02d", year, month)})
+		meta.Search = append(meta.Search, spec.KV{Key: "year-month-day", Value: fmt.Sprintf("%d-%02d-%02d", year, month, day)})
+		meta.Search = append(meta.Search, spec.KV{Key: "year-month-day-hour", Value: fmt.Sprintf("%d-%02d-%02d-%02d", year, month, day, hour)})
 	}
 
-	for _, kv := range meta.Count {
-		k := kv.Key
-		v := kv.Value
-		lc := depths.CleanupAllowDot(strings.ToLower(k))
-		if lc == "event_type" || lc == "foreign_type" || lc == "foreign_id" || lc == sforeignType || lc == "" {
-			continue
-		}
-
-		pk, err := dictionary.GetUniqueTerm(lc)
-		if err != nil {
-			return err
-		}
-
-		value := depths.Cleanup(strings.ToLower(v))
-		if value == "" {
-			value = "__empty"
-		}
-
-		persisted.CountKeys = append(persisted.CountKeys, pk)
-		persisted.CountValues = append(persisted.CountValues, value)
-	}
-
-	for _, kv := range meta.Properties {
-		k := kv.Key
-		v := kv.Value
-		lc := depths.CleanupAllowDot(strings.ToLower(k))
-		if lc == "event_type" || lc == "foreign_type" || lc == "foreign_id" || lc == sforeignType || lc == "" {
-			continue
-		}
-
-		pk, err := dictionary.GetUniqueTerm(lc)
-		if err != nil {
-			return err
-		}
-
-		persisted.PropertyKeys = append(persisted.PropertyKeys, pk)
-		persisted.PropertyValues = append(persisted.PropertyValues, v)
-	}
-
-	encoded, err := proto.Marshal(persisted)
+	encoded, err := proto.Marshal(envelope.Metadata)
 	if err != nil {
 		return err
 	}
 
-	docId, err := forward.Append(foreignId, foreignType, encoded)
+	docId, err := forward.Append(encoded)
 	if err != nil {
 		return err
 	}
 
-	inverted.Append(segmentId, int64(docId), foreignType, sforeignId)
-	inverted.Append(segmentId, int64(docId), typeKey, seventType)
+	inverted.Append(segmentId, int32(docId), foreignType, foreignId)
+	inverted.Append(segmentId, int32(docId), "event_type", eventType)
 
-	for i := 0; i < len(persisted.SearchKeys); i++ {
-		inverted.Append(segmentId, int64(docId), persisted.SearchKeys[i], persisted.SearchValues[i])
+	for _, kv := range meta.Search {
+		inverted.Append(segmentId, int32(docId), kv.Key, kv.Value)
 	}
 	return nil
 }
 
-func ConsumeContext(envelope *spec.Context, dictionary *disk.PersistedDictionary, forward *disk.ForwardWriter) error {
+func ConsumeContext(envelope *spec.Context, forward *disk.ForwardWriter) error {
 	if envelope.CreatedAtNs == 0 {
-		envelope.CreatedAtNs = time.Now().UnixNano()
+		envelope.CreatedAtNs = uint64(time.Now().UnixNano())
 	}
 
-	sforeignType := depths.Cleanup(strings.ToLower(envelope.ForeignType))
-	foreignType, err := dictionary.GetUniqueTerm(sforeignType)
+	encoded, err := proto.Marshal(envelope)
 	if err != nil {
 		return err
 	}
 
-	sforeignId := depths.Cleanup(strings.ToLower(envelope.ForeignId))
-	foreignId, err := dictionary.GetUniqueTerm(sforeignId)
-	if err != nil {
-		return err
-	}
-
-	persisted := &spec.PersistedContext{
-		CreatedAtNs:  envelope.CreatedAtNs,
-		PropertyKeys: []uint64{},
-		ForeignType:  foreignType,
-		ForeignId:    sforeignId,
-	}
-
-	for _, kv := range envelope.Properties {
-		k := kv.Key
-		v := kv.Value
-		lc := depths.CleanupAllowDot(strings.ToLower(k))
-		pk, err := dictionary.GetUniqueTerm(lc)
-		if err != nil {
-			return err
-		}
-		persisted.PropertyKeys = append(persisted.PropertyKeys, pk)
-		persisted.PropertyValues = append(persisted.PropertyValues, v)
-	}
-
-	encoded, err := proto.Marshal(persisted)
-	if err != nil {
-		return err
-	}
-
-	_, err = forward.Append(foreignId, foreignType, encoded)
-	//forward.Sync()
+	_, err = forward.Append(encoded)
 	if err != nil {
 		return err
 	}

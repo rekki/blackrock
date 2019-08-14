@@ -4,10 +4,13 @@
 package spec
 
 import (
+	encoding_binary "encoding/binary"
 	fmt "fmt"
+	_ "github.com/gogo/protobuf/gogoproto"
 	proto "github.com/gogo/protobuf/proto"
 	io "io"
 	math "math"
+	math_bits "math/bits"
 )
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -40,7 +43,7 @@ func (m *KV) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 		return xxx_messageInfo_KV.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
@@ -74,10 +77,10 @@ func (m *KV) GetValue() string {
 }
 
 type Metadata struct {
-	Search      []*KV  `protobuf:"bytes,1,rep,name=search,proto3" json:"search,omitempty"`
-	Count       []*KV  `protobuf:"bytes,2,rep,name=count,proto3" json:"count,omitempty"`
-	Properties  []*KV  `protobuf:"bytes,3,rep,name=properties,proto3" json:"properties,omitempty"`
-	CreatedAtNs int64  `protobuf:"varint,5,opt,name=created_at_ns,json=createdAtNs,proto3" json:"created_at_ns,omitempty"`
+	Search      []KV   `protobuf:"bytes,1,rep,name=search,proto3" json:"search"`
+	Count       []KV   `protobuf:"bytes,2,rep,name=count,proto3" json:"count"`
+	Properties  []KV   `protobuf:"bytes,3,rep,name=properties,proto3" json:"properties"`
+	CreatedAtNs uint64 `protobuf:"fixed64,5,opt,name=created_at_ns,json=createdAtNs,proto3" json:"created_at_ns,omitempty"`
 	EventType   string `protobuf:"bytes,7,opt,name=event_type,json=eventType,proto3" json:"event_type,omitempty"`
 	ForeignId   string `protobuf:"bytes,9,opt,name=foreign_id,json=foreignId,proto3" json:"foreign_id,omitempty"`
 	ForeignType string `protobuf:"bytes,10,opt,name=foreign_type,json=foreignType,proto3" json:"foreign_type,omitempty"`
@@ -97,7 +100,7 @@ func (m *Metadata) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 		return xxx_messageInfo_Metadata.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
@@ -116,28 +119,28 @@ func (m *Metadata) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_Metadata proto.InternalMessageInfo
 
-func (m *Metadata) GetSearch() []*KV {
+func (m *Metadata) GetSearch() []KV {
 	if m != nil {
 		return m.Search
 	}
 	return nil
 }
 
-func (m *Metadata) GetCount() []*KV {
+func (m *Metadata) GetCount() []KV {
 	if m != nil {
 		return m.Count
 	}
 	return nil
 }
 
-func (m *Metadata) GetProperties() []*KV {
+func (m *Metadata) GetProperties() []KV {
 	if m != nil {
 		return m.Properties
 	}
 	return nil
 }
 
-func (m *Metadata) GetCreatedAtNs() int64 {
+func (m *Metadata) GetCreatedAtNs() uint64 {
 	if m != nil {
 		return m.CreatedAtNs
 	}
@@ -166,8 +169,8 @@ func (m *Metadata) GetForeignType() string {
 }
 
 type Context struct {
-	Properties  []*KV  `protobuf:"bytes,2,rep,name=properties,proto3" json:"properties,omitempty"`
-	CreatedAtNs int64  `protobuf:"varint,5,opt,name=created_at_ns,json=createdAtNs,proto3" json:"created_at_ns,omitempty"`
+	Properties  []KV   `protobuf:"bytes,2,rep,name=properties,proto3" json:"properties"`
+	CreatedAtNs uint64 `protobuf:"fixed64,5,opt,name=created_at_ns,json=createdAtNs,proto3" json:"created_at_ns,omitempty"`
 	ForeignId   string `protobuf:"bytes,6,opt,name=foreign_id,json=foreignId,proto3" json:"foreign_id,omitempty"`
 	ForeignType string `protobuf:"bytes,7,opt,name=foreign_type,json=foreignType,proto3" json:"foreign_type,omitempty"`
 }
@@ -186,7 +189,7 @@ func (m *Context) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 		return xxx_messageInfo_Context.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
@@ -205,14 +208,14 @@ func (m *Context) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_Context proto.InternalMessageInfo
 
-func (m *Context) GetProperties() []*KV {
+func (m *Context) GetProperties() []KV {
 	if m != nil {
 		return m.Properties
 	}
 	return nil
 }
 
-func (m *Context) GetCreatedAtNs() int64 {
+func (m *Context) GetCreatedAtNs() uint64 {
 	if m != nil {
 		return m.CreatedAtNs
 	}
@@ -252,7 +255,7 @@ func (m *Envelope) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 		return xxx_messageInfo_Envelope.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
@@ -285,273 +288,47 @@ func (m *Envelope) GetPayload() []byte {
 	return nil
 }
 
-type PersistedMetadata struct {
-	SearchKeys     []uint64 `protobuf:"varint,1,rep,packed,name=searchKeys,proto3" json:"searchKeys,omitempty"`
-	SearchValues   []string `protobuf:"bytes,2,rep,name=searchValues,proto3" json:"searchValues,omitempty"`
-	CountKeys      []uint64 `protobuf:"varint,3,rep,packed,name=countKeys,proto3" json:"countKeys,omitempty"`
-	CountValues    []string `protobuf:"bytes,4,rep,name=countValues,proto3" json:"countValues,omitempty"`
-	PropertyKeys   []uint64 `protobuf:"varint,13,rep,packed,name=propertyKeys,proto3" json:"propertyKeys,omitempty"`
-	PropertyValues []string `protobuf:"bytes,14,rep,name=propertyValues,proto3" json:"propertyValues,omitempty"`
-	CreatedAtNs    int64    `protobuf:"varint,5,opt,name=created_at_ns,json=createdAtNs,proto3" json:"created_at_ns,omitempty"`
-	EventType      uint64   `protobuf:"varint,7,opt,name=event_type,json=eventType,proto3" json:"event_type,omitempty"`
-	Offset         uint64   `protobuf:"varint,8,opt,name=offset,proto3" json:"offset,omitempty"`
-	Partition      uint32   `protobuf:"varint,9,opt,name=partition,proto3" json:"partition,omitempty"`
-	ForeignId      string   `protobuf:"bytes,10,opt,name=foreign_id,json=foreignId,proto3" json:"foreign_id,omitempty"`
-	ForeignType    uint64   `protobuf:"varint,11,opt,name=foreign_type,json=foreignType,proto3" json:"foreign_type,omitempty"`
-	Payload        uint64   `protobuf:"varint,12,opt,name=payload,proto3" json:"payload,omitempty"`
-}
-
-func (m *PersistedMetadata) Reset()         { *m = PersistedMetadata{} }
-func (m *PersistedMetadata) String() string { return proto.CompactTextString(m) }
-func (*PersistedMetadata) ProtoMessage()    {}
-func (*PersistedMetadata) Descriptor() ([]byte, []int) {
-	return fileDescriptor_423806180556987f, []int{4}
-}
-func (m *PersistedMetadata) XXX_Unmarshal(b []byte) error {
-	return m.Unmarshal(b)
-}
-func (m *PersistedMetadata) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	if deterministic {
-		return xxx_messageInfo_PersistedMetadata.Marshal(b, m, deterministic)
-	} else {
-		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
-		if err != nil {
-			return nil, err
-		}
-		return b[:n], nil
-	}
-}
-func (m *PersistedMetadata) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_PersistedMetadata.Merge(m, src)
-}
-func (m *PersistedMetadata) XXX_Size() int {
-	return m.Size()
-}
-func (m *PersistedMetadata) XXX_DiscardUnknown() {
-	xxx_messageInfo_PersistedMetadata.DiscardUnknown(m)
-}
-
-var xxx_messageInfo_PersistedMetadata proto.InternalMessageInfo
-
-func (m *PersistedMetadata) GetSearchKeys() []uint64 {
-	if m != nil {
-		return m.SearchKeys
-	}
-	return nil
-}
-
-func (m *PersistedMetadata) GetSearchValues() []string {
-	if m != nil {
-		return m.SearchValues
-	}
-	return nil
-}
-
-func (m *PersistedMetadata) GetCountKeys() []uint64 {
-	if m != nil {
-		return m.CountKeys
-	}
-	return nil
-}
-
-func (m *PersistedMetadata) GetCountValues() []string {
-	if m != nil {
-		return m.CountValues
-	}
-	return nil
-}
-
-func (m *PersistedMetadata) GetPropertyKeys() []uint64 {
-	if m != nil {
-		return m.PropertyKeys
-	}
-	return nil
-}
-
-func (m *PersistedMetadata) GetPropertyValues() []string {
-	if m != nil {
-		return m.PropertyValues
-	}
-	return nil
-}
-
-func (m *PersistedMetadata) GetCreatedAtNs() int64 {
-	if m != nil {
-		return m.CreatedAtNs
-	}
-	return 0
-}
-
-func (m *PersistedMetadata) GetEventType() uint64 {
-	if m != nil {
-		return m.EventType
-	}
-	return 0
-}
-
-func (m *PersistedMetadata) GetOffset() uint64 {
-	if m != nil {
-		return m.Offset
-	}
-	return 0
-}
-
-func (m *PersistedMetadata) GetPartition() uint32 {
-	if m != nil {
-		return m.Partition
-	}
-	return 0
-}
-
-func (m *PersistedMetadata) GetForeignId() string {
-	if m != nil {
-		return m.ForeignId
-	}
-	return ""
-}
-
-func (m *PersistedMetadata) GetForeignType() uint64 {
-	if m != nil {
-		return m.ForeignType
-	}
-	return 0
-}
-
-func (m *PersistedMetadata) GetPayload() uint64 {
-	if m != nil {
-		return m.Payload
-	}
-	return 0
-}
-
-type PersistedContext struct {
-	PropertyKeys   []uint64 `protobuf:"varint,3,rep,packed,name=propertyKeys,proto3" json:"propertyKeys,omitempty"`
-	PropertyValues []string `protobuf:"bytes,4,rep,name=propertyValues,proto3" json:"propertyValues,omitempty"`
-	CreatedAtNs    int64    `protobuf:"varint,5,opt,name=createdAtNs,proto3" json:"createdAtNs,omitempty"`
-	ForeignId      string   `protobuf:"bytes,9,opt,name=foreign_id,json=foreignId,proto3" json:"foreign_id,omitempty"`
-	ForeignType    uint64   `protobuf:"varint,10,opt,name=foreign_type,json=foreignType,proto3" json:"foreign_type,omitempty"`
-}
-
-func (m *PersistedContext) Reset()         { *m = PersistedContext{} }
-func (m *PersistedContext) String() string { return proto.CompactTextString(m) }
-func (*PersistedContext) ProtoMessage()    {}
-func (*PersistedContext) Descriptor() ([]byte, []int) {
-	return fileDescriptor_423806180556987f, []int{5}
-}
-func (m *PersistedContext) XXX_Unmarshal(b []byte) error {
-	return m.Unmarshal(b)
-}
-func (m *PersistedContext) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	if deterministic {
-		return xxx_messageInfo_PersistedContext.Marshal(b, m, deterministic)
-	} else {
-		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
-		if err != nil {
-			return nil, err
-		}
-		return b[:n], nil
-	}
-}
-func (m *PersistedContext) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_PersistedContext.Merge(m, src)
-}
-func (m *PersistedContext) XXX_Size() int {
-	return m.Size()
-}
-func (m *PersistedContext) XXX_DiscardUnknown() {
-	xxx_messageInfo_PersistedContext.DiscardUnknown(m)
-}
-
-var xxx_messageInfo_PersistedContext proto.InternalMessageInfo
-
-func (m *PersistedContext) GetPropertyKeys() []uint64 {
-	if m != nil {
-		return m.PropertyKeys
-	}
-	return nil
-}
-
-func (m *PersistedContext) GetPropertyValues() []string {
-	if m != nil {
-		return m.PropertyValues
-	}
-	return nil
-}
-
-func (m *PersistedContext) GetCreatedAtNs() int64 {
-	if m != nil {
-		return m.CreatedAtNs
-	}
-	return 0
-}
-
-func (m *PersistedContext) GetForeignId() string {
-	if m != nil {
-		return m.ForeignId
-	}
-	return ""
-}
-
-func (m *PersistedContext) GetForeignType() uint64 {
-	if m != nil {
-		return m.ForeignType
-	}
-	return 0
-}
-
 func init() {
 	proto.RegisterType((*KV)(nil), "spec.KV")
 	proto.RegisterType((*Metadata)(nil), "spec.Metadata")
 	proto.RegisterType((*Context)(nil), "spec.Context")
 	proto.RegisterType((*Envelope)(nil), "spec.Envelope")
-	proto.RegisterType((*PersistedMetadata)(nil), "spec.PersistedMetadata")
-	proto.RegisterType((*PersistedContext)(nil), "spec.PersistedContext")
 }
 
 func init() { proto.RegisterFile("spec.proto", fileDescriptor_423806180556987f) }
 
 var fileDescriptor_423806180556987f = []byte{
-	// 503 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xa4, 0x94, 0xbf, 0x8e, 0xd3, 0x40,
-	0x10, 0xc6, 0xb3, 0x71, 0xfe, 0xd8, 0xe3, 0x24, 0x3a, 0x56, 0x08, 0x6d, 0x01, 0x96, 0x71, 0x81,
-	0x22, 0x84, 0xae, 0x38, 0x9e, 0x00, 0x10, 0x05, 0x8a, 0x40, 0x27, 0x0b, 0xa5, 0x8d, 0x96, 0x78,
-	0x02, 0x16, 0xc1, 0x6b, 0xd9, 0x7b, 0x11, 0x7e, 0x0b, 0x5a, 0xde, 0x84, 0x9a, 0x8a, 0xf2, 0x4a,
-	0x4a, 0x94, 0x3c, 0x06, 0x0d, 0xf2, 0x78, 0x9d, 0x38, 0x06, 0x29, 0x27, 0xae, 0xdb, 0xf9, 0x66,
-	0xf3, 0xe5, 0xdb, 0xf9, 0x4d, 0x02, 0x90, 0xa7, 0xb8, 0x3c, 0x4f, 0x33, 0xa5, 0x15, 0xef, 0x95,
-	0xe7, 0xe0, 0x09, 0x74, 0x67, 0x73, 0x7e, 0x06, 0xd6, 0x47, 0x2c, 0x04, 0xf3, 0xd9, 0xd4, 0x09,
-	0xcb, 0x23, 0xbf, 0x0b, 0xfd, 0x8d, 0x5c, 0x5f, 0xa1, 0xe8, 0x92, 0x56, 0x15, 0xc1, 0x6f, 0x06,
-	0xf6, 0x6b, 0xd4, 0x32, 0x92, 0x5a, 0x72, 0x1f, 0x06, 0x39, 0xca, 0x6c, 0xf9, 0x41, 0x30, 0xdf,
-	0x9a, 0xba, 0x17, 0xf6, 0x39, 0xb9, 0xcf, 0xe6, 0xa1, 0xd1, 0xb9, 0x07, 0xfd, 0xa5, 0xba, 0x4a,
-	0xb4, 0xe8, 0xb6, 0x2e, 0x54, 0x32, 0x9f, 0x02, 0xa4, 0x99, 0x4a, 0x31, 0xd3, 0x31, 0xe6, 0xc2,
-	0x6a, 0x5d, 0x6a, 0xf4, 0x78, 0x00, 0xe3, 0x65, 0x86, 0x52, 0x63, 0xb4, 0x90, 0x7a, 0x91, 0xe4,
-	0xa2, 0xef, 0xb3, 0xa9, 0x15, 0xba, 0x46, 0x7c, 0xa6, 0xdf, 0xe4, 0xfc, 0x01, 0x00, 0x6e, 0x30,
-	0xd1, 0x0b, 0x5d, 0xa4, 0x28, 0x86, 0x94, 0xdb, 0x21, 0xe5, 0x6d, 0x91, 0x62, 0xd9, 0x5e, 0xa9,
-	0x0c, 0xe3, 0xf7, 0xc9, 0x22, 0x8e, 0x84, 0x53, 0xb5, 0x8d, 0xf2, 0x2a, 0xe2, 0x0f, 0x61, 0x54,
-	0xb7, 0xe9, 0xf3, 0x40, 0x17, 0x5c, 0xa3, 0x95, 0x0e, 0xc1, 0x57, 0x06, 0xc3, 0x17, 0x2a, 0xd1,
-	0xf8, 0xb9, 0x1d, 0xbd, 0x7b, 0xfb, 0xe8, 0x8d, 0x6c, 0x83, 0x53, 0xd9, 0x86, 0x7f, 0x67, 0xbb,
-	0x04, 0xfb, 0x65, 0xb2, 0xc1, 0xb5, 0x4a, 0x91, 0x3f, 0x06, 0xfb, 0x93, 0x81, 0x44, 0x48, 0xdd,
-	0x8b, 0x49, 0x95, 0xac, 0x46, 0x17, 0xee, 0xfb, 0x5c, 0xc0, 0x30, 0x95, 0xc5, 0x5a, 0xc9, 0x88,
-	0x48, 0x8f, 0xc2, 0xba, 0x0c, 0xbe, 0x59, 0x70, 0xe7, 0x12, 0xb3, 0x3c, 0xce, 0x35, 0x46, 0x7b,
-	0xe8, 0x1e, 0x40, 0x05, 0x77, 0x86, 0x45, 0x4e, 0xe0, 0x7b, 0x61, 0x43, 0xe1, 0x01, 0x8c, 0xaa,
-	0x6a, 0x5e, 0x2e, 0x4c, 0x35, 0x19, 0x27, 0x3c, 0xd2, 0xf8, 0x7d, 0x70, 0x88, 0x3f, 0x59, 0x58,
-	0x64, 0x71, 0x10, 0xb8, 0x0f, 0x2e, 0x15, 0xc6, 0xa0, 0x47, 0x06, 0x4d, 0xa9, 0xfc, 0x0e, 0x33,
-	0xdf, 0x82, 0x2c, 0xc6, 0x64, 0x71, 0xa4, 0xf1, 0x47, 0x30, 0xa9, 0x6b, 0x63, 0x34, 0x21, 0xa3,
-	0x96, 0xfa, 0x9f, 0x8b, 0xd5, 0x6b, 0x2e, 0xd6, 0x3d, 0x18, 0xa8, 0xd5, 0x2a, 0x47, 0x2d, 0x6c,
-	0x6a, 0x99, 0xaa, 0x7c, 0x66, 0x2a, 0x33, 0x1d, 0xeb, 0x58, 0x25, 0xb4, 0x6f, 0xe3, 0xf0, 0x20,
-	0xb4, 0x90, 0xc3, 0x29, 0xe4, 0x2e, 0x59, 0x37, 0x91, 0x37, 0xd1, 0x8d, 0xa8, 0xbb, 0x47, 0xf7,
-	0x9d, 0xc1, 0xd9, 0x1e, 0x5d, 0xbd, 0xb1, 0xed, 0xa9, 0x59, 0x37, 0x9a, 0x5a, 0xef, 0x9f, 0x53,
-	0x2b, 0x19, 0x1d, 0x06, 0x74, 0x7a, 0xa3, 0x6f, 0xf4, 0x6b, 0x3b, 0x7e, 0xde, 0x73, 0xf1, 0x63,
-	0xeb, 0xb1, 0xeb, 0xad, 0xc7, 0x7e, 0x6d, 0x3d, 0xf6, 0x65, 0xe7, 0x75, 0xae, 0x77, 0x5e, 0xe7,
-	0xe7, 0xce, 0xeb, 0xbc, 0x1b, 0xd0, 0x1f, 0xd8, 0xd3, 0x3f, 0x01, 0x00, 0x00, 0xff, 0xff, 0xc3,
-	0x68, 0x50, 0xed, 0xce, 0x04, 0x00, 0x00,
+	// 373 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xac, 0x92, 0xc1, 0x0a, 0xd3, 0x40,
+	0x10, 0x86, 0xb3, 0x69, 0x9b, 0xa4, 0x93, 0x2a, 0xb2, 0x78, 0x58, 0x04, 0x63, 0x0d, 0x22, 0x45,
+	0x34, 0x85, 0xfa, 0x04, 0x56, 0x3c, 0x48, 0x51, 0x24, 0x48, 0xaf, 0x61, 0x9b, 0x4c, 0xd3, 0x60,
+	0x9b, 0x5d, 0x92, 0x4d, 0x31, 0x0f, 0x21, 0xf8, 0x06, 0xbe, 0x4e, 0x8f, 0x3d, 0x7a, 0x12, 0x69,
+	0x5f, 0x44, 0xb2, 0x49, 0xa5, 0x68, 0xc1, 0x8b, 0xb7, 0x99, 0xff, 0xfb, 0x77, 0xf9, 0x87, 0x19,
+	0x80, 0x52, 0x62, 0x1c, 0xc8, 0x42, 0x28, 0x41, 0xfb, 0x4d, 0xfd, 0xe0, 0x45, 0x9a, 0xa9, 0x4d,
+	0xb5, 0x0a, 0x62, 0xb1, 0x9b, 0xa6, 0x22, 0x15, 0x53, 0x0d, 0x57, 0xd5, 0x5a, 0x77, 0xba, 0xd1,
+	0x55, 0xfb, 0xc8, 0x7f, 0x0e, 0xe6, 0x62, 0x49, 0xef, 0x41, 0xef, 0x13, 0xd6, 0x8c, 0x8c, 0xc9,
+	0x64, 0x18, 0x36, 0x25, 0xbd, 0x0f, 0x83, 0x3d, 0xdf, 0x56, 0xc8, 0x4c, 0xad, 0xb5, 0x8d, 0xff,
+	0xc5, 0x04, 0xe7, 0x1d, 0x2a, 0x9e, 0x70, 0xc5, 0xe9, 0x53, 0xb0, 0x4a, 0xe4, 0x45, 0xbc, 0x61,
+	0x64, 0xdc, 0x9b, 0xb8, 0x33, 0x27, 0xd0, 0x61, 0x16, 0xcb, 0x79, 0xff, 0xf0, 0xe3, 0x91, 0x11,
+	0x76, 0x94, 0x3e, 0x81, 0x41, 0x2c, 0xaa, 0x5c, 0x31, 0xf3, 0xa6, 0xad, 0x85, 0x34, 0x00, 0x90,
+	0x85, 0x90, 0x58, 0xa8, 0x0c, 0x4b, 0xd6, 0xbb, 0x69, 0xbd, 0x72, 0x50, 0x1f, 0xee, 0xc4, 0x05,
+	0x72, 0x85, 0x49, 0xc4, 0x55, 0x94, 0x97, 0x6c, 0x30, 0x26, 0x13, 0x2b, 0x74, 0x3b, 0xf1, 0x95,
+	0x7a, 0x5f, 0xd2, 0x87, 0x00, 0xb8, 0xc7, 0x5c, 0x45, 0xaa, 0x96, 0xc8, 0x6c, 0x3d, 0xc9, 0x50,
+	0x2b, 0x1f, 0x6b, 0x89, 0x0d, 0x5e, 0x8b, 0x02, 0xb3, 0x34, 0x8f, 0xb2, 0x84, 0x0d, 0x5b, 0xdc,
+	0x29, 0x6f, 0x13, 0xfa, 0x18, 0x46, 0x17, 0xac, 0xdf, 0x83, 0x36, 0xb8, 0x9d, 0xd6, 0xfc, 0xe0,
+	0x7f, 0x23, 0x60, 0xbf, 0x16, 0xb9, 0xc2, 0xcf, 0x7f, 0x0e, 0x60, 0xfe, 0xaf, 0x01, 0xae, 0x12,
+	0x5a, 0xff, 0x4a, 0x68, 0xff, 0x9d, 0xf0, 0x03, 0x38, 0x6f, 0xf2, 0x3d, 0x6e, 0x85, 0x44, 0xfa,
+	0x0c, 0x9c, 0x5d, 0xb7, 0x3c, 0xbd, 0x6a, 0x77, 0x76, 0xb7, 0xcd, 0x77, 0x59, 0x69, 0xf8, 0x9b,
+	0x53, 0x06, 0xb6, 0xe4, 0xf5, 0x56, 0xf0, 0x44, 0x5f, 0xc0, 0x28, 0xbc, 0xb4, 0x73, 0x76, 0x38,
+	0x79, 0xe4, 0x78, 0xf2, 0xc8, 0xcf, 0x93, 0x47, 0xbe, 0x9e, 0x3d, 0xe3, 0x78, 0xf6, 0x8c, 0xef,
+	0x67, 0xcf, 0x58, 0x59, 0xfa, 0xa4, 0x5e, 0xfe, 0x0a, 0x00, 0x00, 0xff, 0xff, 0xc1, 0x43, 0xb2,
+	0xb4, 0x95, 0x02, 0x00, 0x00,
 }
 
 func (m *KV) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -559,29 +336,36 @@ func (m *KV) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *KV) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *KV) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
-	if len(m.Key) > 0 {
-		dAtA[i] = 0xa
-		i++
-		i = encodeVarintSpec(dAtA, i, uint64(len(m.Key)))
-		i += copy(dAtA[i:], m.Key)
-	}
 	if len(m.Value) > 0 {
-		dAtA[i] = 0x12
-		i++
+		i -= len(m.Value)
+		copy(dAtA[i:], m.Value)
 		i = encodeVarintSpec(dAtA, i, uint64(len(m.Value)))
-		i += copy(dAtA[i:], m.Value)
+		i--
+		dAtA[i] = 0x12
 	}
-	return i, nil
+	if len(m.Key) > 0 {
+		i -= len(m.Key)
+		copy(dAtA[i:], m.Key)
+		i = encodeVarintSpec(dAtA, i, uint64(len(m.Key)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
 }
 
 func (m *Metadata) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -589,76 +373,91 @@ func (m *Metadata) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *Metadata) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *Metadata) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
-	if len(m.Search) > 0 {
-		for _, msg := range m.Search {
-			dAtA[i] = 0xa
-			i++
-			i = encodeVarintSpec(dAtA, i, uint64(msg.Size()))
-			n, err := msg.MarshalTo(dAtA[i:])
-			if err != nil {
-				return 0, err
+	if len(m.ForeignType) > 0 {
+		i -= len(m.ForeignType)
+		copy(dAtA[i:], m.ForeignType)
+		i = encodeVarintSpec(dAtA, i, uint64(len(m.ForeignType)))
+		i--
+		dAtA[i] = 0x52
+	}
+	if len(m.ForeignId) > 0 {
+		i -= len(m.ForeignId)
+		copy(dAtA[i:], m.ForeignId)
+		i = encodeVarintSpec(dAtA, i, uint64(len(m.ForeignId)))
+		i--
+		dAtA[i] = 0x4a
+	}
+	if len(m.EventType) > 0 {
+		i -= len(m.EventType)
+		copy(dAtA[i:], m.EventType)
+		i = encodeVarintSpec(dAtA, i, uint64(len(m.EventType)))
+		i--
+		dAtA[i] = 0x3a
+	}
+	if m.CreatedAtNs != 0 {
+		i -= 8
+		encoding_binary.LittleEndian.PutUint64(dAtA[i:], uint64(m.CreatedAtNs))
+		i--
+		dAtA[i] = 0x29
+	}
+	if len(m.Properties) > 0 {
+		for iNdEx := len(m.Properties) - 1; iNdEx >= 0; iNdEx-- {
+			{
+				size, err := m.Properties[iNdEx].MarshalToSizedBuffer(dAtA[:i])
+				if err != nil {
+					return 0, err
+				}
+				i -= size
+				i = encodeVarintSpec(dAtA, i, uint64(size))
 			}
-			i += n
+			i--
+			dAtA[i] = 0x1a
 		}
 	}
 	if len(m.Count) > 0 {
-		for _, msg := range m.Count {
+		for iNdEx := len(m.Count) - 1; iNdEx >= 0; iNdEx-- {
+			{
+				size, err := m.Count[iNdEx].MarshalToSizedBuffer(dAtA[:i])
+				if err != nil {
+					return 0, err
+				}
+				i -= size
+				i = encodeVarintSpec(dAtA, i, uint64(size))
+			}
+			i--
 			dAtA[i] = 0x12
-			i++
-			i = encodeVarintSpec(dAtA, i, uint64(msg.Size()))
-			n, err := msg.MarshalTo(dAtA[i:])
-			if err != nil {
-				return 0, err
-			}
-			i += n
 		}
 	}
-	if len(m.Properties) > 0 {
-		for _, msg := range m.Properties {
-			dAtA[i] = 0x1a
-			i++
-			i = encodeVarintSpec(dAtA, i, uint64(msg.Size()))
-			n, err := msg.MarshalTo(dAtA[i:])
-			if err != nil {
-				return 0, err
+	if len(m.Search) > 0 {
+		for iNdEx := len(m.Search) - 1; iNdEx >= 0; iNdEx-- {
+			{
+				size, err := m.Search[iNdEx].MarshalToSizedBuffer(dAtA[:i])
+				if err != nil {
+					return 0, err
+				}
+				i -= size
+				i = encodeVarintSpec(dAtA, i, uint64(size))
 			}
-			i += n
+			i--
+			dAtA[i] = 0xa
 		}
 	}
-	if m.CreatedAtNs != 0 {
-		dAtA[i] = 0x28
-		i++
-		i = encodeVarintSpec(dAtA, i, uint64(m.CreatedAtNs))
-	}
-	if len(m.EventType) > 0 {
-		dAtA[i] = 0x3a
-		i++
-		i = encodeVarintSpec(dAtA, i, uint64(len(m.EventType)))
-		i += copy(dAtA[i:], m.EventType)
-	}
-	if len(m.ForeignId) > 0 {
-		dAtA[i] = 0x4a
-		i++
-		i = encodeVarintSpec(dAtA, i, uint64(len(m.ForeignId)))
-		i += copy(dAtA[i:], m.ForeignId)
-	}
-	if len(m.ForeignType) > 0 {
-		dAtA[i] = 0x52
-		i++
-		i = encodeVarintSpec(dAtA, i, uint64(len(m.ForeignType)))
-		i += copy(dAtA[i:], m.ForeignType)
-	}
-	return i, nil
+	return len(dAtA) - i, nil
 }
 
 func (m *Context) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -666,46 +465,56 @@ func (m *Context) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *Context) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *Context) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
-	if len(m.Properties) > 0 {
-		for _, msg := range m.Properties {
-			dAtA[i] = 0x12
-			i++
-			i = encodeVarintSpec(dAtA, i, uint64(msg.Size()))
-			n, err := msg.MarshalTo(dAtA[i:])
-			if err != nil {
-				return 0, err
-			}
-			i += n
-		}
-	}
-	if m.CreatedAtNs != 0 {
-		dAtA[i] = 0x28
-		i++
-		i = encodeVarintSpec(dAtA, i, uint64(m.CreatedAtNs))
+	if len(m.ForeignType) > 0 {
+		i -= len(m.ForeignType)
+		copy(dAtA[i:], m.ForeignType)
+		i = encodeVarintSpec(dAtA, i, uint64(len(m.ForeignType)))
+		i--
+		dAtA[i] = 0x3a
 	}
 	if len(m.ForeignId) > 0 {
-		dAtA[i] = 0x32
-		i++
+		i -= len(m.ForeignId)
+		copy(dAtA[i:], m.ForeignId)
 		i = encodeVarintSpec(dAtA, i, uint64(len(m.ForeignId)))
-		i += copy(dAtA[i:], m.ForeignId)
+		i--
+		dAtA[i] = 0x32
 	}
-	if len(m.ForeignType) > 0 {
-		dAtA[i] = 0x3a
-		i++
-		i = encodeVarintSpec(dAtA, i, uint64(len(m.ForeignType)))
-		i += copy(dAtA[i:], m.ForeignType)
+	if m.CreatedAtNs != 0 {
+		i -= 8
+		encoding_binary.LittleEndian.PutUint64(dAtA[i:], uint64(m.CreatedAtNs))
+		i--
+		dAtA[i] = 0x29
 	}
-	return i, nil
+	if len(m.Properties) > 0 {
+		for iNdEx := len(m.Properties) - 1; iNdEx >= 0; iNdEx-- {
+			{
+				size, err := m.Properties[iNdEx].MarshalToSizedBuffer(dAtA[:i])
+				if err != nil {
+					return 0, err
+				}
+				i -= size
+				i = encodeVarintSpec(dAtA, i, uint64(size))
+			}
+			i--
+			dAtA[i] = 0x12
+		}
+	}
+	return len(dAtA) - i, nil
 }
 
 func (m *Envelope) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -713,253 +522,47 @@ func (m *Envelope) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *Envelope) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *Envelope) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
-	if m.Metadata != nil {
-		dAtA[i] = 0xa
-		i++
-		i = encodeVarintSpec(dAtA, i, uint64(m.Metadata.Size()))
-		n1, err := m.Metadata.MarshalTo(dAtA[i:])
-		if err != nil {
-			return 0, err
-		}
-		i += n1
-	}
 	if len(m.Payload) > 0 {
-		dAtA[i] = 0x12
-		i++
+		i -= len(m.Payload)
+		copy(dAtA[i:], m.Payload)
 		i = encodeVarintSpec(dAtA, i, uint64(len(m.Payload)))
-		i += copy(dAtA[i:], m.Payload)
+		i--
+		dAtA[i] = 0x12
 	}
-	return i, nil
-}
-
-func (m *PersistedMetadata) Marshal() (dAtA []byte, err error) {
-	size := m.Size()
-	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
-	if err != nil {
-		return nil, err
-	}
-	return dAtA[:n], nil
-}
-
-func (m *PersistedMetadata) MarshalTo(dAtA []byte) (int, error) {
-	var i int
-	_ = i
-	var l int
-	_ = l
-	if len(m.SearchKeys) > 0 {
-		dAtA3 := make([]byte, len(m.SearchKeys)*10)
-		var j2 int
-		for _, num := range m.SearchKeys {
-			for num >= 1<<7 {
-				dAtA3[j2] = uint8(uint64(num)&0x7f | 0x80)
-				num >>= 7
-				j2++
+	if m.Metadata != nil {
+		{
+			size, err := m.Metadata.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
 			}
-			dAtA3[j2] = uint8(num)
-			j2++
+			i -= size
+			i = encodeVarintSpec(dAtA, i, uint64(size))
 		}
+		i--
 		dAtA[i] = 0xa
-		i++
-		i = encodeVarintSpec(dAtA, i, uint64(j2))
-		i += copy(dAtA[i:], dAtA3[:j2])
 	}
-	if len(m.SearchValues) > 0 {
-		for _, s := range m.SearchValues {
-			dAtA[i] = 0x12
-			i++
-			l = len(s)
-			for l >= 1<<7 {
-				dAtA[i] = uint8(uint64(l)&0x7f | 0x80)
-				l >>= 7
-				i++
-			}
-			dAtA[i] = uint8(l)
-			i++
-			i += copy(dAtA[i:], s)
-		}
-	}
-	if len(m.CountKeys) > 0 {
-		dAtA5 := make([]byte, len(m.CountKeys)*10)
-		var j4 int
-		for _, num := range m.CountKeys {
-			for num >= 1<<7 {
-				dAtA5[j4] = uint8(uint64(num)&0x7f | 0x80)
-				num >>= 7
-				j4++
-			}
-			dAtA5[j4] = uint8(num)
-			j4++
-		}
-		dAtA[i] = 0x1a
-		i++
-		i = encodeVarintSpec(dAtA, i, uint64(j4))
-		i += copy(dAtA[i:], dAtA5[:j4])
-	}
-	if len(m.CountValues) > 0 {
-		for _, s := range m.CountValues {
-			dAtA[i] = 0x22
-			i++
-			l = len(s)
-			for l >= 1<<7 {
-				dAtA[i] = uint8(uint64(l)&0x7f | 0x80)
-				l >>= 7
-				i++
-			}
-			dAtA[i] = uint8(l)
-			i++
-			i += copy(dAtA[i:], s)
-		}
-	}
-	if m.CreatedAtNs != 0 {
-		dAtA[i] = 0x28
-		i++
-		i = encodeVarintSpec(dAtA, i, uint64(m.CreatedAtNs))
-	}
-	if m.EventType != 0 {
-		dAtA[i] = 0x38
-		i++
-		i = encodeVarintSpec(dAtA, i, uint64(m.EventType))
-	}
-	if m.Offset != 0 {
-		dAtA[i] = 0x40
-		i++
-		i = encodeVarintSpec(dAtA, i, uint64(m.Offset))
-	}
-	if m.Partition != 0 {
-		dAtA[i] = 0x48
-		i++
-		i = encodeVarintSpec(dAtA, i, uint64(m.Partition))
-	}
-	if len(m.ForeignId) > 0 {
-		dAtA[i] = 0x52
-		i++
-		i = encodeVarintSpec(dAtA, i, uint64(len(m.ForeignId)))
-		i += copy(dAtA[i:], m.ForeignId)
-	}
-	if m.ForeignType != 0 {
-		dAtA[i] = 0x58
-		i++
-		i = encodeVarintSpec(dAtA, i, uint64(m.ForeignType))
-	}
-	if m.Payload != 0 {
-		dAtA[i] = 0x60
-		i++
-		i = encodeVarintSpec(dAtA, i, uint64(m.Payload))
-	}
-	if len(m.PropertyKeys) > 0 {
-		dAtA7 := make([]byte, len(m.PropertyKeys)*10)
-		var j6 int
-		for _, num := range m.PropertyKeys {
-			for num >= 1<<7 {
-				dAtA7[j6] = uint8(uint64(num)&0x7f | 0x80)
-				num >>= 7
-				j6++
-			}
-			dAtA7[j6] = uint8(num)
-			j6++
-		}
-		dAtA[i] = 0x6a
-		i++
-		i = encodeVarintSpec(dAtA, i, uint64(j6))
-		i += copy(dAtA[i:], dAtA7[:j6])
-	}
-	if len(m.PropertyValues) > 0 {
-		for _, s := range m.PropertyValues {
-			dAtA[i] = 0x72
-			i++
-			l = len(s)
-			for l >= 1<<7 {
-				dAtA[i] = uint8(uint64(l)&0x7f | 0x80)
-				l >>= 7
-				i++
-			}
-			dAtA[i] = uint8(l)
-			i++
-			i += copy(dAtA[i:], s)
-		}
-	}
-	return i, nil
-}
-
-func (m *PersistedContext) Marshal() (dAtA []byte, err error) {
-	size := m.Size()
-	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
-	if err != nil {
-		return nil, err
-	}
-	return dAtA[:n], nil
-}
-
-func (m *PersistedContext) MarshalTo(dAtA []byte) (int, error) {
-	var i int
-	_ = i
-	var l int
-	_ = l
-	if len(m.PropertyKeys) > 0 {
-		dAtA9 := make([]byte, len(m.PropertyKeys)*10)
-		var j8 int
-		for _, num := range m.PropertyKeys {
-			for num >= 1<<7 {
-				dAtA9[j8] = uint8(uint64(num)&0x7f | 0x80)
-				num >>= 7
-				j8++
-			}
-			dAtA9[j8] = uint8(num)
-			j8++
-		}
-		dAtA[i] = 0x1a
-		i++
-		i = encodeVarintSpec(dAtA, i, uint64(j8))
-		i += copy(dAtA[i:], dAtA9[:j8])
-	}
-	if len(m.PropertyValues) > 0 {
-		for _, s := range m.PropertyValues {
-			dAtA[i] = 0x22
-			i++
-			l = len(s)
-			for l >= 1<<7 {
-				dAtA[i] = uint8(uint64(l)&0x7f | 0x80)
-				l >>= 7
-				i++
-			}
-			dAtA[i] = uint8(l)
-			i++
-			i += copy(dAtA[i:], s)
-		}
-	}
-	if m.CreatedAtNs != 0 {
-		dAtA[i] = 0x28
-		i++
-		i = encodeVarintSpec(dAtA, i, uint64(m.CreatedAtNs))
-	}
-	if len(m.ForeignId) > 0 {
-		dAtA[i] = 0x4a
-		i++
-		i = encodeVarintSpec(dAtA, i, uint64(len(m.ForeignId)))
-		i += copy(dAtA[i:], m.ForeignId)
-	}
-	if m.ForeignType != 0 {
-		dAtA[i] = 0x50
-		i++
-		i = encodeVarintSpec(dAtA, i, uint64(m.ForeignType))
-	}
-	return i, nil
+	return len(dAtA) - i, nil
 }
 
 func encodeVarintSpec(dAtA []byte, offset int, v uint64) int {
+	offset -= sovSpec(v)
+	base := offset
 	for v >= 1<<7 {
 		dAtA[offset] = uint8(v&0x7f | 0x80)
 		v >>= 7
 		offset++
 	}
 	dAtA[offset] = uint8(v)
-	return offset + 1
+	return base
 }
 func (m *KV) Size() (n int) {
 	if m == nil {
@@ -1003,7 +606,7 @@ func (m *Metadata) Size() (n int) {
 		}
 	}
 	if m.CreatedAtNs != 0 {
-		n += 1 + sovSpec(uint64(m.CreatedAtNs))
+		n += 9
 	}
 	l = len(m.EventType)
 	if l > 0 {
@@ -1033,7 +636,7 @@ func (m *Context) Size() (n int) {
 		}
 	}
 	if m.CreatedAtNs != 0 {
-		n += 1 + sovSpec(uint64(m.CreatedAtNs))
+		n += 9
 	}
 	l = len(m.ForeignId)
 	if l > 0 {
@@ -1063,117 +666,8 @@ func (m *Envelope) Size() (n int) {
 	return n
 }
 
-func (m *PersistedMetadata) Size() (n int) {
-	if m == nil {
-		return 0
-	}
-	var l int
-	_ = l
-	if len(m.SearchKeys) > 0 {
-		l = 0
-		for _, e := range m.SearchKeys {
-			l += sovSpec(uint64(e))
-		}
-		n += 1 + sovSpec(uint64(l)) + l
-	}
-	if len(m.SearchValues) > 0 {
-		for _, s := range m.SearchValues {
-			l = len(s)
-			n += 1 + l + sovSpec(uint64(l))
-		}
-	}
-	if len(m.CountKeys) > 0 {
-		l = 0
-		for _, e := range m.CountKeys {
-			l += sovSpec(uint64(e))
-		}
-		n += 1 + sovSpec(uint64(l)) + l
-	}
-	if len(m.CountValues) > 0 {
-		for _, s := range m.CountValues {
-			l = len(s)
-			n += 1 + l + sovSpec(uint64(l))
-		}
-	}
-	if m.CreatedAtNs != 0 {
-		n += 1 + sovSpec(uint64(m.CreatedAtNs))
-	}
-	if m.EventType != 0 {
-		n += 1 + sovSpec(uint64(m.EventType))
-	}
-	if m.Offset != 0 {
-		n += 1 + sovSpec(uint64(m.Offset))
-	}
-	if m.Partition != 0 {
-		n += 1 + sovSpec(uint64(m.Partition))
-	}
-	l = len(m.ForeignId)
-	if l > 0 {
-		n += 1 + l + sovSpec(uint64(l))
-	}
-	if m.ForeignType != 0 {
-		n += 1 + sovSpec(uint64(m.ForeignType))
-	}
-	if m.Payload != 0 {
-		n += 1 + sovSpec(uint64(m.Payload))
-	}
-	if len(m.PropertyKeys) > 0 {
-		l = 0
-		for _, e := range m.PropertyKeys {
-			l += sovSpec(uint64(e))
-		}
-		n += 1 + sovSpec(uint64(l)) + l
-	}
-	if len(m.PropertyValues) > 0 {
-		for _, s := range m.PropertyValues {
-			l = len(s)
-			n += 1 + l + sovSpec(uint64(l))
-		}
-	}
-	return n
-}
-
-func (m *PersistedContext) Size() (n int) {
-	if m == nil {
-		return 0
-	}
-	var l int
-	_ = l
-	if len(m.PropertyKeys) > 0 {
-		l = 0
-		for _, e := range m.PropertyKeys {
-			l += sovSpec(uint64(e))
-		}
-		n += 1 + sovSpec(uint64(l)) + l
-	}
-	if len(m.PropertyValues) > 0 {
-		for _, s := range m.PropertyValues {
-			l = len(s)
-			n += 1 + l + sovSpec(uint64(l))
-		}
-	}
-	if m.CreatedAtNs != 0 {
-		n += 1 + sovSpec(uint64(m.CreatedAtNs))
-	}
-	l = len(m.ForeignId)
-	if l > 0 {
-		n += 1 + l + sovSpec(uint64(l))
-	}
-	if m.ForeignType != 0 {
-		n += 1 + sovSpec(uint64(m.ForeignType))
-	}
-	return n
-}
-
 func sovSpec(x uint64) (n int) {
-	for {
-		n++
-		x >>= 7
-		if x == 0 {
-			break
-		}
-	}
-	return n
+	return (math_bits.Len64(x|1) + 6) / 7
 }
 func sozSpec(x uint64) (n int) {
 	return sovSpec(uint64((x << 1) ^ uint64((int64(x) >> 63))))
@@ -1193,7 +687,7 @@ func (m *KV) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -1221,7 +715,7 @@ func (m *KV) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -1231,6 +725,9 @@ func (m *KV) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthSpec
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthSpec
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -1250,7 +747,7 @@ func (m *KV) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -1260,6 +757,9 @@ func (m *KV) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthSpec
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthSpec
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -1272,6 +772,9 @@ func (m *KV) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			if skippy < 0 {
+				return ErrInvalidLengthSpec
+			}
+			if (iNdEx + skippy) < 0 {
 				return ErrInvalidLengthSpec
 			}
 			if (iNdEx + skippy) > l {
@@ -1301,7 +804,7 @@ func (m *Metadata) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -1329,7 +832,7 @@ func (m *Metadata) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -1338,10 +841,13 @@ func (m *Metadata) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthSpec
 			}
 			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthSpec
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Search = append(m.Search, &KV{})
+			m.Search = append(m.Search, KV{})
 			if err := m.Search[len(m.Search)-1].Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
@@ -1360,7 +866,7 @@ func (m *Metadata) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -1369,10 +875,13 @@ func (m *Metadata) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthSpec
 			}
 			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthSpec
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Count = append(m.Count, &KV{})
+			m.Count = append(m.Count, KV{})
 			if err := m.Count[len(m.Count)-1].Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
@@ -1391,7 +900,7 @@ func (m *Metadata) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -1400,33 +909,27 @@ func (m *Metadata) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthSpec
 			}
 			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthSpec
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Properties = append(m.Properties, &KV{})
+			m.Properties = append(m.Properties, KV{})
 			if err := m.Properties[len(m.Properties)-1].Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
 			iNdEx = postIndex
 		case 5:
-			if wireType != 0 {
+			if wireType != 1 {
 				return fmt.Errorf("proto: wrong wireType = %d for field CreatedAtNs", wireType)
 			}
 			m.CreatedAtNs = 0
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowSpec
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				m.CreatedAtNs |= (int64(b) & 0x7F) << shift
-				if b < 0x80 {
-					break
-				}
+			if (iNdEx + 8) > l {
+				return io.ErrUnexpectedEOF
 			}
+			m.CreatedAtNs = uint64(encoding_binary.LittleEndian.Uint64(dAtA[iNdEx:]))
+			iNdEx += 8
 		case 7:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field EventType", wireType)
@@ -1441,7 +944,7 @@ func (m *Metadata) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -1451,6 +954,9 @@ func (m *Metadata) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthSpec
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthSpec
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -1470,7 +976,7 @@ func (m *Metadata) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -1480,6 +986,9 @@ func (m *Metadata) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthSpec
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthSpec
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -1499,7 +1008,7 @@ func (m *Metadata) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -1509,6 +1018,9 @@ func (m *Metadata) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthSpec
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthSpec
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -1521,6 +1033,9 @@ func (m *Metadata) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			if skippy < 0 {
+				return ErrInvalidLengthSpec
+			}
+			if (iNdEx + skippy) < 0 {
 				return ErrInvalidLengthSpec
 			}
 			if (iNdEx + skippy) > l {
@@ -1550,7 +1065,7 @@ func (m *Context) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -1578,7 +1093,7 @@ func (m *Context) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -1587,33 +1102,27 @@ func (m *Context) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthSpec
 			}
 			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthSpec
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Properties = append(m.Properties, &KV{})
+			m.Properties = append(m.Properties, KV{})
 			if err := m.Properties[len(m.Properties)-1].Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
 			iNdEx = postIndex
 		case 5:
-			if wireType != 0 {
+			if wireType != 1 {
 				return fmt.Errorf("proto: wrong wireType = %d for field CreatedAtNs", wireType)
 			}
 			m.CreatedAtNs = 0
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowSpec
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				m.CreatedAtNs |= (int64(b) & 0x7F) << shift
-				if b < 0x80 {
-					break
-				}
+			if (iNdEx + 8) > l {
+				return io.ErrUnexpectedEOF
 			}
+			m.CreatedAtNs = uint64(encoding_binary.LittleEndian.Uint64(dAtA[iNdEx:]))
+			iNdEx += 8
 		case 6:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field ForeignId", wireType)
@@ -1628,7 +1137,7 @@ func (m *Context) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -1638,6 +1147,9 @@ func (m *Context) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthSpec
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthSpec
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -1657,7 +1169,7 @@ func (m *Context) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -1667,6 +1179,9 @@ func (m *Context) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthSpec
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthSpec
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -1679,6 +1194,9 @@ func (m *Context) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			if skippy < 0 {
+				return ErrInvalidLengthSpec
+			}
+			if (iNdEx + skippy) < 0 {
 				return ErrInvalidLengthSpec
 			}
 			if (iNdEx + skippy) > l {
@@ -1708,7 +1226,7 @@ func (m *Envelope) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -1736,7 +1254,7 @@ func (m *Envelope) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -1745,6 +1263,9 @@ func (m *Envelope) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthSpec
 			}
 			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthSpec
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -1769,7 +1290,7 @@ func (m *Envelope) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				byteLen |= (int(b) & 0x7F) << shift
+				byteLen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -1778,6 +1299,9 @@ func (m *Envelope) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthSpec
 			}
 			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthSpec
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -1795,722 +1319,7 @@ func (m *Envelope) Unmarshal(dAtA []byte) error {
 			if skippy < 0 {
 				return ErrInvalidLengthSpec
 			}
-			if (iNdEx + skippy) > l {
-				return io.ErrUnexpectedEOF
-			}
-			iNdEx += skippy
-		}
-	}
-
-	if iNdEx > l {
-		return io.ErrUnexpectedEOF
-	}
-	return nil
-}
-func (m *PersistedMetadata) Unmarshal(dAtA []byte) error {
-	l := len(dAtA)
-	iNdEx := 0
-	for iNdEx < l {
-		preIndex := iNdEx
-		var wire uint64
-		for shift := uint(0); ; shift += 7 {
-			if shift >= 64 {
-				return ErrIntOverflowSpec
-			}
-			if iNdEx >= l {
-				return io.ErrUnexpectedEOF
-			}
-			b := dAtA[iNdEx]
-			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
-			if b < 0x80 {
-				break
-			}
-		}
-		fieldNum := int32(wire >> 3)
-		wireType := int(wire & 0x7)
-		if wireType == 4 {
-			return fmt.Errorf("proto: PersistedMetadata: wiretype end group for non-group")
-		}
-		if fieldNum <= 0 {
-			return fmt.Errorf("proto: PersistedMetadata: illegal tag %d (wire type %d)", fieldNum, wire)
-		}
-		switch fieldNum {
-		case 1:
-			if wireType == 0 {
-				var v uint64
-				for shift := uint(0); ; shift += 7 {
-					if shift >= 64 {
-						return ErrIntOverflowSpec
-					}
-					if iNdEx >= l {
-						return io.ErrUnexpectedEOF
-					}
-					b := dAtA[iNdEx]
-					iNdEx++
-					v |= (uint64(b) & 0x7F) << shift
-					if b < 0x80 {
-						break
-					}
-				}
-				m.SearchKeys = append(m.SearchKeys, v)
-			} else if wireType == 2 {
-				var packedLen int
-				for shift := uint(0); ; shift += 7 {
-					if shift >= 64 {
-						return ErrIntOverflowSpec
-					}
-					if iNdEx >= l {
-						return io.ErrUnexpectedEOF
-					}
-					b := dAtA[iNdEx]
-					iNdEx++
-					packedLen |= (int(b) & 0x7F) << shift
-					if b < 0x80 {
-						break
-					}
-				}
-				if packedLen < 0 {
-					return ErrInvalidLengthSpec
-				}
-				postIndex := iNdEx + packedLen
-				if postIndex > l {
-					return io.ErrUnexpectedEOF
-				}
-				var elementCount int
-				var count int
-				for _, integer := range dAtA {
-					if integer < 128 {
-						count++
-					}
-				}
-				elementCount = count
-				if elementCount != 0 && len(m.SearchKeys) == 0 {
-					m.SearchKeys = make([]uint64, 0, elementCount)
-				}
-				for iNdEx < postIndex {
-					var v uint64
-					for shift := uint(0); ; shift += 7 {
-						if shift >= 64 {
-							return ErrIntOverflowSpec
-						}
-						if iNdEx >= l {
-							return io.ErrUnexpectedEOF
-						}
-						b := dAtA[iNdEx]
-						iNdEx++
-						v |= (uint64(b) & 0x7F) << shift
-						if b < 0x80 {
-							break
-						}
-					}
-					m.SearchKeys = append(m.SearchKeys, v)
-				}
-			} else {
-				return fmt.Errorf("proto: wrong wireType = %d for field SearchKeys", wireType)
-			}
-		case 2:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field SearchValues", wireType)
-			}
-			var stringLen uint64
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowSpec
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			intStringLen := int(stringLen)
-			if intStringLen < 0 {
-				return ErrInvalidLengthSpec
-			}
-			postIndex := iNdEx + intStringLen
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			m.SearchValues = append(m.SearchValues, string(dAtA[iNdEx:postIndex]))
-			iNdEx = postIndex
-		case 3:
-			if wireType == 0 {
-				var v uint64
-				for shift := uint(0); ; shift += 7 {
-					if shift >= 64 {
-						return ErrIntOverflowSpec
-					}
-					if iNdEx >= l {
-						return io.ErrUnexpectedEOF
-					}
-					b := dAtA[iNdEx]
-					iNdEx++
-					v |= (uint64(b) & 0x7F) << shift
-					if b < 0x80 {
-						break
-					}
-				}
-				m.CountKeys = append(m.CountKeys, v)
-			} else if wireType == 2 {
-				var packedLen int
-				for shift := uint(0); ; shift += 7 {
-					if shift >= 64 {
-						return ErrIntOverflowSpec
-					}
-					if iNdEx >= l {
-						return io.ErrUnexpectedEOF
-					}
-					b := dAtA[iNdEx]
-					iNdEx++
-					packedLen |= (int(b) & 0x7F) << shift
-					if b < 0x80 {
-						break
-					}
-				}
-				if packedLen < 0 {
-					return ErrInvalidLengthSpec
-				}
-				postIndex := iNdEx + packedLen
-				if postIndex > l {
-					return io.ErrUnexpectedEOF
-				}
-				var elementCount int
-				var count int
-				for _, integer := range dAtA {
-					if integer < 128 {
-						count++
-					}
-				}
-				elementCount = count
-				if elementCount != 0 && len(m.CountKeys) == 0 {
-					m.CountKeys = make([]uint64, 0, elementCount)
-				}
-				for iNdEx < postIndex {
-					var v uint64
-					for shift := uint(0); ; shift += 7 {
-						if shift >= 64 {
-							return ErrIntOverflowSpec
-						}
-						if iNdEx >= l {
-							return io.ErrUnexpectedEOF
-						}
-						b := dAtA[iNdEx]
-						iNdEx++
-						v |= (uint64(b) & 0x7F) << shift
-						if b < 0x80 {
-							break
-						}
-					}
-					m.CountKeys = append(m.CountKeys, v)
-				}
-			} else {
-				return fmt.Errorf("proto: wrong wireType = %d for field CountKeys", wireType)
-			}
-		case 4:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field CountValues", wireType)
-			}
-			var stringLen uint64
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowSpec
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			intStringLen := int(stringLen)
-			if intStringLen < 0 {
-				return ErrInvalidLengthSpec
-			}
-			postIndex := iNdEx + intStringLen
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			m.CountValues = append(m.CountValues, string(dAtA[iNdEx:postIndex]))
-			iNdEx = postIndex
-		case 5:
-			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field CreatedAtNs", wireType)
-			}
-			m.CreatedAtNs = 0
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowSpec
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				m.CreatedAtNs |= (int64(b) & 0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-		case 7:
-			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field EventType", wireType)
-			}
-			m.EventType = 0
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowSpec
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				m.EventType |= (uint64(b) & 0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-		case 8:
-			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Offset", wireType)
-			}
-			m.Offset = 0
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowSpec
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				m.Offset |= (uint64(b) & 0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-		case 9:
-			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Partition", wireType)
-			}
-			m.Partition = 0
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowSpec
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				m.Partition |= (uint32(b) & 0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-		case 10:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field ForeignId", wireType)
-			}
-			var stringLen uint64
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowSpec
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			intStringLen := int(stringLen)
-			if intStringLen < 0 {
-				return ErrInvalidLengthSpec
-			}
-			postIndex := iNdEx + intStringLen
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			m.ForeignId = string(dAtA[iNdEx:postIndex])
-			iNdEx = postIndex
-		case 11:
-			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field ForeignType", wireType)
-			}
-			m.ForeignType = 0
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowSpec
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				m.ForeignType |= (uint64(b) & 0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-		case 12:
-			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Payload", wireType)
-			}
-			m.Payload = 0
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowSpec
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				m.Payload |= (uint64(b) & 0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-		case 13:
-			if wireType == 0 {
-				var v uint64
-				for shift := uint(0); ; shift += 7 {
-					if shift >= 64 {
-						return ErrIntOverflowSpec
-					}
-					if iNdEx >= l {
-						return io.ErrUnexpectedEOF
-					}
-					b := dAtA[iNdEx]
-					iNdEx++
-					v |= (uint64(b) & 0x7F) << shift
-					if b < 0x80 {
-						break
-					}
-				}
-				m.PropertyKeys = append(m.PropertyKeys, v)
-			} else if wireType == 2 {
-				var packedLen int
-				for shift := uint(0); ; shift += 7 {
-					if shift >= 64 {
-						return ErrIntOverflowSpec
-					}
-					if iNdEx >= l {
-						return io.ErrUnexpectedEOF
-					}
-					b := dAtA[iNdEx]
-					iNdEx++
-					packedLen |= (int(b) & 0x7F) << shift
-					if b < 0x80 {
-						break
-					}
-				}
-				if packedLen < 0 {
-					return ErrInvalidLengthSpec
-				}
-				postIndex := iNdEx + packedLen
-				if postIndex > l {
-					return io.ErrUnexpectedEOF
-				}
-				var elementCount int
-				var count int
-				for _, integer := range dAtA {
-					if integer < 128 {
-						count++
-					}
-				}
-				elementCount = count
-				if elementCount != 0 && len(m.PropertyKeys) == 0 {
-					m.PropertyKeys = make([]uint64, 0, elementCount)
-				}
-				for iNdEx < postIndex {
-					var v uint64
-					for shift := uint(0); ; shift += 7 {
-						if shift >= 64 {
-							return ErrIntOverflowSpec
-						}
-						if iNdEx >= l {
-							return io.ErrUnexpectedEOF
-						}
-						b := dAtA[iNdEx]
-						iNdEx++
-						v |= (uint64(b) & 0x7F) << shift
-						if b < 0x80 {
-							break
-						}
-					}
-					m.PropertyKeys = append(m.PropertyKeys, v)
-				}
-			} else {
-				return fmt.Errorf("proto: wrong wireType = %d for field PropertyKeys", wireType)
-			}
-		case 14:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field PropertyValues", wireType)
-			}
-			var stringLen uint64
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowSpec
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			intStringLen := int(stringLen)
-			if intStringLen < 0 {
-				return ErrInvalidLengthSpec
-			}
-			postIndex := iNdEx + intStringLen
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			m.PropertyValues = append(m.PropertyValues, string(dAtA[iNdEx:postIndex]))
-			iNdEx = postIndex
-		default:
-			iNdEx = preIndex
-			skippy, err := skipSpec(dAtA[iNdEx:])
-			if err != nil {
-				return err
-			}
-			if skippy < 0 {
-				return ErrInvalidLengthSpec
-			}
-			if (iNdEx + skippy) > l {
-				return io.ErrUnexpectedEOF
-			}
-			iNdEx += skippy
-		}
-	}
-
-	if iNdEx > l {
-		return io.ErrUnexpectedEOF
-	}
-	return nil
-}
-func (m *PersistedContext) Unmarshal(dAtA []byte) error {
-	l := len(dAtA)
-	iNdEx := 0
-	for iNdEx < l {
-		preIndex := iNdEx
-		var wire uint64
-		for shift := uint(0); ; shift += 7 {
-			if shift >= 64 {
-				return ErrIntOverflowSpec
-			}
-			if iNdEx >= l {
-				return io.ErrUnexpectedEOF
-			}
-			b := dAtA[iNdEx]
-			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
-			if b < 0x80 {
-				break
-			}
-		}
-		fieldNum := int32(wire >> 3)
-		wireType := int(wire & 0x7)
-		if wireType == 4 {
-			return fmt.Errorf("proto: PersistedContext: wiretype end group for non-group")
-		}
-		if fieldNum <= 0 {
-			return fmt.Errorf("proto: PersistedContext: illegal tag %d (wire type %d)", fieldNum, wire)
-		}
-		switch fieldNum {
-		case 3:
-			if wireType == 0 {
-				var v uint64
-				for shift := uint(0); ; shift += 7 {
-					if shift >= 64 {
-						return ErrIntOverflowSpec
-					}
-					if iNdEx >= l {
-						return io.ErrUnexpectedEOF
-					}
-					b := dAtA[iNdEx]
-					iNdEx++
-					v |= (uint64(b) & 0x7F) << shift
-					if b < 0x80 {
-						break
-					}
-				}
-				m.PropertyKeys = append(m.PropertyKeys, v)
-			} else if wireType == 2 {
-				var packedLen int
-				for shift := uint(0); ; shift += 7 {
-					if shift >= 64 {
-						return ErrIntOverflowSpec
-					}
-					if iNdEx >= l {
-						return io.ErrUnexpectedEOF
-					}
-					b := dAtA[iNdEx]
-					iNdEx++
-					packedLen |= (int(b) & 0x7F) << shift
-					if b < 0x80 {
-						break
-					}
-				}
-				if packedLen < 0 {
-					return ErrInvalidLengthSpec
-				}
-				postIndex := iNdEx + packedLen
-				if postIndex > l {
-					return io.ErrUnexpectedEOF
-				}
-				var elementCount int
-				var count int
-				for _, integer := range dAtA {
-					if integer < 128 {
-						count++
-					}
-				}
-				elementCount = count
-				if elementCount != 0 && len(m.PropertyKeys) == 0 {
-					m.PropertyKeys = make([]uint64, 0, elementCount)
-				}
-				for iNdEx < postIndex {
-					var v uint64
-					for shift := uint(0); ; shift += 7 {
-						if shift >= 64 {
-							return ErrIntOverflowSpec
-						}
-						if iNdEx >= l {
-							return io.ErrUnexpectedEOF
-						}
-						b := dAtA[iNdEx]
-						iNdEx++
-						v |= (uint64(b) & 0x7F) << shift
-						if b < 0x80 {
-							break
-						}
-					}
-					m.PropertyKeys = append(m.PropertyKeys, v)
-				}
-			} else {
-				return fmt.Errorf("proto: wrong wireType = %d for field PropertyKeys", wireType)
-			}
-		case 4:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field PropertyValues", wireType)
-			}
-			var stringLen uint64
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowSpec
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			intStringLen := int(stringLen)
-			if intStringLen < 0 {
-				return ErrInvalidLengthSpec
-			}
-			postIndex := iNdEx + intStringLen
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			m.PropertyValues = append(m.PropertyValues, string(dAtA[iNdEx:postIndex]))
-			iNdEx = postIndex
-		case 5:
-			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field CreatedAtNs", wireType)
-			}
-			m.CreatedAtNs = 0
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowSpec
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				m.CreatedAtNs |= (int64(b) & 0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-		case 9:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field ForeignId", wireType)
-			}
-			var stringLen uint64
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowSpec
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			intStringLen := int(stringLen)
-			if intStringLen < 0 {
-				return ErrInvalidLengthSpec
-			}
-			postIndex := iNdEx + intStringLen
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			m.ForeignId = string(dAtA[iNdEx:postIndex])
-			iNdEx = postIndex
-		case 10:
-			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field ForeignType", wireType)
-			}
-			m.ForeignType = 0
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowSpec
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				m.ForeignType |= (uint64(b) & 0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-		default:
-			iNdEx = preIndex
-			skippy, err := skipSpec(dAtA[iNdEx:])
-			if err != nil {
-				return err
-			}
-			if skippy < 0 {
+			if (iNdEx + skippy) < 0 {
 				return ErrInvalidLengthSpec
 			}
 			if (iNdEx + skippy) > l {
@@ -2579,8 +1388,11 @@ func skipSpec(dAtA []byte) (n int, err error) {
 					break
 				}
 			}
-			iNdEx += length
 			if length < 0 {
+				return 0, ErrInvalidLengthSpec
+			}
+			iNdEx += length
+			if iNdEx < 0 {
 				return 0, ErrInvalidLengthSpec
 			}
 			return iNdEx, nil
@@ -2611,6 +1423,9 @@ func skipSpec(dAtA []byte) (n int, err error) {
 					return 0, err
 				}
 				iNdEx = start + next
+				if iNdEx < 0 {
+					return 0, ErrInvalidLengthSpec
+				}
 			}
 			return iNdEx, nil
 		case 4:

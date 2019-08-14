@@ -16,9 +16,9 @@ import (
 
 type PersistedDictionary struct {
 	fd       *os.File
-	offset   uint64
-	resolved map[string]uint64
-	reverse  map[uint64]string
+	offset   uint32
+	resolved map[string]uint32
+	reverse  map[uint32]string
 	sync.RWMutex
 }
 
@@ -32,21 +32,21 @@ func NewPersistedDictionary(root string) (*PersistedDictionary, error) {
 	if err != nil {
 		return nil, err
 	}
-	reverse := map[uint64]string{}
+	reverse := map[uint32]string{}
 	for k, v := range resolved {
 		reverse[v] = k
 	}
 	log.Infof("dictionary %s with %d size and %d elements", filename, off, len(reverse))
 	return &PersistedDictionary{
 		fd:       fd,
-		offset:   uint64(off),
+		offset:   uint32(off),
 		resolved: resolved,
 		reverse:  reverse,
 	}, nil
 }
 
-func ParseFile(fd *os.File, off uint64) (uint64, map[string]uint64, error) {
-	out := map[string]uint64{}
+func ParseFile(fd *os.File, off uint32) (uint32, map[string]uint32, error) {
+	out := map[string]uint32{}
 
 	for {
 		header := make([]byte, 8)
@@ -79,8 +79,8 @@ func ParseFile(fd *os.File, off uint64) (uint64, map[string]uint64, error) {
 		if checksum != uint32(hash) {
 			return 0, nil, fmt.Errorf("checksum mismatch, got %d expected %d", hash, checksum)
 		}
-		out[string(data)] = uint64(off)
-		off += 8 + uint64(length)
+		out[string(data)] = uint32(off)
+		off += 8 + uint32(length)
 	}
 	return off, out, nil
 }
@@ -91,7 +91,7 @@ func (pd *PersistedDictionary) normalize(s string) string {
 	return s
 }
 
-func (pd *PersistedDictionary) GetUniqueTerm(s string) (uint64, error) {
+func (pd *PersistedDictionary) GetUniqueTerm(s string) (uint32, error) {
 	// this is used by jubei in 2 threads
 
 	s = pd.normalize(s)
@@ -122,19 +122,19 @@ func (pd *PersistedDictionary) GetUniqueTerm(s string) (uint64, error) {
 
 	copy(data[8:], b)
 
-	off := atomic.AddUint64(&pd.offset, uint64(len(data)))
-	off -= uint64(len(data))
+	off := atomic.AddUint32(&pd.offset, uint32(len(data)))
+	off -= uint32(len(data))
 
 	_, err := pd.fd.WriteAt(data, int64(off))
 	if err != nil {
 		return 0, err
 	}
-	pd.resolved[s] = uint64(off)
-	pd.reverse[uint64(off)] = s
+	pd.resolved[s] = uint32(off)
+	pd.reverse[uint32(off)] = s
 	return off, nil
 }
 
-func (pd *PersistedDictionary) Resolve(s string) (uint64, bool) {
+func (pd *PersistedDictionary) Resolve(s string) (uint32, bool) {
 	// used in readonly more from khanzo, so no locking needed
 	s = pd.normalize(s)
 	v, ok := pd.resolved[s]
@@ -144,7 +144,8 @@ func (pd *PersistedDictionary) Resolve(s string) (uint64, bool) {
 func (pd *PersistedDictionary) Close() {
 	pd.fd.Close()
 }
-func (pd *PersistedDictionary) ReverseResolve(s uint64) string {
+
+func (pd *PersistedDictionary) ReverseResolve(s uint32) string {
 	// used in readonly more from khanzo, so no locking needed
 	v, ok := pd.reverse[s]
 	if ok {

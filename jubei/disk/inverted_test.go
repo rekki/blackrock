@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"path"
 	"testing"
 	"time"
 
@@ -11,12 +12,12 @@ import (
 )
 
 type InvertedCase struct {
-	key   uint64
-	value uint64
-	data  []int64
+	key   uint32
+	value uint32
+	data  []int32
 }
 
-func Equal(a, b []int64) bool {
+func Equal(a, b []int32) bool {
 	if len(a) != len(b) {
 		return false
 	}
@@ -33,36 +34,36 @@ func TestInverted(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(dir)
-	inv, err := NewInvertedWriter(dir, 10)
+	inv, err := NewInvertedWriter(10)
 	if err != nil {
 		t.Fatal(err)
 	}
 	cases := []InvertedCase{InvertedCase{
 		key:   0,
 		value: 0,
-		data:  []int64{1, 2, 3},
+		data:  []int32{1, 2, 3},
 	},
 		InvertedCase{
 			key:   1,
 			value: 1,
-			data:  []int64{6, 7, 9},
+			data:  []int32{6, 7, 9},
 		},
 		InvertedCase{
 			key:   0,
 			value: 1,
-			data:  []int64{6, 7, 9},
+			data:  []int32{6, 7, 9},
 		},
 		InvertedCase{
 			key:   1,
 			value: 0,
-			data:  []int64{6, 7, 9},
+			data:  []int32{6, 7, 9},
 		},
 	}
 
-	segmentId := depths.SegmentFromNs(time.Now().UnixNano())
+	segmentId := path.Join(dir, depths.SegmentFromNs(time.Now().UnixNano()))
 	for _, v := range cases {
 		for _, id := range v.data {
-			err := inv.Append(segmentId, id, v.key, fmt.Sprintf("%d", v.value))
+			err := inv.Append(segmentId, id, fmt.Sprintf("%d", v.key), fmt.Sprintf("%d", v.value))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -70,14 +71,14 @@ func TestInverted(t *testing.T) {
 	}
 
 	for _, v := range cases {
-		data := inv.Read(segmentId, v.key, fmt.Sprintf("%d", v.value))
+		data := InvertedReadRaw(segmentId, -1, fmt.Sprintf("%d", v.key), fmt.Sprintf("%d", v.value))
 
 		if !Equal(data, v.data) {
 			t.Fatalf("mismatch got %v expected %v", data, v.data)
 		}
 	}
 
-	segment, err := ReadAllTermsInSegment(dir, segmentId)
+	segment, err := ReadAllTermsInSegment(segmentId)
 	if err != nil {
 		t.Fatal(err)
 	}

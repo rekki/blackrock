@@ -25,9 +25,15 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-func consumeEvents(r *kafka.Reader, dictionary *disk.PersistedDictionary, forward *disk.ForwardWriter, payload *disk.ForwardWriter, inverted *disk.InvertedWriter) error {
+func consumeEvents(root string, r *kafka.Reader, maxDescriptors int) error {
 	log.Warnf("waiting... ")
 	ctx := context.Background()
+	inverted, err := disk.NewInvertedWriter(maxDescriptors)
+	if err != nil {
+		log.Fatal(err)
+	}
+	writers := map[string]*disk.ForwardWriter{}
+
 	for {
 		m, err := r.ReadMessage(ctx)
 		if err != nil {
@@ -41,7 +47,20 @@ func consumeEvents(r *kafka.Reader, dictionary *disk.PersistedDictionary, forwar
 			continue
 		}
 
-		err = consume.ConsumeEvents(uint32(m.Partition), uint64(m.Offset), &envelope, dictionary, forward, payload, inverted)
+		segmentId := path.Join(root, depths.SegmentFromNs(envelope.Metadata.CreatedAtNs))
+		forward, ok := writers[segmentId]
+		if !ok {
+
+			log.Warnf("openning new segment: %s", segmentId)
+			os.MkdirAll(segmentId, 0700)
+			forward, err = disk.NewForwardWriter(segmentId, "main")
+			if err != nil {
+				return err
+			}
+
+			writers[segmentId] = forward
+		}
+		err = consume.ConsumeEvents(segmentId, &envelope, forward, inverted)
 		if err != nil {
 			return err
 		}
@@ -50,7 +69,7 @@ func consumeEvents(r *kafka.Reader, dictionary *disk.PersistedDictionary, forwar
 	}
 }
 
-func consumeContext(r *kafka.Reader, dictionary *disk.PersistedDictionary, forward *disk.ForwardWriter) error {
+func consumeContext(r *kafka.Reader, forward *disk.ForwardWriter) error {
 	log.Warnf("context waiting...")
 	ctx := context.Background()
 	for {
@@ -66,7 +85,7 @@ func consumeContext(r *kafka.Reader, dictionary *disk.PersistedDictionary, forwa
 			continue
 		}
 
-		err = consume.ConsumeContext(&envelope, dictionary, forward)
+		err = consume.ConsumeContext(&envelope, forward)
 		if err != nil {
 			return err
 		}
@@ -142,27 +161,7 @@ func main() {
 	})
 	defer cd.Close()
 
-	forward, err := disk.NewForwardWriter(root, "main")
-	if err != nil {
-		log.Fatal(err)
-	}
-
 	forwardContext, err := disk.NewForwardWriter(root, "context")
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	payload, err := disk.NewForwardWriter(root, "payload")
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	inverted, err := disk.NewInvertedWriter(root, *maxDescriptors)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	dictionary, err := disk.NewPersistedDictionary(root)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -184,12 +183,12 @@ func main() {
 	}()
 
 	go func() {
-		err := consumeEvents(rd, dictionary, forward, payload, inverted)
+		err := consumeEvents(root, rd, *maxDescriptors)
 		log.Warnf("error consuming events: %s", err.Error())
 		sigs <- syscall.SIGTERM
 	}()
 	go func() {
-		err = consumeContext(cd, dictionary, forwardContext)
+		err = consumeContext(cd, forwardContext)
 		log.Warnf("error consuming context: %s", err.Error())
 		sigs <- syscall.SIGTERM
 	}()

@@ -149,16 +149,16 @@ func genUser(times []time.Time) *spec.Context {
 		panic(err)
 	}
 	c := &spec.Context{
-		CreatedAtNs: times[rand.Intn(len(times))].UnixNano(),
+		CreatedAtNs: uint64(times[rand.Intn(len(times))].UnixNano()),
 		ForeignType: "user_id",
 		ForeignId:   s.UUID,
 	}
-	c.Properties = append(c.Properties, &spec.KV{Key: "name", Value: s.Name})
-	c.Properties = append(c.Properties, &spec.KV{Key: "title", Value: s.Title})
-	c.Properties = append(c.Properties, &spec.KV{Key: "timezone", Value: s.TimeZone})
-	c.Properties = append(c.Properties, &spec.KV{Key: "email", Value: s.Email})
-	c.Properties = append(c.Properties, &spec.KV{Key: "currency", Value: s.Currency})
-	c.Properties = append(c.Properties, &spec.KV{Key: "phone", Value: s.PhoneNumber})
+	c.Properties = append(c.Properties, spec.KV{Key: "name", Value: s.Name})
+	c.Properties = append(c.Properties, spec.KV{Key: "title", Value: s.Title})
+	c.Properties = append(c.Properties, spec.KV{Key: "timezone", Value: s.TimeZone})
+	c.Properties = append(c.Properties, spec.KV{Key: "email", Value: s.Email})
+	c.Properties = append(c.Properties, spec.KV{Key: "currency", Value: s.Currency})
+	c.Properties = append(c.Properties, spec.KV{Key: "phone", Value: s.PhoneNumber})
 	return c
 }
 
@@ -170,12 +170,12 @@ func genAuthor(times []time.Time) *spec.Context {
 	}
 
 	c := &spec.Context{
-		CreatedAtNs: times[rand.Intn(len(times))].UnixNano(),
+		CreatedAtNs: uint64(times[rand.Intn(len(times))].UnixNano()),
 		ForeignType: "author_id",
 		ForeignId:   s.UUID,
 	}
-	c.Properties = append(c.Properties, &spec.KV{Key: "name", Value: s.Name})
-	c.Properties = append(c.Properties, &spec.KV{Key: "date_of_birth", Value: s.DateOfBirth})
+	c.Properties = append(c.Properties, spec.KV{Key: "name", Value: s.Name})
+	c.Properties = append(c.Properties, spec.KV{Key: "date_of_birth", Value: s.DateOfBirth})
 	return c
 }
 
@@ -187,15 +187,15 @@ func genBook(times []time.Time, author ...*spec.Context) *spec.Context {
 	}
 
 	c := &spec.Context{
-		CreatedAtNs: times[rand.Intn(len(times))].UnixNano(),
+		CreatedAtNs: uint64(times[rand.Intn(len(times))].UnixNano()),
 		ForeignType: "book_id",
 		ForeignId:   s.UUID,
 	}
-	c.Properties = append(c.Properties, &spec.KV{Key: "name", Value: s.Name})
-	c.Properties = append(c.Properties, &spec.KV{Key: "genre", Value: s.Genre})
-	c.Properties = append(c.Properties, &spec.KV{Key: "published_at", Value: s.PublishDate})
+	c.Properties = append(c.Properties, spec.KV{Key: "name", Value: s.Name})
+	c.Properties = append(c.Properties, spec.KV{Key: "genre", Value: s.Genre})
+	c.Properties = append(c.Properties, spec.KV{Key: "published_at", Value: s.PublishDate})
 	for _, a := range author {
-		c.Properties = append(c.Properties, &spec.KV{Key: "author_id", Value: a.ForeignId})
+		c.Properties = append(c.Properties, spec.KV{Key: "author_id", Value: a.ForeignId})
 	}
 	return c
 }
@@ -224,28 +224,28 @@ func genEvent(days []time.Time, users []*spec.Context, books []*spec.Context) *s
 	}
 
 	action := actions[rand.Intn(len(actions))]
-	search := []*spec.KV{}
+	search := []spec.KV{}
 	for i := 0; i < rand.Intn(5); i++ {
 		book := books[rand.Intn(len(books))]
-		search = append(search, &spec.KV{Key: "book_id", Value: book.ForeignId})
+		search = append(search, spec.KV{Key: "book_id", Value: book.ForeignId})
 	}
 	if rand.Intn(3) == 1 {
-		search = append(search, &spec.KV{Key: "env", Value: "staging"})
+		search = append(search, spec.KV{Key: "env", Value: "staging"})
 	} else {
-		search = append(search, &spec.KV{Key: "env", Value: "live"})
+		search = append(search, spec.KV{Key: "env", Value: "live"})
 	}
 
-	search = append(search, &spec.KV{Key: "product", Value: "amazon.com"})
+	search = append(search, spec.KV{Key: "product", Value: "amazon.com"})
 
 	ua := UA[rand.Intn(len(UA))]
 	m := &spec.Metadata{
-		CreatedAtNs: days[rand.Intn(len(days))].UnixNano(),
+		CreatedAtNs: uint64(days[rand.Intn(len(days))].UnixNano()),
 		ForeignType: "user_id",
 		ForeignId:   user.ForeignId,
 		EventType:   action,
 		Search:      search,
-		Count:       []*spec.KV{&spec.KV{Key: "currency", Value: s.Currency}, &spec.KV{Key: "timezone", Value: s.TimeZone}},
-		Properties:  []*spec.KV{&spec.KV{Key: "user_agent", Value: ua}, &spec.KV{Key: "random", Value: fmt.Sprintf("%d", rand.Int())}},
+		Count:       []spec.KV{spec.KV{Key: "currency", Value: s.Currency}, spec.KV{Key: "timezone", Value: s.TimeZone}},
+		Properties:  []spec.KV{spec.KV{Key: "user_agent", Value: ua}, spec.KV{Key: "random", Value: fmt.Sprintf("%d", rand.Int())}},
 	}
 
 	return &spec.Envelope{Metadata: m}

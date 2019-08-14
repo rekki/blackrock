@@ -14,7 +14,7 @@ func TestDictionary(t *testing.T) {
 	}
 	defer os.RemoveAll(dir)
 
-	cases := map[string]uint64{}
+	cases := map[string]uint32{}
 	for k := 0; k < 10; k++ {
 		d, err := NewPersistedDictionary(dir)
 		if err != nil {
@@ -63,5 +63,4 @@ func TestDictionary(t *testing.T) {
 		}
 		d.Close()
 	}
-
 }

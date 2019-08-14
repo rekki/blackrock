@@ -7,10 +7,10 @@ import (
 	"testing"
 )
 
-func postingsList(n int) []int64 {
-	list := make([]int64, n)
+func postingsList(n int) []int32 {
+	list := make([]int32, n)
 	for i := 0; i < n; i++ {
-		list[i] = int64(i) * 3
+		list[i] = int32(i) * 3
 	}
 	return list
 }
@@ -18,8 +18,8 @@ func postingsList(n int) []int64 {
 func postingsListFile(root string, n int) *os.File {
 	data := make([]byte, n*8)
 	for i := 0; i < n; i++ {
-		v := int64(i) * 3
-		binary.LittleEndian.PutUint64(data[i*8:], uint64(v))
+		v := int32(i) * 3
+		binary.LittleEndian.PutUint32(data[i*8:], uint32(v))
 	}
 
 	f, err := ioutil.TempFile(root, "postings_")
@@ -33,15 +33,15 @@ func postingsListFile(root string, n int) *os.File {
 	return f
 }
 
-func query(query Query) []int64 {
-	out := []int64{}
+func query(query Query) []int32 {
+	out := []int32{}
 	for query.Next() != NO_MORE {
 		out = append(out, query.GetDocId())
 	}
 	return out
 }
 
-func eq(t *testing.T, a, b []int64) {
+func eq(t *testing.T, a, b []int32) {
 	if len(a) != len(b) {
 		t.Logf("len(a) != len(b) ; len(a) = %d, len(b) = %d [%v %v]", len(a), len(b), a, b)
 		t.FailNow()
@@ -66,7 +66,7 @@ func BenchmarkNextFile1000(b *testing.B) {
 	defer os.RemoveAll(tmp)
 
 	for n := 0; n < b.N; n++ {
-		sum := int64(0)
+		sum := int32(0)
 		q := NewTermFile("", x)
 		for q.Next() != NO_MORE {
 			sum += q.GetDocId()
@@ -79,7 +79,7 @@ func BenchmarkNext1000(b *testing.B) {
 	x := postingsList(1000)
 
 	for n := 0; n < b.N; n++ {
-		sum := int64(0)
+		sum := int32(0)
 		q := NewTerm("", x)
 		for q.Next() != NO_MORE {
 			sum += q.GetDocId()
@@ -92,7 +92,7 @@ func BenchmarkOr1000(b *testing.B) {
 	y := postingsList(1000)
 
 	for n := 0; n < b.N; n++ {
-		sum := int64(0)
+		sum := int32(0)
 		q := NewBoolOrQuery(
 			NewTerm("x", x),
 			NewTerm("y", y),
@@ -109,7 +109,7 @@ func BenchmarkAnd1000(b *testing.B) {
 	y := postingsList(1000)
 
 	for n := 0; n < b.N; n++ {
-		sum := int64(0)
+		sum := int32(0)
 		q := NewBoolAndQuery(
 			NewTerm("x", x),
 			NewTerm("y", y),
@@ -201,45 +201,45 @@ func TestModify(t *testing.T) {
 		NewTerm("x", e),
 	)))
 
-	eq(t, []int64{4, 6, 7, 8, 10}, query(NewBoolAndNotQuery(
-		NewTerm("x", []int64{1, 2, 3, 9}),
+	eq(t, []int32{4, 6, 7, 8, 10}, query(NewBoolAndNotQuery(
+		NewTerm("x", []int32{1, 2, 3, 9}),
 		NewBoolOrQuery(
-			NewTerm("x", []int64{3, 4}),
-			NewTerm("x", []int64{1, 2, 3, 6, 7, 8, 9, 10}),
+			NewTerm("x", []int32{3, 4}),
+			NewTerm("x", []int32{1, 2, 3, 6, 7, 8, 9, 10}),
 		),
 	)))
-	eq(t, []int64{6, 7, 8, 10}, query(NewBoolAndNotQuery(
-		NewTerm("x", []int64{1, 2, 3, 9}),
+	eq(t, []int32{6, 7, 8, 10}, query(NewBoolAndNotQuery(
+		NewTerm("x", []int32{1, 2, 3, 9}),
 		NewBoolAndNotQuery(
-			NewTerm("x", []int64{4, 5}),
-			NewTerm("x", []int64{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}),
-			NewTerm("x", []int64{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}),
+			NewTerm("x", []int32{4, 5}),
+			NewTerm("x", []int32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}),
+			NewTerm("x", []int32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}),
 		),
 	)))
 
-	eq(t, []int64{6, 7, 8, 10}, query(NewBoolAndNotQuery(
+	eq(t, []int32{6, 7, 8, 10}, query(NewBoolAndNotQuery(
 		NewBoolOrQuery(
-			NewTerm("x", []int64{1, 2}),
-			NewTerm("x", []int64{3, 9})),
+			NewTerm("x", []int32{1, 2}),
+			NewTerm("x", []int32{3, 9})),
 		NewBoolAndNotQuery(
-			NewTerm("x", []int64{4, 5}),
-			NewTerm("x", []int64{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}),
-			NewTerm("x", []int64{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}),
+			NewTerm("x", []int32{4, 5}),
+			NewTerm("x", []int32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}),
+			NewTerm("x", []int32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}),
 		),
 	)))
 
-	eq(t, []int64{}, query(NewBoolAndNotQuery(
-		NewTerm("x", []int64{1, 2, 3, 9}),
-		NewTerm("x", []int64{1, 2, 3, 9}),
+	eq(t, []int32{}, query(NewBoolAndNotQuery(
+		NewTerm("x", []int32{1, 2, 3, 9}),
+		NewTerm("x", []int32{1, 2, 3, 9}),
 	)))
 
-	eq(t, []int64{}, query(NewBoolAndNotQuery(
-		NewTerm("x", []int64{1, 2, 3, 9}),
+	eq(t, []int32{}, query(NewBoolAndNotQuery(
+		NewTerm("x", []int32{1, 2, 3, 9}),
 	)))
 
-	eq(t, []int64{1, 2, 3, 9}, query(NewBoolAndNotQuery(
-		NewTerm("x", []int64{}),
-		NewTerm("x", []int64{1, 2, 3, 9}),
+	eq(t, []int32{1, 2, 3, 9}, query(NewBoolAndNotQuery(
+		NewTerm("x", []int32{}),
+		NewTerm("x", []int32{1, 2, 3, 9}),
 	)))
 
 	eq(t, b, query(NewBoolAndQuery(

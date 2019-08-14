@@ -38,8 +38,8 @@ func RandStringBytesMaskImprSrcUnsafe(n int) string {
 }
 
 type Case struct {
-	id       uint64
-	document uint64
+	id       uint32
+	document uint32
 	data     []byte
 }
 
@@ -57,24 +57,17 @@ func TestForward(t *testing.T) {
 	for i := 0; i < 1000; i++ {
 		data := []byte(RandStringBytesMaskImprSrcUnsafe(i))
 
-		off, err := fw.Append(uint64(i), uint64(i*10), data)
+		off, err := fw.Append(data)
 		if err != nil {
 			t.Fatal(err)
 		}
-		cases = append(cases, Case{id: uint64(i), document: off, data: data})
+		cases = append(cases, Case{id: uint32(i), document: off, data: data})
 	}
 	for _, v := range cases {
-		id, ftype, data, _, err := fw.Read(v.document, true)
+		data, _, err := fw.Read(v.document)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if id != v.id {
-			t.Fatalf("id mismatch, expected %d got %d", v.id, id)
-		}
-		if ftype != v.id*10 {
-			t.Fatalf("ftype mismatch, expected %d got %d", v.id*10, ftype)
-		}
-
 		if !bytes.Equal(v.data, data) {
 			t.Fatalf("data mismatch, expected %v got %v", v.data, data)
 		}
@@ -95,22 +88,16 @@ func TestForward(t *testing.T) {
 	for i := 0; i < 1000; i++ {
 		data := []byte(RandStringBytesMaskImprSrcUnsafe(i))
 
-		off, err := fw.Append(uint64(i), uint64(i*10), data)
+		off, err := fw.Append(data)
 		if err != nil {
 			t.Fatal(err)
 		}
-		cases = append(cases, Case{id: uint64(i), document: off, data: data})
+		cases = append(cases, Case{id: uint32(i), document: off, data: data})
 	}
 	for _, v := range cases {
-		id, ftype, data, _, err := fw.Read(v.document, true)
+		data, _, err := fw.Read(v.document)
 		if err != nil {
 			t.Fatal(err)
-		}
-		if id != v.id {
-			t.Fatalf("id mismatch, expected %d got %d", v.id, id)
-		}
-		if ftype != v.id*10 {
-			t.Fatalf("type mismatch, expected %d got %d", v.id*10, ftype)
 		}
 
 		if !bytes.Equal(v.data, data) {
@@ -118,7 +105,7 @@ func TestForward(t *testing.T) {
 		}
 	}
 	n := 0
-	err = fw.Scan(0, true, func(offset uint64, id uint64, ftype uint64, data []byte) error {
+	err = fw.Scan(0, func(offset uint32, data []byte) error {
 		n++
 		return nil
 	})

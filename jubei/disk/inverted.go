@@ -11,16 +11,14 @@ import (
 )
 
 type InvertedWriter struct {
-	descriptors        map[string]*os.File
+	descriptors        map[string]*os.File // FIXME(jackdoe): use lru
 	maxOpenDescriptors int
-	root               string
 }
 
-func NewInvertedWriter(root string, maxOpenDescriptors int) (*InvertedWriter, error) {
+func NewInvertedWriter(maxOpenDescriptors int) (*InvertedWriter, error) {
 	return &InvertedWriter{
 		maxOpenDescriptors: maxOpenDescriptors,
 		descriptors:        map[string]*os.File{},
-		root:               root,
 	}, nil
 }
 func (fw *InvertedWriter) Close() {
@@ -30,8 +28,8 @@ func (fw *InvertedWriter) Close() {
 	}
 }
 
-func (fw *InvertedWriter) Size(segmentId string, tagKey uint64, tagValue string) int64 {
-	dir, filename := depths.PathForTag(fw.root, segmentId, tagKey, tagValue)
+func (fw *InvertedWriter) Size(root, tagKey, tagValue string) int32 {
+	dir, filename := depths.PathForTag(root, tagKey, tagValue)
 	fn := path.Join(dir, filename)
 	file, err := os.OpenFile(fn, os.O_RDONLY, 0600)
 	if os.IsNotExist(err) {
@@ -41,54 +39,50 @@ func (fw *InvertedWriter) Size(segmentId string, tagKey uint64, tagValue string)
 	if err != nil {
 		return 0
 	}
-	total := fi.Size() / int64(8)
-	return total
+	total := fi.Size() / int64(4)
+	return int32(total)
 }
 
-func (fw *InvertedWriter) Read(segmentId string, tk uint64, tagValue string) []int64 {
-	return fw.ReadRaw(segmentId, -1, tk, tagValue)
-}
-
-func (fw *InvertedWriter) ReadRaw(segmentId string, maxDocuments int64, tagKey uint64, tagValue string) []int64 {
-	dir, filename := depths.PathForTag(fw.root, segmentId, tagKey, tagValue)
+func InvertedReadRaw(root string, maxDocuments int32, tagKey, tagValue string) []int32 {
+	dir, filename := depths.PathForTag(root, tagKey, tagValue)
 	fn := path.Join(dir, filename)
 	file, err := os.OpenFile(fn, os.O_RDONLY, 0600)
 	if os.IsNotExist(err) {
 		log.Infof("missing file %s, returning empty", fn)
-		return []int64{}
+		return []int32{}
 	}
 	fi, err := file.Stat()
 	if err != nil {
 		log.Warnf("failed to read file stats: %s, error: %s", fn, err.Error())
-		return []int64{}
+		return []int32{}
 	}
-	// read to the closest multiple of 8
+	// read to the closest multiple of 4
 	log.Infof("reading %s, size: %d", fn, fi.Size())
-	total := fi.Size() / int64(8)
-	seek := int64(0)
+	total := int32(fi.Size() / int64(4))
+	seek := int32(0)
 	if maxDocuments > 0 && total > maxDocuments {
-		seek = (total - maxDocuments) * 8
+		seek = (total - maxDocuments) * 4
 	}
-	file.Seek(seek, 0)
+	file.Seek(int64(seek), 0)
 	log.Infof("seek %d, total %d max requested: %d", seek, total, maxDocuments)
 
 	postings, err := ioutil.ReadAll(file)
 	if err != nil {
 		log.Warnf("failed to read file: %s, error: %s", fn, err.Error())
-		return []int64{}
+		return []int32{}
 	}
-	n := len(postings) / 8
-	longed := make([]int64, n)
+	n := len(postings) / 4
+	longed := make([]int32, n)
 	j := 0
-	for i := 0; i < n*8; i += 8 {
-		longed[j] = int64(binary.LittleEndian.Uint64(postings[i:]))
+	for i := 0; i < n*4; i += 4 {
+		longed[j] = int32(binary.LittleEndian.Uint32(postings[i:]))
 		j++
 	}
 	return longed
 }
 
-func (fw *InvertedWriter) Append(segmentId string, docId int64, tagKey uint64, tagValue string) error {
-	dir, fn := depths.PathForTag(fw.root, segmentId, tagKey, tagValue)
+func (fw *InvertedWriter) Append(root string, docId int32, tagKey, tagValue string) error {
+	dir, fn := depths.PathForTag(root, tagKey, tagValue)
 	filename := path.Join(dir, fn)
 	f, ok := fw.descriptors[filename]
 	if !ok {
@@ -110,9 +104,9 @@ func (fw *InvertedWriter) Append(segmentId string, docId int64, tagKey uint64, t
 		fw.descriptors[filename] = fd
 	}
 	log.Infof("writing document id %d at %s", docId, filename)
-	data := make([]byte, 8)
+	data := make([]byte, 4)
 
-	binary.LittleEndian.PutUint64(data, uint64(docId))
+	binary.LittleEndian.PutUint32(data, uint32(docId))
 	_, err := f.Write(data)
 	if err != nil {
 		return err

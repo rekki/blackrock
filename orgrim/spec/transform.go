@@ -71,8 +71,8 @@ type JsonFrame struct {
 	Payload     interface{}            `json:"payload"`
 }
 
-func Transform(m map[string]interface{}, expand bool) ([]*KV, error) {
-	out := []*KV{}
+func Transform(m map[string]interface{}, expand bool) ([]KV, error) {
+	out := []KV{}
 	flatten, err := depths.Flatten(m, "", depths.DotStyle)
 	if err != nil {
 		return nil, err
@@ -84,7 +84,7 @@ func Transform(m map[string]interface{}, expand bool) ([]*KV, error) {
 			return
 		}
 		seen[key] = true
-		out = append(out, &KV{Key: k, Value: v})
+		out = append(out, KV{Key: k, Value: v})
 	}
 	hasID := func(s string) bool {
 		return strings.HasSuffix(s, "_id") || strings.HasSuffix(s, "_ids") || strings.HasSuffix(s, "_code")
@@ -123,7 +123,7 @@ func Transform(m map[string]interface{}, expand bool) ([]*KV, error) {
 				add(strings.Join(noid, "."), v)
 			}
 		} else {
-			out = append(out, &KV{Key: k, Value: v})
+			out = append(out, KV{Key: k, Value: v})
 		}
 	}
 
@@ -142,7 +142,7 @@ func DecodeAndFlatten(body io.Reader) (*Envelope, error) {
 		return nil, err
 	}
 
-	search := []*KV{}
+	search := []KV{}
 	if metadata.Search != nil {
 		search, err = Transform(metadata.Search, true)
 		if err != nil {
@@ -150,7 +150,7 @@ func DecodeAndFlatten(body io.Reader) (*Envelope, error) {
 		}
 	}
 
-	count := []*KV{}
+	count := []KV{}
 	if metadata.Count != nil {
 		count, err = Transform(metadata.Count, true)
 		if err != nil {
@@ -158,7 +158,7 @@ func DecodeAndFlatten(body io.Reader) (*Envelope, error) {
 		}
 	}
 
-	properties := []*KV{}
+	properties := []KV{}
 	if metadata.Properties != nil {
 		properties, err = Transform(metadata.Properties, true)
 		if err != nil {
@@ -171,7 +171,7 @@ func DecodeAndFlatten(body io.Reader) (*Envelope, error) {
 			Search:      search,
 			Count:       count,
 			Properties:  properties,
-			CreatedAtNs: metadata.CreatedAtNs,
+			CreatedAtNs: uint64(metadata.CreatedAtNs),
 			EventType:   metadata.EventType,
 			ForeignId:   metadata.ForeignId,
 			ForeignType: metadata.ForeignType,
@@ -187,7 +187,7 @@ func DecodeAndFlatten(body io.Reader) (*Envelope, error) {
 	}
 
 	if converted.Metadata.CreatedAtNs == 0 {
-		converted.Metadata.CreatedAtNs = time.Now().UnixNano()
+		converted.Metadata.CreatedAtNs = uint64(time.Now().UnixNano())
 	}
 
 	err = ValidateEnvelope(&converted)

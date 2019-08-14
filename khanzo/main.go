@@ -11,6 +11,7 @@ import (
 	_ "net/http/pprof"
 	"net/url"
 	"os"
+	"path"
 	"reflect"
 	"runtime"
 	"strconv"
@@ -65,44 +66,9 @@ func intOrDefault(s string, n int) int {
 	return int(v)
 }
 
-type ReloadableDictionary struct {
-	dictionary *disk.PersistedDictionary
-	root       string
-}
-
-func NewReloadableDictionary(root string) *ReloadableDictionary {
-	dictionary, err := disk.NewPersistedDictionary(root)
-	if err != nil {
-		log.Fatal(err)
-	}
-	dictionary.Close()
-	return &ReloadableDictionary{
-		dictionary: dictionary,
-		root:       root,
-	}
-}
-func (r *ReloadableDictionary) Get() *disk.PersistedDictionary {
-	return r.dictionary
-}
-func (r *ReloadableDictionary) Reload() {
-	tmp, err := disk.NewPersistedDictionary(r.root)
-	if err != nil {
-		log.Fatal(err)
-	}
-	tmp.Close()
-	r.dictionary = tmp
-}
-
 func yyyymmdd(t time.Time) string {
 	year, month, day := t.Date()
 	return fmt.Sprintf("%d-%02d-%02d", year, month, day)
-}
-
-type Cached struct {
-	foreignId   uint64
-	foreignType uint64
-	data        spec.PersistedMetadata
-	offset      uint64
 }
 
 func main() {
@@ -124,23 +90,12 @@ func main() {
 		log.Fatal(err)
 	}
 	log.Warnf("config: %s", depths.DumpObj(config))
-	forward, err := disk.NewForwardWriter(root, "main")
-	if err != nil {
-		log.Fatal(err)
-	}
 
 	forwardContext, err := disk.NewForwardWriter(root, "context")
 	if err != nil {
 		log.Fatal(err)
 	}
 	contextCache := NewContextCache(forwardContext)
-
-	inverted, err := disk.NewInvertedWriter(root, 0)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	dictionary := NewReloadableDictionary(root)
 
 	if *verbose {
 		log.SetLevel(log.InfoLevel)
@@ -155,7 +110,6 @@ func main() {
 
 	go func() {
 		for {
-			dictionary.Reload()
 			contextCache.Scan()
 			runtime.GC()
 			log.Warnf("lru cache size: %d", cache.Len())
@@ -166,7 +120,7 @@ func main() {
 	r := gin.Default()
 	r.Use(cors.Default())
 	r.Use(gin.Recovery())
-	t, err := loadTemplate(contextCache, dictionary)
+	t, err := loadTemplate(contextCache)
 	if err != nil {
 		log.Panic(err)
 	}
@@ -202,52 +156,60 @@ func main() {
 
 	search := func(qr QueryRequest) (*QueryResponse, error) {
 		dates := expandYYYYMMDD(qr.From, qr.To)
-		query, _, err := fromJson(qr.Query, func(k, v string) Query {
-			return NewTermQuery(dates, inverted, dictionary.Get(), k, strings.ToLower(v))
-		})
 
-		if err != nil {
-			return nil, err
-		}
 		out := &QueryResponse{
 			Hits:  []Hit{},
 			Total: 0,
 		}
-
-		for query.Next() != NO_MORE {
-			did := query.GetDocId()
-			out.Total++
-			if qr.Size == 0 {
-				continue
+		for _, date := range dates {
+			segment := path.Join(root, depths.SegmentFromNs(uint64(date.UnixNano())))
+			forward, err := disk.NewForwardWriter(segment, "main")
+			if err != nil {
+				return nil, err
 			}
 
-			score := query.Score()
-			doInsert := false
-			var hit Hit
-			if len(out.Hits) < qr.Size {
-				hit, err = getScoredHit(contextCache, forward, dictionary.Get(), did, qr.DecodeMetadata)
-				hit.Score = score
-				if err != nil {
-					// possibly corrupt forward index, igore, error is already printed
-					continue
-				}
-				out.Hits = append(out.Hits, hit)
-				doInsert = true
-			} else if out.Hits[len(out.Hits)-1].Score < hit.Score {
-				doInsert = true
-				hit, err = getScoredHit(contextCache, forward, dictionary.Get(), did, qr.DecodeMetadata)
-				hit.Score = score
-				if err != nil {
-					// possibly corrupt forward index, igore, error is already printed
-					continue
-				}
+			query, _, err := fromJson(qr.Query, func(k, v string) Query {
+				return NewTermQuery(segment, k, v)
+			})
+			if err != nil {
+				return nil, err
 			}
-			if doInsert {
-				for i := 0; i < len(out.Hits); i++ {
-					if out.Hits[i].Score < hit.Score {
-						copy(out.Hits[i+1:], out.Hits[i:])
-						out.Hits[i] = hit
-						break
+
+			for query.Next() != NO_MORE {
+				did := query.GetDocId()
+				out.Total++
+				if qr.Size == 0 {
+					continue
+				}
+
+				score := query.Score()
+				doInsert := false
+				var hit Hit
+				if len(out.Hits) < qr.Size {
+					hit, err = getScoredHit(contextCache, forward, did)
+					hit.Score = score
+					if err != nil {
+						// possibly corrupt forward index, igore, error is already printed
+						continue
+					}
+					out.Hits = append(out.Hits, hit)
+					doInsert = true
+				} else if out.Hits[len(out.Hits)-1].Score < hit.Score {
+					doInsert = true
+					hit, err = getScoredHit(contextCache, forward, did)
+					hit.Score = score
+					if err != nil {
+						// possibly corrupt forward index, igore, error is already printed
+						continue
+					}
+				}
+				if doInsert {
+					for i := 0; i < len(out.Hits); i++ {
+						if out.Hits[i].Score < hit.Score {
+							copy(out.Hits[i+1:], out.Hits[i:])
+							out.Hits[i] = hit
+							break
+						}
 					}
 				}
 			}
@@ -280,38 +242,47 @@ func main() {
 		}
 
 		dates := expandYYYYMMDD(qr.From, qr.To)
-		query, _, err := fromJson(qr.Query, func(k, v string) Query {
-			return NewTermQuery(dates, inverted, dictionary.Get(), k, strings.ToLower(v))
-		})
-
-		if err != nil {
-			c.JSON(400, gin.H{"error": err.Error()})
-			return
-		}
-
-		w := c.Writer
-		nl := []byte{'\n'}
-		left := qr.Size
-		for query.Next() != NO_MORE {
-			did := query.GetDocId()
-			hit, err := getScoredHit(contextCache, forward, dictionary.Get(), did, qr.DecodeMetadata)
-			hit.Score = query.Score()
+		for _, date := range dates {
+			segment := path.Join(root, depths.SegmentFromNs(uint64(date.UnixNano())))
+			forward, err := disk.NewForwardWriter(segment, "main")
 			if err != nil {
 				c.JSON(400, gin.H{"error": err.Error()})
 				return
 			}
-			b, err := json.Marshal(&hit)
+
+			query, _, err := fromJson(qr.Query, func(k, v string) Query {
+				return NewTermQuery(segment, k, v)
+			})
+
 			if err != nil {
 				c.JSON(400, gin.H{"error": err.Error()})
 				return
 			}
-			w.Write(b)
-			w.Write(nl)
 
-			if qr.Size > 0 {
-				left--
-				if left == 0 {
-					break
+			w := c.Writer
+			nl := []byte{'\n'}
+			left := qr.Size
+			for query.Next() != NO_MORE {
+				did := query.GetDocId()
+				hit, err := getScoredHit(contextCache, forward, did)
+				hit.Score = query.Score()
+				if err != nil {
+					c.JSON(400, gin.H{"error": err.Error()})
+					return
+				}
+				b, err := json.Marshal(&hit)
+				if err != nil {
+					c.JSON(400, gin.H{"error": err.Error()})
+					return
+				}
+				w.Write(b)
+				w.Write(nl)
+
+				if qr.Size > 0 {
+					left--
+					if left == 0 {
+						return
+					}
 				}
 			}
 		}
@@ -323,7 +294,7 @@ func main() {
 
 	r.GET("/scan/:format/*query", func(c *gin.Context) {
 		sampleSize := intOrDefault(c.Query("sample_size"), 100)
-		counter := NewCounter(config, dictionary.Get(), contextCache, sampleSize)
+		counter := NewCounter()
 
 		from := c.Query("from")
 		to := c.Query("to")
@@ -332,52 +303,57 @@ func main() {
 			return
 		}
 		dates := expandYYYYMMDD(from, to)
-
-		// FIXME: this needs major cleanup
-		queryPath := strings.Trim(c.Param("query"), "/")
-		and := strings.Replace(queryPath, "/", " AND ", -1)
-		andor := strings.Replace(and, "|", " OR ", -1)
-		make := func(k, v string) Query {
-			return NewTermQuery(dates, inverted, dictionary.Get(), k, strings.ToLower(v))
-		}
-		query, nQueries, err := fromString(andor, make)
-		if err != nil {
-			c.JSON(400, gin.H{"error": err.Error()})
-			return
-		}
-
-		if nQueries == 0 {
-			query = expandTimeToQuery(dates, make)
-		}
-		for query.Next() != NO_MORE {
-			did := query.GetDocId()
-			cached, ok := cache.Get(did)
-
-			if !ok {
-				foreignId, foreignType, data, offset, err := forward.Read(uint64(did), true)
-				if err != nil {
-					c.JSON(400, gin.H{"error": err.Error()})
-					return
-				}
-				var p spec.PersistedMetadata
-				err = proto.Unmarshal(data, &p)
-				if err != nil {
-					c.JSON(400, gin.H{"error": err.Error()})
-					return
-				}
-				cached = Cached{
-					offset:      offset,
-					foreignId:   foreignId,
-					foreignType: foreignType,
-					data:        p,
-				}
-				cache.Add(did, cached)
+		for _, date := range dates {
+			segment := path.Join(root, depths.SegmentFromNs(uint64(date.UnixNano())))
+			forward, err := disk.NewForwardWriter(segment, "main")
+			if err != nil {
+				c.JSON(400, gin.H{"error": err.Error()})
+				return
 			}
 
-			cx := cached.(Cached)
-			counter.Add(int64(cx.offset), cx.foreignId, cx.foreignType, &cx.data)
-		}
+			// FIXME: this needs major cleanup
+			queryPath := strings.Trim(c.Param("query"), "/")
+			and := strings.Replace(queryPath, "/", " AND ", -1)
+			andor := strings.Replace(and, "|", " OR ", -1)
+			make := func(k, v string) Query {
+				return NewTermQuery(segment, k, v)
+			}
+			query, nQueries, err := fromString(andor, make)
+			if err != nil {
+				c.JSON(400, gin.H{"error": err.Error()})
+				return
+			}
 
+			if nQueries == 0 {
+				query = expandTimeToQuery([]time.Time{date}, make)
+			}
+			for query.Next() != NO_MORE {
+				did := query.GetDocId()
+				cached, ok := cache.Get(did)
+
+				if !ok {
+					data, _, err := forward.Read(uint32(did))
+					if err != nil {
+						c.JSON(400, gin.H{"error": err.Error()})
+						return
+					}
+					var p spec.Metadata
+					err = proto.Unmarshal(data, &p)
+					if err != nil {
+						c.JSON(400, gin.H{"error": err.Error()})
+						return
+					}
+					cache.Add(did, p)
+					cached = p
+				}
+
+				cx := cached.(spec.Metadata)
+				counter.Add(&cx)
+				if len(counter.Sample) < sampleSize {
+					counter.Sample = append(counter.Sample, toHit(contextCache, did, cx))
+				}
+			}
+		}
 		Render(c, counter.Prettify())
 	})
 
@@ -389,79 +365,81 @@ func main() {
 			return
 		}
 		dates := expandYYYYMMDD(qr.From, qr.To)
-		make := func(k, v string) Query {
-			return NewTermQuery(dates, inverted, dictionary.Get(), k, strings.ToLower(v))
-		}
-		query, nQueries, err := fromJson(qr.Query, make)
-		if err != nil {
-			c.JSON(400, gin.H{"error": err.Error()})
-			return
-		}
-		if nQueries == 0 {
-			query = expandTimeToQuery(dates, make)
-		}
-
-		onlyKey, _ := dictionary.dictionary.Resolve(qr.ExperimentKey)
-		variants := uint32(qr.Variants)
-		if variants == 0 {
-			variants = 2
-		}
-
-		if len(qr.Cohort) != 0 && qr.Variants > 0 {
-			c.JSON(400, gin.H{"error": errors.New("cant use both cohort and variants, specify the variants in the cohort key")})
-		}
-		hasCohort := len(qr.Cohort) > 0
-		for query.Next() != NO_MORE {
-			did := query.GetDocId()
-			cached, ok := cache.Get(did)
-			if !ok {
-				// XXX: dont cache or use another cache?
-				foreignId, foreignType, data, offset, err := forward.Read(uint64(did), true)
-				if err != nil {
-					c.JSON(400, gin.H{"error": err.Error()})
-					return
-				}
-				var p spec.PersistedMetadata
-				err = proto.Unmarshal(data, &p)
-				if err != nil {
-					c.JSON(400, gin.H{"error": err.Error()})
-					return
-				}
-				cached = Cached{
-					offset:      offset,
-					foreignId:   foreignId,
-					foreignType: foreignType,
-					data:        p,
-				}
-
-				cache.Add(did, cached)
+		for _, date := range dates {
+			segment := path.Join(root, depths.SegmentFromNs(uint64(date.UnixNano())))
+			forward, err := disk.NewForwardWriter(segment, "main")
+			if err != nil {
+				c.JSON(400, gin.H{"error": err.Error()})
+				return
 			}
-			cx := cached.(Cached)
-			variant := -1
-			value := ""
-			if cx.data.ForeignType == onlyKey {
-				variant = int(dice(cx.data.ForeignId, qr.Exp, variants))
-				value = cx.data.ForeignId
-			} else {
-				for i, t := range cx.data.SearchKeys {
-					if t == onlyKey {
-						value = cx.data.SearchValues[i]
-						if hasCohort {
-							v, ok := qr.Cohort[value]
-							if ok {
-								variant = v
+
+			make := func(k, v string) Query {
+				return NewTermQuery(segment, k, v)
+			}
+			query, nQueries, err := fromJson(qr.Query, make)
+			if err != nil {
+				c.JSON(400, gin.H{"error": err.Error()})
+				return
+			}
+			if nQueries == 0 {
+				query = expandTimeToQuery(dates, make)
+			}
+
+			onlyKey := qr.ExperimentKey
+			variants := uint32(qr.Variants)
+			if variants == 0 {
+				variants = 2
+			}
+
+			if len(qr.Cohort) != 0 && qr.Variants > 0 {
+				c.JSON(400, gin.H{"error": errors.New("cant use both cohort and variants, specify the variants in the cohort key")})
+			}
+			hasCohort := len(qr.Cohort) > 0
+			for query.Next() != NO_MORE {
+				did := query.GetDocId()
+				cached, ok := cache.Get(did)
+				if !ok {
+					// XXX: dont cache or use another cache?
+					data, _, err := forward.Read(uint32(did))
+					if err != nil {
+						c.JSON(400, gin.H{"error": err.Error()})
+						return
+					}
+					var p spec.Metadata
+					err = proto.Unmarshal(data, &p)
+					if err != nil {
+						c.JSON(400, gin.H{"error": err.Error()})
+						return
+					}
+					cache.Add(did, p)
+				}
+				cx := cached.(spec.Metadata)
+				variant := -1
+				value := ""
+				if cx.ForeignType == onlyKey {
+					variant = int(dice(cx.ForeignId, qr.Exp, variants))
+					value = cx.ForeignId
+				} else {
+					for _, kv := range cx.Search {
+						if kv.Key == onlyKey {
+							value = kv.Value
+							if hasCohort {
+								v, ok := qr.Cohort[value]
+								if ok {
+									variant = v
+								}
+							} else {
+								variant = int(dice(value, qr.Exp, variants))
 							}
-						} else {
-							variant = int(dice(value, qr.Exp, variants))
+							break
 						}
-						break
 					}
 				}
-			}
-			if variant >= 0 {
-				epoch := cx.data.CreatedAtNs / 1000000000
-				row := fmt.Sprintf("%d,%s,%s,%s,%d\n", epoch, dictionary.dictionary.ReverseResolve(cx.data.EventType), cx.data.ForeignId, value, variant)
-				c.Writer.Write([]byte(row))
+				if variant >= 0 {
+					epoch := cx.CreatedAtNs / 1000000000
+					row := fmt.Sprintf("%d,%s,%s,%s,%d\n", epoch, cx.EventType, cx.ForeignId, value, variant)
+					c.Writer.Write([]byte(row))
+				}
 			}
 		}
 	})
@@ -483,25 +461,19 @@ func dice(id, exp string, variants uint32) uint32 {
 }
 
 func setupSimpleEventAccept(root string, r *gin.Engine) {
-	dictionary, err := disk.NewPersistedDictionary(root)
-	if err != nil {
-		log.Fatal(err)
-	}
 	giant := sync.Mutex{}
-	forward, err := disk.NewForwardWriter(root, "main")
-	if err != nil {
-		log.Fatal(err)
-	}
 
 	forwardContext, err := disk.NewForwardWriter(root, "context")
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	inverted, err := disk.NewInvertedWriter(root, 512)
+	inverted, err := disk.NewInvertedWriter(512)
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	writers := map[string]*disk.ForwardWriter{}
 
 	r.POST("/push/envelope", func(c *gin.Context) {
 		var envelope spec.Envelope
@@ -518,12 +490,24 @@ func setupSimpleEventAccept(root string, r *gin.Engine) {
 		}
 
 		if envelope.Metadata.CreatedAtNs == 0 {
-			envelope.Metadata.CreatedAtNs = time.Now().UnixNano()
+			envelope.Metadata.CreatedAtNs = uint64(time.Now().UnixNano())
 		}
 
+		segmentId := path.Join(root, depths.SegmentFromNs(envelope.Metadata.CreatedAtNs))
 		giant.Lock()
 		defer giant.Unlock()
-		err = consume.ConsumeEvents(0, 0, &envelope, dictionary, forward, nil, inverted)
+
+		w, ok := writers[segmentId]
+		if !ok {
+			os.MkdirAll(segmentId, 0700)
+			w, err = disk.NewForwardWriter(segmentId, "main")
+			if err != nil {
+				log.Fatal(err)
+			}
+			writers[segmentId] = w
+		}
+
+		err = consume.ConsumeEvents(segmentId, &envelope, w, inverted)
 		if err != nil {
 			c.JSON(500, gin.H{"error": err.Error()})
 			return
@@ -547,10 +531,22 @@ func setupSimpleEventAccept(root string, r *gin.Engine) {
 			return
 		}
 
+		segmentId := path.Join(root, depths.SegmentFromNs(converted.Metadata.CreatedAtNs))
 		giant.Lock()
 		defer giant.Unlock()
 
-		err = consume.ConsumeEvents(0, 0, converted, dictionary, forward, nil, inverted)
+		w, ok := writers[segmentId]
+		if !ok {
+			os.MkdirAll(segmentId, 0700)
+			w, err := disk.NewForwardWriter(segmentId, "main")
+			if err != nil {
+				log.Fatal(err)
+			}
+			writers[segmentId] = w
+		}
+
+		err = consume.ConsumeEvents(segmentId, converted, w, inverted)
+
 		if err != nil {
 			c.JSON(500, gin.H{"error": err.Error()})
 			return
@@ -573,13 +569,13 @@ func setupSimpleEventAccept(root string, r *gin.Engine) {
 		}
 
 		if ctx.CreatedAtNs == 0 {
-			ctx.CreatedAtNs = time.Now().UnixNano()
+			ctx.CreatedAtNs = uint64(time.Now().UnixNano())
 		}
 
 		giant.Lock()
 		defer giant.Unlock()
 
-		err = consume.ConsumeContext(&ctx, dictionary, forwardContext)
+		err = consume.ConsumeContext(&ctx, forwardContext)
 		if err != nil {
 			c.JSON(500, gin.H{"error": err.Error()})
 			return
@@ -589,13 +585,13 @@ func setupSimpleEventAccept(root string, r *gin.Engine) {
 	})
 }
 
-func loadTemplate(contextCache *ContextCache, pd *ReloadableDictionary) (*template.Template, error) {
+func loadTemplate(contextCache *ContextCache) (*template.Template, error) {
 	t := template.New("").Funcs(template.FuncMap{
 		"banner": func(b string) string {
 			return chart.BannerLeft(b)
 		},
-		"time": func(b int64) string {
-			t := time.Unix(b/1000000000, 0)
+		"time": func(b uint64) string {
+			t := time.Unix(int64(b)/1000000000, 0)
 			return t.Format(time.UnixDate)
 		},
 		"pretty": func(b interface{}) string {
@@ -608,7 +604,7 @@ func loadTemplate(contextCache *ContextCache, pd *ReloadableDictionary) (*templa
 			return strings.Replace(a, b, c, -1)
 		},
 		"ctx": func(key, value string) []*spec.Context {
-			return LoadContextForStat(contextCache, pd.Get(), key, value, time.Now().UnixNano())
+			return LoadContextForStat(contextCache, key, value, uint64(time.Now().UnixNano()))
 		},
 		"getN": func(qs template.URL, key string, n int) int {
 			v, err := url.ParseQuery(string(qs))

@@ -11,8 +11,8 @@ import (
 )
 
 const (
-	NO_MORE   = int64(math.MaxInt64)
-	NOT_READY = int64(-1)
+	NO_MORE   = int32(math.MaxInt32)
+	NOT_READY = int32(-1)
 )
 
 // FIXME(jackdoe): this is very bad
@@ -186,30 +186,30 @@ func fromJson(input interface{}, makeTermQuery func(string, string) Query) (Quer
 }
 
 type Query interface {
-	advance(int64) int64
-	Next() int64
-	GetDocId() int64
+	advance(int32) int32
+	Next() int32
+	GetDocId() int32
 	Score() float32
 	Reset()
 	String() string
 }
 
 type QueryBase struct {
-	docId int64
+	docId int32
 }
 
-func (q *QueryBase) GetDocId() int64 {
+func (q *QueryBase) GetDocId() int32 {
 	return q.docId
 }
 
 type Term struct {
 	cursor   int
-	postings []int64
+	postings []int32
 	term     string
 	QueryBase
 }
 
-func NewTerm(t string, postings []int64) *Term {
+func NewTerm(t string, postings []int32) *Term {
 	return &Term{
 		term:      t,
 		cursor:    -1,
@@ -231,7 +231,7 @@ func (t *Term) Score() float32 {
 	return float32(1)
 }
 
-func (t *Term) advance(target int64) int64 {
+func (t *Term) advance(target int32) int32 {
 	if t.docId == NO_MORE || t.docId == target || target == NO_MORE {
 		t.docId = target
 		return t.docId
@@ -267,7 +267,7 @@ func (t *Term) advance(target int64) int64 {
 	return t.docId
 }
 
-func (t *Term) Next() int64 {
+func (t *Term) Next() int32 {
 	t.cursor++
 	if t.cursor >= len(t.postings) {
 		t.docId = NO_MORE
@@ -315,7 +315,7 @@ func (q *BoolOrQuery) Score() float32 {
 	return float32(score)
 }
 
-func (q *BoolOrQuery) advance(target int64) int64 {
+func (q *BoolOrQuery) advance(target int32) int32 {
 	new_doc := NO_MORE
 	n := len(q.queries)
 	for i := 0; i < n; i++ {
@@ -340,7 +340,7 @@ func (q *BoolOrQuery) String() string {
 	return strings.Join(out, " OR ")
 }
 
-func (q *BoolOrQuery) Next() int64 {
+func (q *BoolOrQuery) Next() int32 {
 	new_doc := NO_MORE
 	n := len(q.queries)
 	for i := 0; i < n; i++ {
@@ -384,7 +384,7 @@ func (q *BoolAndQuery) Score() float32 {
 	return float32(len(q.queries))
 }
 
-func (q *BoolAndQuery) nextAndedDoc(target int64) int64 {
+func (q *BoolAndQuery) nextAndedDoc(target int32) int32 {
 	start := 1
 	n := len(q.queries)
 AGAIN:
@@ -445,7 +445,7 @@ func (q *BoolAndQuery) String() string {
 	return s
 }
 
-func (q *BoolAndQuery) advance(target int64) int64 {
+func (q *BoolAndQuery) advance(target int32) int32 {
 	if len(q.queries) == 0 {
 		q.docId = NO_MORE
 		return NO_MORE
@@ -454,7 +454,7 @@ func (q *BoolAndQuery) advance(target int64) int64 {
 	return q.nextAndedDoc(q.queries[0].advance(target))
 }
 
-func (q *BoolAndQuery) Next() int64 {
+func (q *BoolAndQuery) Next() int32 {
 	if len(q.queries) == 0 {
 		q.docId = NO_MORE
 		return NO_MORE
@@ -465,8 +465,8 @@ func (q *BoolAndQuery) Next() int64 {
 }
 
 type TermFile struct {
-	cursor int64
-	size   int64
+	cursor int32
+	size   int32
 	file   *os.File
 	term   string
 	QueryBase
@@ -474,9 +474,9 @@ type TermFile struct {
 
 func NewTermFile(t string, f *os.File) *TermFile {
 	fs, err := f.Stat()
-	size := int64(0)
+	size := int32(0)
 	if err == nil {
-		size = fs.Size()
+		size = int32(fs.Size())
 	}
 	return &TermFile{
 		term:      t,
@@ -500,16 +500,16 @@ func (t *TermFile) Score() float32 {
 	return float32(1)
 }
 
-func (t *TermFile) read(pos int64) int64 {
-	data := make([]byte, 8)
-	_, err := t.file.ReadAt(data, pos)
+func (t *TermFile) read(pos int32) int32 {
+	data := make([]byte, 4)
+	_, err := t.file.ReadAt(data, int64(pos))
 	if err != nil {
 		return NO_MORE
 	}
-	return int64(binary.LittleEndian.Uint64(data))
+	return int32(binary.LittleEndian.Uint32(data))
 }
 
-func (t *TermFile) advance(target int64) int64 {
+func (t *TermFile) advance(target int32) int32 {
 	// FIXME(jackdoe): add buffer with few hundred integers to dramatically reduce the reads
 	if t.docId == NO_MORE || t.docId == target || target == NO_MORE {
 		t.docId = target
@@ -547,7 +547,7 @@ func (t *TermFile) advance(target int64) int64 {
 	return t.docId
 }
 
-func (t *TermFile) Next() int64 {
+func (t *TermFile) Next() int32 {
 	t.cursor++
 	t.docId = t.read(t.cursor * 8)
 	return t.docId

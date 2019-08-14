@@ -2,12 +2,11 @@ package main
 
 import (
 	"fmt"
-	"time"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackdoe/blackrock/depths"
 	"github.com/jackdoe/blackrock/jubei/disk"
-	log "github.com/sirupsen/logrus"
 )
 
 type ExpQueryRequest struct {
@@ -21,11 +20,10 @@ type ExpQueryRequest struct {
 }
 
 type QueryRequest struct {
-	Query          interface{} `json:"query"`
-	Size           int         `json:"size"`
-	DecodeMetadata bool        `json:"decode_metadata"`
-	From           string      `json:"from"`
-	To             string      `json:"to"`
+	Query interface{} `json:"query"`
+	Size  int         `json:"size"`
+	From  string      `json:"from"`
+	To    string      `json:"to"`
 }
 
 type QueryResponse struct {
@@ -53,15 +51,12 @@ func (qr *QueryResponse) VW(c *gin.Context) {
 	w := c.Writer
 	for _, hit := range qr.Hits {
 		m := hit.Metadata
-		if m == nil {
-			continue
-		}
 		label, ok := labels[m.EventType]
 		if !ok {
 			continue
 		}
 
-		w.Write([]byte(fmt.Sprintf("%d |%s %s ", label, hit.ForeignType, depths.CleanupVW(hit.ForeignId))))
+		w.Write([]byte(fmt.Sprintf("%d |%s %s ", label, hit.Metadata.ForeignType, depths.CleanupVW(hit.Metadata.ForeignId))))
 		for _, kv := range m.Search {
 			w.Write([]byte(fmt.Sprintf("|%s %s ", kv.Key, depths.CleanupVW(kv.Value))))
 		}
@@ -81,23 +76,9 @@ func (qr *QueryResponse) HTML(c *gin.Context) {
 	c.YAML(200, qr)
 }
 
-func NewTermQuery(dates []time.Time, inverted *disk.InvertedWriter, dictionary *disk.PersistedDictionary, tagKey string, tagValue string) Query {
+func NewTermQuery(root string, tagKey string, tagValue string) Query {
+	tagKey = depths.Cleanup(strings.ToLower(tagKey))
+	tagValue = depths.Cleanup(strings.ToLower(tagValue))
 	s := fmt.Sprintf("%s:%s", tagKey, tagValue)
-	tk, ok := dictionary.Resolve(tagKey)
-	if !ok {
-		log.Warnf("error reading key for %s", tagKey)
-		return NewTerm(s, []int64{})
-	}
-	queries := []Query{}
-
-	for _, d := range dates {
-		seg := depths.SegmentFromNs(d.UnixNano())
-		s := fmt.Sprintf("%s:%s:%s", seg, tagKey, tagValue)
-		queries = append(queries, NewTerm(s, inverted.Read(seg, tk, tagValue)))
-	}
-
-	if len(queries) == 1 {
-		return queries[1]
-	}
-	return NewBoolOrQuery(queries...)
+	return NewTerm(s, disk.InvertedReadRaw(root, -1, tagKey, tagValue))
 }
