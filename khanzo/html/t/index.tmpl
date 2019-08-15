@@ -77,6 +77,7 @@
   <body>
     {{ $base := .BaseUrl }}
     {{ $query := .QueryString }}
+    {{ $total := .Stats.TotalCount }}
     <div style="line-height: 25px;">
       <a href="{{ replace $base "/html/" "/text/" }}">text</a>
       <br>
@@ -92,8 +93,19 @@
         <input name="to" type=date value='{{getS $query "to"}}'>
         <input type=submit value=filter>
       </form>
+      total events: {{ $total }}
+{{ if .Stats.ConvertedCache }}
+  <br>
+  {{ $totalConvertions := .Stats.TotalCountEventsFromConverter }}
+  {{  $perVariant := .Stats.ConvertedCache.TotalConvertingUsers }}
+
+{{ range $variant, $value := $perVariant }}
+  <div style="background-color: {{ variantColor $variant}}">v{{ $variant }} converting users: {{ $value.ConvertingUsers}}, non converting users: {{ $value.NotConvertingUsers}}, convertions: {{ $value.Convertions}}, convertion rate: {{ percent $value.Users $value.ConvertingUsers}}% </div>
+{{ end }}
+  <br>
+{{ end }}
+
     </div>
-    {{ $total := .Stats.TotalCount }}
 
     <table border=0>
       <tr><td colspan=2><pre class="banner">{{ banner "basic"}}</pre></td></tr>
@@ -102,22 +114,27 @@
       {{ end }}
 
       <tr><td colspan=2><pre class="banner">{{ banner "foreign id"}}</pre></td></tr>
-      {{ range .Stats.Foreign }}
-      {{ template "/html/t/chart.tmpl" dict "Data" . "GlobalTotal" $total "BaseUrl" $base "Link" true "QueryString" $query}}
+      {{ range (.Stats.SortedKeys .Stats.Foreign) }}
+      {{ template "/html/t/chart.tmpl" dict "Data" . "GlobalTotal" $total "BaseUrl" $base "Link" true "QueryString" $query "Foreign" true}}
       {{ end }}
       <tr><td colspan=2><pre class="banner">{{ banner "event type"}}</pre></td></tr>
       {{ template "/html/t/chart.tmpl" dict "Data" .Stats.EventTypes "GlobalTotal" $total  "BaseUrl" $base "Link" true "QueryString" $query}}
+
       <tr><td colspan=2><pre class="banner">{{ banner "search"}}</pre></td></tr>
-      {{ range .Stats.Search }}
+      {{ range (.Stats.SortedKeys .Stats.Search) }}
       {{ template "/html/t/chart.tmpl" dict "Data" . "GlobalTotal" $total  "BaseUrl" $base "Link" true "QueryString" $query}}
       {{ end }}
+
       <tr><td colspan=2><pre class="banner">{{ banner "count"}}</pre></td></tr>
-      {{ range .Stats.Count }}
+      {{ range (.Stats.SortedKeys .Stats.Count) }}
       {{ template "/html/t/chart.tmpl" dict "Data" . "GlobalTotal" $total  "BaseUrl" $base "Link" false "QueryString" $query}}
       {{ end }}
+
       <tr><td colspan=2><pre id="sample" class="banner">{{ banner "sample"}}</pre></td></tr>
-      {{ range .Stats.Sample }}
-      {{ template "/html/t/hit.tmpl" dict "Data" . "QueryString" $query "BaseUrl" $base }}
+      {{ range $variant,$hits := .Stats.Sample }}
+      {{ range $hits }}
+      {{ template "/html/t/hit.tmpl" dict "Data" . "QueryString" $query "BaseUrl" $base "Variant" $variant}}
+      {{ end  }}
       {{ end  }}
     </table>
   </body>

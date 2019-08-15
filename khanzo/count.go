@@ -12,109 +12,261 @@ import (
 	"github.com/jackdoe/blackrock/orgrim/spec"
 )
 
-type ByKV []*spec.KV
+type ConvertedCache map[uint32]map[string]map[string]uint32
 
-func (a ByKV) Len() int      { return len(a) }
-func (a ByKV) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
-func (a ByKV) Less(i, j int) bool {
-	if a[i].Key == a[j].Key {
-		return a[i].Value < a[j].Value
+func NewConvertedCache() *ConvertedCache {
+	return &ConvertedCache{}
+}
+
+type ConvertedPerVariant struct {
+	ConvertingUsers    uint32
+	NotConvertingUsers uint32
+	Users              uint32
+	Convertions        uint32
+}
+
+func (x *ConvertedCache) TotalConvertingUsers() []ConvertedPerVariant {
+	c := *x
+	out := make([]ConvertedPerVariant, len(c))
+
+	for vid, variant := range c {
+		sum := uint32(0)
+		usersC := uint32(0)
+		usersNC := uint32(0)
+		for _, pid := range variant {
+			for _, u := range pid {
+				if u == 0 {
+					usersNC++
+				} else {
+					usersC++
+				}
+				sum += u
+			}
+		}
+		out[vid] = ConvertedPerVariant{ConvertingUsers: usersC, NotConvertingUsers: usersNC, Convertions: sum, Users: usersC + usersNC}
 	}
-	return a[i].Key < a[j].Key
-}
 
-type Counter struct {
-	Search     map[string]map[string]uint32 `json:"search"`
-	Count      map[string]map[string]uint32 `json:"count"`
-	Foreign    map[string]map[string]uint32 `json:"foreign"`
-	EventTypes map[string]uint32            `json:"event_types"`
-	Sample     []Hit                        `json:"sample"`
-	Total      uint64                       `json:"total"`
-}
-
-func NewCounter() *Counter {
-	return &Counter{
-		Search:     map[string]map[string]uint32{},
-		Count:      map[string]map[string]uint32{},
-		Foreign:    map[string]map[string]uint32{},
-		EventTypes: map[string]uint32{},
-		Sample:     []Hit{},
-		Total:      0,
-	}
-}
-
-func (c *Counter) Prettify() *CountedResult {
-	out := &CountedResult{}
-	out.Search = statsForMapMap(c.Search)
-	out.Count = statsForMapMap(c.Count)
-	out.Foreign = statsForMapMap(c.Foreign)
-
-	out.EventTypes = statsForMap("event_type", c.EventTypes)
-	out.Sample = c.Sample
-	out.TotalCount = int64(c.Total)
 	return out
 }
 
-func (c *Counter) Add(p *spec.Metadata) {
+func (x *ConvertedCache) GetConverted(variant uint32, ftype, fid string) bool {
+	c := *x
+	pv, ok := c[variant]
+	if !ok {
+		return false
+	}
+
+	v, ok := pv[ftype]
+	if !ok {
+		return false
+	}
+	_, ok = v[fid]
+	return ok
+}
+
+func (c ConvertedCache) SetConverted(n uint32, variant uint32, ftype, fid string) {
+	pv, ok := c[variant]
+	if !ok {
+		pv = map[string]map[string]uint32{}
+		c[variant] = pv
+	}
+
+	v, ok := pv[ftype]
+	if !ok {
+		v = map[string]uint32{}
+		pv[ftype] = v
+	}
+	v[fid] += n
+}
+
+type CountPerValue struct {
+	CountEventsFromConverterVariant []uint32
+	Count                           uint32
+	Key                             string
+}
+
+func (c *CountPerValue) Add(variant uint32, converted bool) {
+	if converted {
+		if variant >= uint32(len(c.CountEventsFromConverterVariant)) {
+			x := make([]uint32, variant+1)
+			for i, v := range c.CountEventsFromConverterVariant {
+				x[i] = v
+			}
+			c.CountEventsFromConverterVariant = x
+		}
+		c.CountEventsFromConverterVariant[variant]++
+	}
+	c.Count++
+}
+
+type CountPerKey struct {
+	PerValue                 map[string]*CountPerValue
+	Count                    uint32
+	CountEventsFromConverter uint32
+	Key                      string
+}
+
+func (c *CountPerKey) Sorted() []*CountPerValue {
+	out := []*CountPerValue{}
+	for _, v := range c.PerValue {
+		out = append(out, v)
+	}
+
+	sort.Slice(out, func(i, j int) bool {
+		if out[j].Count == out[i].Count {
+			return out[i].Key < out[j].Key
+		}
+		return out[j].Count < out[i].Count
+	})
+	return out
+}
+
+func (c *CountPerKey) Add(value string, variant uint32, converted bool) {
+	c.Count++
+	if converted {
+		c.CountEventsFromConverter++
+	}
+	pv, ok := c.PerValue[value]
+	if !ok {
+		pv = &CountPerValue{Key: value}
+		c.PerValue[value] = pv
+	}
+	pv.Add(variant, converted)
+}
+
+func NewCountPerKey(s string) *CountPerKey {
+	return &CountPerKey{Key: s, PerValue: map[string]*CountPerValue{}}
+}
+
+type Counter struct {
+	Search                        map[string]*CountPerKey `json:"search"`
+	Count                         map[string]*CountPerKey `json:"count"`
+	Foreign                       map[string]*CountPerKey `json:"foreign"`
+	EventTypes                    *CountPerKey            `json:"event_types"`
+	Sample                        map[uint32][]Hit        `json:"sample"`
+	TotalCount                    uint32                  `json:"total"`
+	TotalCountEventsFromConverter uint32                  `json:"total"`
+	ConvertedCache                *ConvertedCache         `json:"convertions"`
+}
+
+func NewCounter(conv *ConvertedCache) *Counter {
+	return &Counter{
+		Search:         map[string]*CountPerKey{},
+		Count:          map[string]*CountPerKey{},
+		Foreign:        map[string]*CountPerKey{},
+		EventTypes:     NewCountPerKey("event_type"),
+		Sample:         map[uint32][]Hit{},
+		ConvertedCache: conv,
+		TotalCount:     0,
+	}
+}
+func (c *Counter) SortedKeys(what map[string]*CountPerKey) []*CountPerKey {
+	out := []*CountPerKey{}
+	for _, v := range what {
+		out = append(out, v)
+	}
+
+	sort.Slice(out, func(i, j int) bool {
+		if out[j].Count == out[i].Count {
+			return out[i].Key < out[j].Key
+		}
+		return out[j].Count < out[j].Count
+	})
+	return out
+}
+
+func (c *Counter) Add(variant uint32, p *spec.Metadata) {
+	converted := false
+
+	if c.ConvertedCache != nil {
+		converted = c.ConvertedCache.GetConverted(variant, p.ForeignType, p.ForeignId)
+		if converted {
+			c.TotalCountEventsFromConverter++
+		} else {
+			c.ConvertedCache.SetConverted(0, variant, p.ForeignType, p.ForeignId)
+		}
+	}
+	c.TotalCount++
 	for _, kv := range p.Search {
 		k := kv.Key
 		v := kv.Value
-		m, ok := c.Search[k]
+		xm, ok := c.Search[k]
 		if !ok {
-			m = map[string]uint32{}
-			c.Search[k] = m
+			xm = NewCountPerKey(k)
+			c.Search[k] = xm
 		}
-		m[v]++
+		xm.Add(v, variant, converted)
 	}
 
 	for _, kv := range p.Count {
 		k := kv.Key
 		v := kv.Value
 
-		m, ok := c.Count[k]
+		xm, ok := c.Count[k]
 		if !ok {
-			m = map[string]uint32{}
-			c.Count[k] = m
+			xm = NewCountPerKey(k)
+			c.Count[k] = xm
 		}
-		m[v]++
+		xm.Add(v, 0, false)
 	}
-	m, ok := c.Foreign[p.ForeignType]
-	if !ok {
-		m = map[string]uint32{}
-		c.Foreign[p.ForeignType] = m
+	{
+		xm, ok := c.Foreign[p.ForeignType]
+		if !ok {
+			xm = NewCountPerKey(p.ForeignType)
+			c.Foreign[p.ForeignType] = xm
+		}
+		xm.Add(p.ForeignId, 0, false)
 	}
-	m[p.ForeignId]++
-	c.EventTypes[p.EventType]++
-	c.Total++
+
+	c.EventTypes.Add(p.EventType, 0, false)
 }
 
-type PerValue struct {
-	Value string `json:"value" yaml:"value"`
-	Count int64  `json:"count"`
+func (c *Counter) String(context *gin.Context) {
+	makers := prettyStats("FOREIGN", c.SortedKeys(c.Foreign))
+	types := prettyStats("EVENT_TYPES", []*CountPerKey{c.EventTypes})
+	properties := prettyStats("COUNT", c.SortedKeys(c.Count))
+	tags := prettyStats("SEARCH", c.SortedKeys(c.Search))
+	out := fmt.Sprintf("%s%s%s%s\n", makers, types, tags, properties)
+	out += chart.Banner("SAMPLE")
+	for _, samples := range c.Sample {
+		for _, h := range samples {
+			out += fmt.Sprintf("%s\n", h.String())
+		}
+	}
+	context.String(200, out)
 }
 
-type PerKey struct {
-	Key        string     `json:"key"`
-	Values     []PerValue `json:"values"`
-	TotalCount int64      `json:"total"`
-}
+func prettyStats(title string, stats []*CountPerKey) string {
+	if stats == nil {
+		return ""
+	}
 
-type CountedResult struct {
-	EventTypes *PerKey   `json:"event_types"`
-	Foreign    []*PerKey `json:"foreign"`
-	Search     []*PerKey `json:"search"`
-	Count      []*PerKey `json:"count"`
-	Sample     []Hit     `json:"sample"`
-	TotalCount int64     `json:"total"`
-}
+	out := []string{}
+	pad := "    "
+	width := 80 - len(pad)
+	total := uint32(0)
+	for _, t := range stats {
+		for _, v := range t.PerValue {
+			total += v.Count
+		}
+	}
 
-func (cr *CountedResult) VW(c *gin.Context) {
-	c.JSON(400, gin.H{"error": "scan does not support vw output"})
-}
+	for _, t := range stats {
+		if t == nil {
+			continue
+		}
+		x := []float64{}
+		y := []string{}
+		sorted := t.Sorted()
+		for _, v := range sorted {
+			x = append(x, float64(v.Count))
+			y = append(y, v.Key)
+		}
+		percent := float64(100) * float64(t.Count) / float64(total)
+		out = append(out, fmt.Sprintf("« %s (%d) » total: %d, %.2f%%\n%s", t.Key, len(y), t.Count, percent, chart.HorizontalBar(x, y, '▒', width, pad, 50)))
+	}
 
-func (cr *CountedResult) String(c *gin.Context) {
-	t := cr.prettyCategoryStats()
-	c.String(200, t)
+	return fmt.Sprintf("%s%s", chart.Banner(title), strings.Join(out, "\n\n--------\n\n"))
 }
 
 type Breadcrumb struct {
@@ -122,8 +274,8 @@ type Breadcrumb struct {
 	Exact string
 }
 
-func (cr *CountedResult) HTML(c *gin.Context) {
-	url := c.Request.URL.Path
+func (c *Counter) HTML(context *gin.Context) {
+	url := context.Request.URL.Path
 	splitted := strings.Split(url, "/")
 	crumbs := []Breadcrumb{}
 	for i := 0; i < len(splitted[3:]); i++ {
@@ -137,90 +289,5 @@ func (cr *CountedResult) HTML(c *gin.Context) {
 		url = "/scan/html/"
 	}
 
-	c.HTML(http.StatusOK, "/html/t/index.tmpl", map[string]interface{}{"Crumbs": crumbs, "Stats": cr, "BaseUrl": url, "QueryString": template.URL(c.Request.URL.RawQuery)})
-}
-
-func (cr *CountedResult) prettyCategoryStats() string {
-	makers := prettyStats("FOREIGN", cr.Foreign)
-	types := prettyStats("EVENT_TYPES", []*PerKey{cr.EventTypes})
-	properties := prettyStats("COUNT", cr.Count)
-	tags := prettyStats("SEARCH", cr.Search)
-	out := fmt.Sprintf("%s%s%s%s\n", makers, types, tags, properties)
-	out += chart.Banner("SAMPLE")
-	for _, h := range cr.Sample {
-		out += fmt.Sprintf("%s\n", h.String())
-	}
-	return out
-}
-
-func statsForMap(key string, values map[string]uint32) *PerKey {
-	tk := &PerKey{
-		Key: key,
-	}
-	for value, count := range values {
-		tk.TotalCount += int64(count)
-		tk.Values = append(tk.Values, PerValue{Value: value, Count: int64(count)})
-	}
-	sort.Slice(tk.Values, func(i, j int) bool {
-		if tk.Values[j].Count == tk.Values[i].Count {
-			return tk.Values[i].Value < tk.Values[j].Value
-		}
-		return tk.Values[j].Count < tk.Values[i].Count
-	})
-	return tk
-}
-
-func statsForMapMap(input map[string]map[string]uint32) []*PerKey {
-	out := []*PerKey{}
-	for key, values := range input {
-		out = append(out, statsForMap(key, values))
-	}
-	sort.Slice(out, func(i, j int) bool {
-		if out[j].TotalCount == out[i].TotalCount {
-			return out[i].Key < out[j].Key
-		}
-
-		return out[j].TotalCount < out[i].TotalCount
-	})
-	return out
-}
-
-func prettyStats(title string, stats []*PerKey) string {
-	if stats == nil {
-		return ""
-	}
-
-	sort.Slice(stats, func(i, j int) bool {
-		return stats[j].TotalCount < stats[i].TotalCount
-	})
-
-	out := []string{}
-	pad := "    "
-	width := 80 - len(pad)
-	total := int64(0)
-	for _, t := range stats {
-		for _, v := range t.Values {
-			total += v.Count
-		}
-	}
-
-	for _, t := range stats {
-		if t == nil {
-			continue
-		}
-		x := []float64{}
-		y := []string{}
-		sort.Slice(t.Values, func(i, j int) bool {
-			return t.Values[j].Count < t.Values[i].Count
-		})
-
-		for _, v := range t.Values {
-			x = append(x, float64(v.Count))
-			y = append(y, v.Value)
-		}
-		percent := float64(100) * float64(t.TotalCount) / float64(total)
-		out = append(out, fmt.Sprintf("« %s (%d) » total: %d, %.2f%%\n%s", t.Key, len(y), t.TotalCount, percent, chart.HorizontalBar(x, y, '▒', width, pad, 50)))
-	}
-
-	return fmt.Sprintf("%s%s", chart.Banner(title), strings.Join(out, "\n\n--------\n\n"))
+	context.HTML(http.StatusOK, "/html/t/index.tmpl", map[string]interface{}{"Crumbs": crumbs, "Stats": c, "BaseUrl": url, "QueryString": template.URL(context.Request.URL.RawQuery)})
 }

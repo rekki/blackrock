@@ -1,6 +1,8 @@
 package consume
 
-import "testing"
+import (
+	"testing"
+)
 
 func TestFixme(t *testing.T) {
 	cases := []string{
@@ -22,6 +24,23 @@ func TestFixme(t *testing.T) {
 		k, v := Fixme(cases[i], cases[i+1])
 		if k != expected[i] || v != expected[i+1] {
 			t.Fatalf("[got]%v %v != [expected]%v %v", k, v, expected[i], expected[i+1])
+		}
+	}
+}
+
+func TestCutInt(t *testing.T) {
+	cases := map[string]int{
+		"x_b_casd_1": 1,
+		"x_1":        1,
+		"_1":         0,
+		"x_b_c_":     0,
+	}
+
+	for k, v := range cases {
+		_, e, _ := extractLastNumber(k, byte('_'))
+
+		if v != e {
+			t.Fatalf("expected %d got %d", v, e)
 		}
 	}
 }

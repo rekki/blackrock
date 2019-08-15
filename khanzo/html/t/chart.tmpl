@@ -1,34 +1,36 @@
-
+{{ $sorted := .Data.Sorted }}
 <tr id="{{ .Data.Key }}">
   <td class="left">
-    {{ .Data.Key }} ({{ (len .Data.Values) }})
+    {{ .Data.Key }} ({{ (len $sorted) }})
   </td>
   <td class="right">
-    total: {{ .Data.TotalCount }} {{ percent .GlobalTotal .Data.TotalCount }}
+    total: {{ .Data.Count }} {{ percent .GlobalTotal .Data.Count }}
   </td>
 </tr>
-{{ $total := .Data.TotalCount }}
+
+{{ $total := .Data.Count }}
+{{ $totalConvertions := .Data.CountEventsFromConverter }}
 {{ $b := .BaseUrl }}
 {{ $qs := .QueryString }}
 {{ $tag := .Data.Key }}
 {{ $link := .Link }}
+{{ $foreign := .Foreign }}
 {{ $limit := getN $qs .Data.Key 50 }}
-{{ range $i, $val := .Data.Values }}
-{{ $p := percent $total $val.Count }}
+{{ range $i, $val := $sorted }}
 
 {{ if lt $i $limit}}
 <tr>
   <td class="left">
     {{ if $link }}
     <div style="padding-left: 1.5em;">
-    {{ $p := ctx $tag $val.Value }}
-    {{ $name := findFirstNameOrDefault $p $val.Value }}
+    {{ $p := ctx $tag $val.Key }}
+    {{ $name := findFirstNameOrDefault $p $val.Key }}
     {{ if $p }}
     <label class="trigger">
       <input type="checkbox"/>
       <span class="msg">
         <table>
-          <tr><td colspan=2><b><a href="{{$b}}/{{$tag}}:{{$val.Value}}?{{$qs}}">{{ $name }}</a></b></td></tr>
+          <tr><td colspan=2><b><a href="{{$b}}/{{$tag}}:{{$val.Key}}?{{$qs}}">{{ $name }}</a></b></td></tr>
           {{ range $p }}
           <tr><td><b>{{.ForeignType}}</b></td><td>{{.ForeignId}}</td></tr>
           {{ range .Properties }}
@@ -40,27 +42,39 @@
       </span>
     </label>
     {{ end }}
-    <a href="{{$b}}/{{$tag}}:{{$val.Value}}?{{$qs}}">{{ $name }}</a>
+    <a href="{{$b}}/{{$tag}}:{{$val.Key}}?{{$qs}}">{{ $name }}</a>
     </div>
     {{ else }}
-    <div style="padding-left: 1.5em">{{ $val.Value }}</div>
+    <div style="padding-left: 1.5em">{{ $val.Key }}</div>
     {{ end }}
   </td>
   <td class="right">
+    {{ $p := percent $total $val.Count}}
     <div style="position: relative">
      <div style="display: inline-block; z-index: 1">{{ format $val.Count }} ({{$p}}%)</div>
      <div style="position: absolute; left: 0; bottom: 0;  display: inline-block; width: {{$p}}%; background-color: rgba(200,200,200,0.5);">&nbsp;</div>
     </div>
+    {{ range $variant, $count := $val.CountEventsFromConverterVariant }}
+
+    {{ if gt $count 0 }}
+    {{ $p := percent $totalConvertions $count}}
+    <div style="position: relative">
+     <div style="display: inline-block; z-index: 1">v{{ $variant }} {{ format $count }} ({{$p}}%)</div>
+     {{ $color := variantColor $variant }}
+     <div style="position: absolute; left: 0; bottom: 0;  display: inline-block; width: {{$p}}%; background-color: {{$color}};">&nbsp;</div>
+    </div>
+    {{ end }}
+    {{ end }}
   </td>
 </tr>
-{{ end }}
 
 {{ end }}
+{{ end }}
 
-{{ if gt (len .Data.Values) $limit }}
+{{ if gt (len $sorted) $limit }}
 <tr>
   <td class="left" colspan=2>
-    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;...<a href="{{$b}}?{{addN $qs .Data.Key 100}}#{{.Data.Key}}">skipping {{ minus (len .Data.Values) $limit }}</a>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;...<a href="{{$b}}?{{addN $qs .Data.Key 100}}#{{.Data.Key}}">skipping {{ minus (len $sorted) $limit }}</a>
   </td>
 </tr>
 
@@ -68,4 +82,24 @@
 <tr>
   <td>&nbsp;</td>
 </tr>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 

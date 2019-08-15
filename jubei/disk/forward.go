@@ -21,6 +21,7 @@ type ForwardWriter struct {
 }
 
 func NewForwardWriter(root string, name string) (*ForwardWriter, error) {
+	os.MkdirAll(root, 0700)
 	filename := path.Join(root, fmt.Sprintf("%s.bin", name))
 	fd, err := os.OpenFile(filename, os.O_RDWR|os.O_CREATE, 0600)
 	if err != nil {

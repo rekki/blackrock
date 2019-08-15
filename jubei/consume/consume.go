@@ -2,6 +2,7 @@ package consume
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -30,12 +31,31 @@ func Fixme(k, v string) (string, string) {
 	return k, v
 }
 
-func ConsumeEvents(segmentId string, envelope *spec.Envelope, forward *disk.ForwardWriter, inverted *disk.InvertedWriter) error {
+func extractLastNumber(s string, sep byte) (string, int, bool) {
+	pos := -1
+	for i := len(s) - 1; i >= 0; i-- {
+		if s[i] == sep {
+			pos = i
+			break
+		}
+	}
+
+	if pos > 0 && pos < len(s)-1 {
+		v, err := strconv.ParseInt(s[pos+1:], 10, 32)
+		if err != nil {
+			return s, 0, false
+		}
+		return s[:pos], int(v), true
+	}
+	return s, 0, false
+}
+
+func ConsumeEvents(segmentId string, envelope *spec.Envelope, exp *ExperimentStateWriter, forward *disk.ForwardWriter, inverted *disk.InvertedWriter) error {
 	meta := envelope.Metadata
 	foreignId := depths.Cleanup(strings.ToLower(meta.ForeignId))
 	foreignType := depths.Cleanup(strings.ToLower(meta.ForeignType))
 	eventType := depths.Cleanup(strings.ToLower(meta.EventType))
-
+	implicitExperiments := []*spec.TrackExperiment{}
 	for i, kv := range meta.Search {
 		k := kv.Key
 		v := kv.Value
@@ -51,6 +71,19 @@ func ConsumeEvents(segmentId string, envelope *spec.Envelope, forward *disk.Forw
 			value = "__empty"
 		}
 		meta.Search[i] = spec.KV{Key: lc, Value: value}
+
+		if k == "experiment" && strings.HasPrefix(value, "exp_") {
+			name, variant, ok := extractLastNumber(value, byte('_'))
+			if ok {
+				implicitExperiments = append(implicitExperiments, &spec.TrackExperiment{
+					FirstTrackedAtNs: meta.CreatedAtNs,
+					Variant:          int32(variant),
+					Name:             name,
+					ForeignId:        meta.ForeignId,
+					ForeignType:      meta.ForeignType,
+				})
+			}
+		}
 	}
 
 	// add some automatic tags
@@ -82,6 +115,14 @@ func ConsumeEvents(segmentId string, envelope *spec.Envelope, forward *disk.Forw
 	for _, kv := range meta.Search {
 		inverted.Append(segmentId, int32(docId), kv.Key, kv.Value)
 	}
+	for _, ex := range implicitExperiments {
+		ex.Origin = docId
+		err := exp.Add(*ex)
+		if err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 

@@ -54,13 +54,13 @@ func getScoredHit(contextCache *ContextCache, forward *disk.ForwardWriter, did i
 	if err != nil {
 		return Hit{}, err
 	}
-	return toHit(contextCache, did, p), nil
+	return toHit(contextCache, did, &p), nil
 }
 
-func toHit(contextCache *ContextCache, did int32, p spec.Metadata) Hit {
+func toHit(contextCache *ContextCache, did int32, p *spec.Metadata) Hit {
 	hit := Hit{
 		ID:       did,
-		Metadata: p,
+		Metadata: *p,
 	}
 	seen := map[string]map[string]bool{}
 	for _, kv := range p.Search {

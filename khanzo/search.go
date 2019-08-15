@@ -35,43 +35,6 @@ func (qr *QueryResponse) String(c *gin.Context) {
 	c.YAML(200, qr)
 }
 
-func (qr *QueryResponse) VW(c *gin.Context) {
-	labels := map[string]int{}
-
-	for i := -1; i < 10; i++ {
-		l := c.Query(fmt.Sprintf("label_%d", i))
-		if l != "" {
-			labels[l] = i
-		}
-	}
-	if len(labels) == 0 {
-		c.JSON(400, gin.H{"error": "no labels found, use ?label_1=some_event_type"})
-		return
-	}
-	w := c.Writer
-	for _, hit := range qr.Hits {
-		m := hit.Metadata
-		label, ok := labels[m.EventType]
-		if !ok {
-			continue
-		}
-
-		w.Write([]byte(fmt.Sprintf("%d |%s %s ", label, hit.Metadata.ForeignType, depths.CleanupVW(hit.Metadata.ForeignId))))
-		for _, kv := range m.Search {
-			w.Write([]byte(fmt.Sprintf("|%s %s ", kv.Key, depths.CleanupVW(kv.Value))))
-		}
-		for _, kv := range m.Count {
-			w.Write([]byte(fmt.Sprintf("|%s %s ", kv.Key, depths.CleanupVW(kv.Value))))
-		}
-		for _, ctx := range hit.Context {
-			for _, kv := range ctx.Properties {
-				w.Write([]byte(fmt.Sprintf("|%s_%s %s ", ctx.ForeignType, kv.Key, depths.CleanupVW(kv.Value))))
-			}
-		}
-		w.Write([]byte{'\n'})
-	}
-}
-
 func (qr *QueryResponse) HTML(c *gin.Context) {
 	c.YAML(200, qr)
 }

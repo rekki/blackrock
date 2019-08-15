@@ -30,12 +30,10 @@ import (
 	"github.com/jackdoe/blackrock/orgrim/spec"
 	auth "github.com/jackdoe/gin-basic-auth-dynamic"
 	log "github.com/sirupsen/logrus"
-	"github.com/spaolacci/murmur3"
 )
 
 type Renderable interface {
 	String(c *gin.Context)
-	VW(c *gin.Context)
 	HTML(c *gin.Context)
 }
 
@@ -50,8 +48,6 @@ func Render(c *gin.Context, x Renderable) {
 		c.YAML(200, x)
 	} else if format == "html" {
 		x.HTML(c)
-	} else if format == "vw" {
-		x.VW(c)
 	} else {
 		x.String(c)
 	}
@@ -80,6 +76,13 @@ func main() {
 	var bind = flag.String("bind", ":9002", "bind to")
 	var pconfig = flag.String("config", "", "config key:limit:sortByName:hide|key...")
 	flag.Parse()
+	if *verbose {
+		log.SetLevel(log.InfoLevel)
+	} else {
+		gin.SetMode(gin.ReleaseMode)
+		log.SetLevel(log.WarnLevel)
+	}
+
 	go func() {
 		log.Println(http.ListenAndServe("localhost:6060", nil))
 	}()
@@ -96,13 +99,11 @@ func main() {
 		log.Fatal(err)
 	}
 	contextCache := NewContextCache(forwardContext)
-
-	if *verbose {
-		log.SetLevel(log.InfoLevel)
-	} else {
-		gin.SetMode(gin.ReleaseMode)
-		log.SetLevel(log.WarnLevel)
+	experimentCache, err := consume.LoadExperimentsFromPath(root)
+	if err != nil {
+		log.Fatal(err)
 	}
+
 	cache, err := lru.NewARC(*lruSize)
 	if err != nil {
 		log.Fatal(err)
@@ -111,6 +112,10 @@ func main() {
 	go func() {
 		for {
 			contextCache.Scan()
+			experimentCache, err = consume.LoadExperimentsFromPath(root)
+			if err != nil {
+				log.Fatal(err)
+			}
 			runtime.GC()
 			log.Warnf("lru cache size: %d", cache.Len())
 			time.Sleep(1 * time.Minute)
@@ -291,37 +296,26 @@ func main() {
 	r.GET("/", func(c *gin.Context) {
 		c.Redirect(302, "/scan/html/")
 	})
-
-	r.GET("/scan/:format/*query", func(c *gin.Context) {
-		sampleSize := intOrDefault(c.Query("sample_size"), 100)
-		counter := NewCounter()
-
-		from := c.Query("from")
-		to := c.Query("to")
-		if (from == "" || to == "") && c.Param("format") == "html" {
-			c.Redirect(302, fmt.Sprintf("%s?from=%s&to=%s", c.Request.URL.Path, yyyymmdd(time.Now().UTC().AddDate(0, 0, -1)), yyyymmdd(time.Now().UTC())))
-			return
-		}
-		dates := expandYYYYMMDD(from, to)
+	foreach := func(queryString string, dates []time.Time, cb func(did int32, x *spec.Metadata)) error {
 		for _, date := range dates {
 			segment := path.Join(root, depths.SegmentFromNs(uint64(date.UnixNano())))
 			forward, err := disk.NewForwardWriter(segment, "main")
 			if err != nil {
-				c.JSON(400, gin.H{"error": err.Error()})
-				return
+				return err
 			}
 
 			// FIXME: this needs major cleanup
-			queryPath := strings.Trim(c.Param("query"), "/")
+			queryPath := strings.Trim(queryString, "/")
 			and := strings.Replace(queryPath, "/", " AND ", -1)
+
 			andor := strings.Replace(and, "|", " OR ", -1)
 			make := func(k, v string) Query {
 				return NewTermQuery(segment, k, v)
 			}
 			query, nQueries, err := fromString(andor, make)
+
 			if err != nil {
-				c.JSON(400, gin.H{"error": err.Error()})
-				return
+				return err
 			}
 
 			if nQueries == 0 {
@@ -334,114 +328,96 @@ func main() {
 				if !ok {
 					data, _, err := forward.Read(uint32(did))
 					if err != nil {
-						c.JSON(400, gin.H{"error": err.Error()})
-						return
+						return err
 					}
 					var p spec.Metadata
 					err = proto.Unmarshal(data, &p)
 					if err != nil {
-						c.JSON(400, gin.H{"error": err.Error()})
-						return
+						return err
 					}
-					cache.Add(did, p)
-					cached = p
+					cache.Add(did, &p)
+					cached = &p
 				}
 
-				cx := cached.(spec.Metadata)
-				counter.Add(&cx)
-				if len(counter.Sample) < sampleSize {
-					counter.Sample = append(counter.Sample, toHit(contextCache, did, cx))
-				}
+				cx := cached.(*spec.Metadata)
+				cb(did, cx)
 			}
 		}
-		Render(c, counter.Prettify())
-	})
+		return nil
+	}
 
-	r.POST("/exp/csv", func(c *gin.Context) {
-		var qr ExpQueryRequest
+	r.GET("/scan/:format/*query", func(c *gin.Context) {
+		sampleSize := intOrDefault(c.Query("sample_size"), 100)
+		counter := NewCounter(nil)
 
-		if err := c.ShouldBindJSON(&qr); err != nil {
+		from := c.Query("from")
+		to := c.Query("to")
+		if (from == "" || to == "") && c.Param("format") == "html" {
+			c.Redirect(302, fmt.Sprintf("%s?from=%s&to=%s", c.Request.URL.Path, yyyymmdd(time.Now().UTC().AddDate(0, 0, -1)), yyyymmdd(time.Now().UTC())))
+			return
+		}
+		dates := expandYYYYMMDD(from, to)
+		err := foreach(c.Param("query"), dates, func(did int32, cx *spec.Metadata) {
+			counter.Add(0, cx)
+			if len(counter.Sample[0]) < sampleSize {
+				counter.Sample[0] = append(counter.Sample[0], toHit(contextCache, did, cx))
+			}
+		})
+
+		if err != nil {
 			c.JSON(400, gin.H{"error": err.Error()})
 			return
 		}
-		dates := expandYYYYMMDD(qr.From, qr.To)
-		for _, date := range dates {
-			segment := path.Join(root, depths.SegmentFromNs(uint64(date.UnixNano())))
-			forward, err := disk.NewForwardWriter(segment, "main")
-			if err != nil {
-				c.JSON(400, gin.H{"error": err.Error()})
-				return
-			}
 
-			make := func(k, v string) Query {
-				return NewTermQuery(segment, k, v)
-			}
-			query, nQueries, err := fromJson(qr.Query, make)
-			if err != nil {
-				c.JSON(400, gin.H{"error": err.Error()})
-				return
-			}
-			if nQueries == 0 {
-				query = expandTimeToQuery(dates, make)
-			}
+		Render(c, counter)
+	})
 
-			onlyKey := qr.ExperimentKey
-			variants := uint32(qr.Variants)
-			if variants == 0 {
-				variants = 2
-			}
-
-			if len(qr.Cohort) != 0 && qr.Variants > 0 {
-				c.JSON(400, gin.H{"error": errors.New("cant use both cohort and variants, specify the variants in the cohort key")})
-			}
-			hasCohort := len(qr.Cohort) > 0
-			for query.Next() != NO_MORE {
-				did := query.GetDocId()
-				cached, ok := cache.Get(did)
-				if !ok {
-					// XXX: dont cache or use another cache?
-					data, _, err := forward.Read(uint32(did))
-					if err != nil {
-						c.JSON(400, gin.H{"error": err.Error()})
-						return
-					}
-					var p spec.Metadata
-					err = proto.Unmarshal(data, &p)
-					if err != nil {
-						c.JSON(400, gin.H{"error": err.Error()})
-						return
-					}
-					cache.Add(did, p)
-				}
-				cx := cached.(spec.Metadata)
-				variant := -1
-				value := ""
-				if cx.ForeignType == onlyKey {
-					variant = int(dice(cx.ForeignId, qr.Exp, variants))
-					value = cx.ForeignId
-				} else {
-					for _, kv := range cx.Search {
-						if kv.Key == onlyKey {
-							value = kv.Value
-							if hasCohort {
-								v, ok := qr.Cohort[value]
-								if ok {
-									variant = v
-								}
-							} else {
-								variant = int(dice(value, qr.Exp, variants))
-							}
-							break
-						}
-					}
-				}
-				if variant >= 0 {
-					epoch := cx.CreatedAtNs / 1000000000
-					row := fmt.Sprintf("%d,%s,%s,%s,%d\n", epoch, cx.EventType, cx.ForeignId, value, variant)
-					c.Writer.Write([]byte(row))
-				}
-			}
+	r.GET("/exp/:format/:experiment/:metricKey/:metricValue/*query", func(c *gin.Context) {
+		sampleSize := intOrDefault(c.Query("sample_size"), 100)
+		counter := NewCounter(NewConvertedCache())
+		experiment := c.Param("experiment")
+		metricKey := c.Param("metricKey")
+		metricValue := c.Param("metricValue")
+		from := c.Query("from")
+		to := c.Query("to")
+		if (from == "" || to == "") && c.Param("format") == "html" {
+			c.Redirect(302, fmt.Sprintf("%s?from=%s&to=%s", c.Request.URL.Path, yyyymmdd(time.Now().UTC().AddDate(0, 0, -1)), yyyymmdd(time.Now().UTC())))
+			return
 		}
+
+		dates := expandYYYYMMDD(from, to)
+		first := uint64(dates[0].UnixNano())
+
+		// get all converting event
+		err := foreach(fmt.Sprintf("%s/%s:%s/", c.Param("query"), metricKey, metricValue), dates, func(did int32, cx *spec.Metadata) {
+			track := experimentCache.Find(first, experiment, cx.ForeignType, cx.ForeignId)
+
+			if track != nil {
+				variant := uint32(track.Variant)
+				counter.ConvertedCache.SetConverted(1, variant, cx.ForeignType, cx.ForeignId)
+			}
+		})
+		if err != nil {
+			c.JSON(400, gin.H{"error": err.Error()})
+			return
+		}
+
+		err = foreach(c.Param("query"), dates, func(did int32, cx *spec.Metadata) {
+			track := experimentCache.Find(first, experiment, cx.ForeignType, cx.ForeignId)
+			if track == nil {
+				return
+			}
+			variant := uint32(track.Variant)
+			if len(counter.Sample[variant]) < sampleSize {
+				counter.Sample[variant] = append(counter.Sample[variant], toHit(contextCache, did, cx))
+			}
+			counter.Add(variant, cx)
+		})
+		if err != nil {
+			c.JSON(400, gin.H{"error": err.Error()})
+			return
+		}
+		Render(c, counter)
 	})
 
 	if *accept {
@@ -451,19 +427,15 @@ func main() {
 	log.Panic(r.Run(*bind))
 }
 
-func dice(id, exp string, variants uint32) uint32 {
-	b := make([]byte, len(exp)+1+len(id))
-	copy(b[0:], []byte(id))
-	b[len(id)] = byte('/')
-	copy(b[len(id)+1:], []byte(exp))
-	// XXX: config the seed
-	return murmur3.Sum32WithSeed(b, 0) % variants
-}
-
 func setupSimpleEventAccept(root string, r *gin.Engine) {
 	giant := sync.Mutex{}
 
 	forwardContext, err := disk.NewForwardWriter(root, "context")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	exp, err := consume.NewExperimentStateWriter(root)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -507,7 +479,7 @@ func setupSimpleEventAccept(root string, r *gin.Engine) {
 			writers[segmentId] = w
 		}
 
-		err = consume.ConsumeEvents(segmentId, &envelope, w, inverted)
+		err = consume.ConsumeEvents(segmentId, &envelope, exp, w, inverted)
 		if err != nil {
 			c.JSON(500, gin.H{"error": err.Error()})
 			return
@@ -537,7 +509,6 @@ func setupSimpleEventAccept(root string, r *gin.Engine) {
 
 		w, ok := writers[segmentId]
 		if !ok {
-			os.MkdirAll(segmentId, 0700)
 			w, err := disk.NewForwardWriter(segmentId, "main")
 			if err != nil {
 				log.Fatal(err)
@@ -545,7 +516,7 @@ func setupSimpleEventAccept(root string, r *gin.Engine) {
 			writers[segmentId] = w
 		}
 
-		err = consume.ConsumeEvents(segmentId, converted, w, inverted)
+		err = consume.ConsumeEvents(segmentId, converted, exp, w, inverted)
 
 		if err != nil {
 			c.JSON(500, gin.H{"error": err.Error()})
@@ -597,7 +568,7 @@ func loadTemplate(contextCache *ContextCache) (*template.Template, error) {
 		"pretty": func(b interface{}) string {
 			return depths.DumpObj(b)
 		},
-		"format": func(value int64) string {
+		"format": func(value uint32) string {
 			return fmt.Sprintf("%8s", chart.Fit(float64(value)))
 		},
 		"replace": func(a, b, c string) string {
@@ -658,15 +629,12 @@ func loadTemplate(contextCache *ContextCache) (*template.Template, error) {
 			v.Set(key, fmt.Sprintf("%d", off))
 			return template.URL(v.Encode())
 		},
-		"pick": func(from []*PerKey, which ...string) []*PerKey {
-			out := []*PerKey{}
-			for _, v := range from {
-			WHICH:
-				for _, k := range which {
-					if v.Key == k {
-						out = append(out, v)
-						break WHICH
-					}
+		"pick": func(from map[string]*CountPerKey, which ...string) []*CountPerKey {
+			out := []*CountPerKey{}
+			for _, w := range which {
+				v, ok := from[w]
+				if ok {
+					out = append(out, v)
 				}
 			}
 			return out
@@ -684,12 +652,24 @@ func loadTemplate(contextCache *ContextCache) (*template.Template, error) {
 		"minus": func(a, b int) int {
 			return a - b
 		},
+		"variantColor": func(v int) template.CSS {
+			r := 200 / (v + 1)
+			g := 100
+			b := 100
+			if v > 0 {
+				g = 255 / (v + 1)
+				b = 255 / (v + 1)
+			}
+			out := fmt.Sprintf("rgba(%d,%d,%d,0.7)", r, g, b)
+			return template.CSS(out)
+		},
+
 		"prettyFlat": func(v string) string {
 			return strings.Replace(v, ".", " ", -1)
 		},
 		"percent": func(value ...interface{}) string {
-			a := float64(value[0].(int64))
-			b := float64(value[1].(int64))
+			a := float64(value[0].(uint32))
+			b := float64(value[1].(uint32))
 
 			return fmt.Sprintf("%.2f", (100 * (b / a)))
 		},

@@ -9,6 +9,7 @@ import (
 
 	"github.com/bxcodec/faker"
 
+	"github.com/jackdoe/blackrock/jubei/consume"
 	"github.com/jackdoe/blackrock/orgrim/client"
 	"github.com/jackdoe/blackrock/orgrim/spec"
 )
@@ -214,9 +215,11 @@ func pickAuthors(authors []*spec.Context) []*spec.Context {
 }
 
 var actions = []string{"buy", "click", "skip", "ignore", "click", "click", "ignore", "ignore", "skip"}
+var experiments = []string{"search_typo_correction", "random_image", "reverse_ranking"}
 
 func genEvent(days []time.Time, users []*spec.Context, books []*spec.Context) *spec.Envelope {
-	user := users[rand.Intn(len(users))]
+	userIdx := rand.Intn(len(users))
+	user := users[userIdx]
 	var s SomeAction
 	err := faker.FakeData(&s)
 	if err != nil {
@@ -229,11 +232,21 @@ func genEvent(days []time.Time, users []*spec.Context, books []*spec.Context) *s
 		book := books[rand.Intn(len(books))]
 		search = append(search, spec.KV{Key: "book_id", Value: book.ForeignId})
 	}
-	if rand.Intn(3) == 1 {
+	if userIdx%2 == 1 {
 		search = append(search, spec.KV{Key: "env", Value: "staging"})
 	} else {
 		search = append(search, spec.KV{Key: "env", Value: "live"})
 	}
+
+	if rand.Intn(3) == 1 {
+		idx := rand.Intn(len(experiments))
+		expName := experiments[idx]
+		variant := consume.ExpDice("user_id", user.ForeignId, expName, uint32(idx+2))
+		search = append(search, spec.KV{Key: "experiment", Value: fmt.Sprintf("exp_%s_%d", expName, variant)})
+	}
+	expName := "everything"
+	variant := consume.ExpDice("user_id", user.ForeignId, expName, 2)
+	search = append(search, spec.KV{Key: "experiment", Value: fmt.Sprintf("exp_%s_%d", expName, variant)})
 
 	search = append(search, spec.KV{Key: "product", Value: "amazon.com"})
 
