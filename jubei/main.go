@@ -34,12 +34,6 @@ func consumeEvents(root string, r *kafka.Reader, maxDescriptors int) error {
 	}
 	writers := map[string]*disk.ForwardWriter{}
 
-	exp, err := consume.NewExperimentStateWriter(root)
-
-	if err != nil {
-		return err
-	}
-
 	for {
 		m, err := r.ReadMessage(ctx)
 		if err != nil {
@@ -65,7 +59,7 @@ func consumeEvents(root string, r *kafka.Reader, maxDescriptors int) error {
 			writers[segmentId] = forward
 		}
 
-		err = consume.ConsumeEvents(segmentId, &envelope, exp, forward, inverted)
+		err = consume.ConsumeEvents(segmentId, &envelope, forward, inverted)
 		if err != nil {
 			return err
 		}

@@ -10,6 +10,7 @@ import (
 	"github.com/jackdoe/blackrock/depths"
 	"github.com/jackdoe/blackrock/jubei/disk"
 	"github.com/jackdoe/blackrock/orgrim/spec"
+	"github.com/spaolacci/murmur3"
 )
 
 // hack to backfix some wrongly flattened keys
@@ -31,7 +32,7 @@ func Fixme(k, v string) (string, string) {
 	return k, v
 }
 
-func extractLastNumber(s string, sep byte) (string, int, bool) {
+func ExtractLastNumber(s string, sep byte) (string, int, bool) {
 	pos := -1
 	for i := len(s) - 1; i >= 0; i-- {
 		if s[i] == sep {
@@ -50,12 +51,11 @@ func extractLastNumber(s string, sep byte) (string, int, bool) {
 	return s, 0, false
 }
 
-func ConsumeEvents(segmentId string, envelope *spec.Envelope, exp *ExperimentStateWriter, forward *disk.ForwardWriter, inverted *disk.InvertedWriter) error {
+func ConsumeEvents(segmentId string, envelope *spec.Envelope, forward *disk.ForwardWriter, inverted *disk.InvertedWriter) error {
 	meta := envelope.Metadata
 	foreignId := depths.Cleanup(strings.ToLower(meta.ForeignId))
 	foreignType := depths.Cleanup(strings.ToLower(meta.ForeignType))
 	eventType := depths.Cleanup(strings.ToLower(meta.EventType))
-	implicitExperiments := []*spec.TrackExperiment{}
 	for i, kv := range meta.Search {
 		k := kv.Key
 		v := kv.Value
@@ -73,15 +73,12 @@ func ConsumeEvents(segmentId string, envelope *spec.Envelope, exp *ExperimentSta
 		meta.Search[i] = spec.KV{Key: lc, Value: value}
 
 		if k == "experiment" && strings.HasPrefix(value, "exp_") {
-			name, variant, ok := extractLastNumber(value, byte('_'))
+			name, variant, ok := ExtractLastNumber(value, byte('_'))
 			if ok {
-				implicitExperiments = append(implicitExperiments, &spec.TrackExperiment{
-					FirstTrackedAtNs: meta.CreatedAtNs,
-					Variant:          int32(variant),
-					Name:             name,
-					ForeignId:        meta.ForeignId,
-					ForeignType:      meta.ForeignType,
-				})
+				if meta.Track == nil {
+					meta.Track = map[string]uint32{}
+				}
+				meta.Track[name] = uint32(variant)
 			}
 		}
 	}
@@ -115,12 +112,8 @@ func ConsumeEvents(segmentId string, envelope *spec.Envelope, exp *ExperimentSta
 	for _, kv := range meta.Search {
 		inverted.Append(segmentId, int32(docId), kv.Key, kv.Value)
 	}
-	for _, ex := range implicitExperiments {
-		ex.Origin = docId
-		err := exp.Add(*ex)
-		if err != nil {
-			return err
-		}
+	for ex, _ := range meta.Track {
+		inverted.Append(segmentId, int32(docId), "__experiment", ex)
 	}
 
 	return nil
@@ -141,4 +134,9 @@ func ConsumeContext(envelope *spec.Context, forward *disk.ForwardWriter) error {
 		return err
 	}
 	return nil
+}
+
+func ExpDice(ftype, id, exp string, variants uint32) uint32 {
+	h := murmur3.Sum32WithSeed([]byte(ftype), 0) + murmur3.Sum32WithSeed([]byte(id), 0) + murmur3.Sum32WithSeed([]byte(exp), 0)
+	return h % variants
 }

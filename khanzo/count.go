@@ -27,7 +27,13 @@ type ConvertedPerVariant struct {
 
 func (x *ConvertedCache) TotalConvertingUsers() []ConvertedPerVariant {
 	c := *x
-	out := make([]ConvertedPerVariant, len(c))
+	maxVariant := uint32(0)
+	for variant, _ := range c {
+		if variant > maxVariant {
+			maxVariant = variant
+		}
+	}
+	out := make([]ConvertedPerVariant, maxVariant+1)
 
 	for vid, variant := range c {
 		sum := uint32(0)
@@ -47,21 +53,6 @@ func (x *ConvertedCache) TotalConvertingUsers() []ConvertedPerVariant {
 	}
 
 	return out
-}
-
-func (x *ConvertedCache) GetConverted(variant uint32, ftype, fid string) bool {
-	c := *x
-	pv, ok := c[variant]
-	if !ok {
-		return false
-	}
-
-	v, ok := pv[ftype]
-	if !ok {
-		return false
-	}
-	_, ok = v[fid]
-	return ok
 }
 
 func (c ConvertedCache) SetConverted(n uint32, variant uint32, ftype, fid string) {
@@ -175,16 +166,9 @@ func (c *Counter) SortedKeys(what map[string]*CountPerKey) []*CountPerKey {
 	return out
 }
 
-func (c *Counter) Add(variant uint32, p *spec.Metadata) {
-	converted := false
-
+func (c *Counter) Add(converted bool, variant uint32, p *spec.Metadata) {
 	if c.ConvertedCache != nil {
-		converted = c.ConvertedCache.GetConverted(variant, p.ForeignType, p.ForeignId)
-		if converted {
-			c.TotalCountEventsFromConverter++
-		} else {
-			c.ConvertedCache.SetConverted(0, variant, p.ForeignType, p.ForeignId)
-		}
+		c.TotalCountEventsFromConverter++
 	}
 	c.TotalCount++
 	for _, kv := range p.Search {

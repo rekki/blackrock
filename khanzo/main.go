@@ -99,11 +99,6 @@ func main() {
 		log.Fatal(err)
 	}
 	contextCache := NewContextCache(forwardContext)
-	experimentCache, err := consume.LoadExperimentsFromPath(root)
-	if err != nil {
-		log.Fatal(err)
-	}
-
 	cache, err := lru.NewARC(*lruSize)
 	if err != nil {
 		log.Fatal(err)
@@ -112,10 +107,7 @@ func main() {
 	go func() {
 		for {
 			contextCache.Scan()
-			experimentCache, err = consume.LoadExperimentsFromPath(root)
-			if err != nil {
-				log.Fatal(err)
-			}
+
 			runtime.GC()
 			log.Warnf("lru cache size: %d", cache.Len())
 			time.Sleep(1 * time.Minute)
@@ -358,7 +350,7 @@ func main() {
 		}
 		dates := expandYYYYMMDD(from, to)
 		err := foreach(c.Param("query"), dates, func(did int32, cx *spec.Metadata) {
-			counter.Add(0, cx)
+			counter.Add(false, 0, cx)
 			if len(counter.Sample[0]) < sampleSize {
 				counter.Sample[0] = append(counter.Sample[0], toHit(contextCache, did, cx))
 			}
@@ -386,32 +378,60 @@ func main() {
 		}
 
 		dates := expandYYYYMMDD(from, to)
-		first := uint64(dates[0].UnixNano())
+		tracked := map[string]map[string]uint32{}
 
-		// get all converting event
-		err := foreach(fmt.Sprintf("%s/%s:%s/", c.Param("query"), metricKey, metricValue), dates, func(did int32, cx *spec.Metadata) {
-			track := experimentCache.Find(first, experiment, cx.ForeignType, cx.ForeignId)
+		// all users that are tracked
+		err := foreach(fmt.Sprintf("%s/__experiment:%s/", c.Param("query"), experiment), dates, func(did int32, cx *spec.Metadata) {
+			variant, ok := cx.Track[experiment]
 
-			if track != nil {
-				variant := uint32(track.Variant)
-				counter.ConvertedCache.SetConverted(1, variant, cx.ForeignType, cx.ForeignId)
+			pid, ok := tracked[cx.ForeignType]
+			if !ok {
+				pid = map[string]uint32{}
+				tracked[cx.ForeignType] = pid
 			}
+			pid[cx.ForeignId] = uint32(variant)
 		})
 		if err != nil {
 			c.JSON(400, gin.H{"error": err.Error()})
 			return
 		}
 
+		isEventType := metricKey == "event_type"
 		err = foreach(c.Param("query"), dates, func(did int32, cx *spec.Metadata) {
-			track := experimentCache.Find(first, experiment, cx.ForeignType, cx.ForeignId)
-			if track == nil {
+			pid, ok := tracked[cx.ForeignType]
+			if !ok {
 				return
 			}
-			variant := uint32(track.Variant)
+			variant, ok := pid[cx.ForeignId]
+
+			if !ok {
+				return
+			}
+			converted := false
+			if isEventType {
+				if cx.EventType == metricValue {
+					converted = true
+				}
+			} else {
+				for _, kv := range cx.Search {
+					if kv.Key == metricKey {
+						if kv.Value == metricValue {
+							converted = true
+						}
+						break
+					}
+				}
+			}
+			if converted {
+				counter.ConvertedCache.SetConverted(1, variant, cx.ForeignType, cx.ForeignId)
+			} else {
+				counter.ConvertedCache.SetConverted(0, variant, cx.ForeignType, cx.ForeignId)
+			}
+
 			if len(counter.Sample[variant]) < sampleSize {
 				counter.Sample[variant] = append(counter.Sample[variant], toHit(contextCache, did, cx))
 			}
-			counter.Add(variant, cx)
+			counter.Add(converted, variant, cx)
 		})
 		if err != nil {
 			c.JSON(400, gin.H{"error": err.Error()})
@@ -431,11 +451,6 @@ func setupSimpleEventAccept(root string, r *gin.Engine) {
 	giant := sync.Mutex{}
 
 	forwardContext, err := disk.NewForwardWriter(root, "context")
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	exp, err := consume.NewExperimentStateWriter(root)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -479,7 +494,7 @@ func setupSimpleEventAccept(root string, r *gin.Engine) {
 			writers[segmentId] = w
 		}
 
-		err = consume.ConsumeEvents(segmentId, &envelope, exp, w, inverted)
+		err = consume.ConsumeEvents(segmentId, &envelope, w, inverted)
 		if err != nil {
 			c.JSON(500, gin.H{"error": err.Error()})
 			return
@@ -516,7 +531,7 @@ func setupSimpleEventAccept(root string, r *gin.Engine) {
 			writers[segmentId] = w
 		}
 
-		err = consume.ConsumeEvents(segmentId, converted, exp, w, inverted)
+		err = consume.ConsumeEvents(segmentId, converted, w, inverted)
 
 		if err != nil {
 			c.JSON(500, gin.H{"error": err.Error()})

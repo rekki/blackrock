@@ -37,7 +37,7 @@ func TestCutInt(t *testing.T) {
 	}
 
 	for k, v := range cases {
-		_, e, _ := extractLastNumber(k, byte('_'))
+		_, e, _ := ExtractLastNumber(k, byte('_'))
 
 		if v != e {
 			t.Fatalf("expected %d got %d", v, e)
