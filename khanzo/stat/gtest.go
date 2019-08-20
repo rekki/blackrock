@@ -2,6 +2,8 @@ package stat
 
 import (
 	"math"
+
+	. "gonum.org/v1/gonum/stat/distuv"
 )
 
 // copy pasta from https://github.com/lukasvermeer/confidence/blob/master/experiment.js
@@ -18,6 +20,7 @@ func G(data []Variant) float64 {
 	}
 	return gtest(v)
 }
+
 func gtest(data [][]uint32) float64 {
 	rows := len(data)
 	columns := len(data[0])
@@ -44,4 +47,15 @@ func gtest(data [][]uint32) float64 {
 	}
 
 	return g_test
+}
+
+func P(data []Variant) (float64, float64, bool) {
+	chi := ChiSquared{K: float64(len(data) - 1)}
+	g := G(data)
+	// return (1-jStat.chisquare.cdf(this.get_g_test(), this.variants.length - 1));
+	p := 1 - chi.CDF(g)
+
+	cutoff := chi.Quantile(p)
+	certainty := float64(100) * (1 - p) // return (100 * (1-this.get_p())).toFixed(2);
+	return p, certainty, g >= cutoff
 }
