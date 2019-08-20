@@ -688,6 +688,10 @@ func loadTemplate(contextCache *ContextCache) (*template.Template, error) {
 
 			return fmt.Sprintf("%.2f", (100 * (b / a)))
 		},
+		"formatFloat": func(value float64) string {
+			return fmt.Sprintf("%.2f", value)
+		},
+
 		"dict": func(values ...interface{}) (map[string]interface{}, error) {
 			if len(values) == 0 {
 				return nil, errors.New("invalid dict call")

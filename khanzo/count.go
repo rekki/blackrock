@@ -9,6 +9,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackdoe/blackrock/khanzo/chart"
+	"github.com/jackdoe/blackrock/khanzo/stat"
 	"github.com/jackdoe/blackrock/orgrim/spec"
 )
 
@@ -24,7 +25,23 @@ type ConvertedPerVariant struct {
 	Users              uint32
 	Convertions        uint32
 }
+type ConfidenceSignificant struct {
+	Confidence  float64
+	Significant bool
+}
 
+func (x *ConvertedCache) Confidence(pv []ConvertedPerVariant) ConfidenceSignificant {
+	sv := []stat.Variant{}
+	for _, v := range pv {
+		sv = append(sv, stat.Variant{
+			Visits:      v.ConvertingUsers + v.NotConvertingUsers,
+			Convertions: v.ConvertingUsers,
+		})
+	}
+
+	_, confidence, significant := stat.P(sv)
+	return ConfidenceSignificant{Confidence: confidence, Significant: significant}
+}
 func (x *ConvertedCache) TotalConvertingUsers() []ConvertedPerVariant {
 	c := *x
 	maxVariant := uint32(0)

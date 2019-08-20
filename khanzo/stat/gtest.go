@@ -54,7 +54,6 @@ func P(data []Variant) (float64, float64, bool) {
 	g := G(data)
 	// return (1-jStat.chisquare.cdf(this.get_g_test(), this.variants.length - 1));
 	p := 1 - chi.CDF(g)
-
 	cutoff := chi.Quantile(p)
 	certainty := float64(100) * (1 - p) // return (100 * (1-this.get_p())).toFixed(2);
 	return p, certainty, g >= cutoff
