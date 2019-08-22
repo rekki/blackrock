@@ -32,6 +32,11 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+func CacheKey(t int64, doc int32) int64 {
+	t = depths.SegmentFromNsInt(t)
+	return int64(doc)<<32 | t
+}
+
 type Renderable interface {
 	String(c *gin.Context)
 	HTML(c *gin.Context)
@@ -290,6 +295,8 @@ func main() {
 	})
 	foreach := func(queryString string, dates []time.Time, cb func(did int32, x *spec.Metadata)) error {
 		for _, date := range dates {
+			ns := date.UnixNano()
+
 			segment := path.Join(root, depths.SegmentFromNs(date.UnixNano()))
 			forward, err := disk.NewForwardWriter(segment, "main")
 			if err != nil {
@@ -315,7 +322,8 @@ func main() {
 			}
 			for query.Next() != NO_MORE {
 				did := query.GetDocId()
-				cached, ok := cache.Get(did)
+				cacheKey := CacheKey(ns, did)
+				cached, ok := cache.Get(cacheKey)
 
 				if !ok {
 					data, _, err := forward.Read(uint32(did))
@@ -327,7 +335,7 @@ func main() {
 					if err != nil {
 						return err
 					}
-					cache.Add(did, &p)
+					cache.Add(cacheKey, &p)
 					cached = &p
 				}
 

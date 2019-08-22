@@ -6,7 +6,7 @@ import (
 	"github.com/jackdoe/blackrock/orgrim/spec"
 )
 
-func makeExample(created uint64, id string) *spec.Context {
+func makeExample(created int64, id string) *spec.Context {
 	return &spec.Context{CreatedAtNs: created, ForeignId: id, ForeignType: "0"}
 }
 func TestInsert(t *testing.T) {

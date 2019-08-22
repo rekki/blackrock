@@ -76,8 +76,18 @@ func epochDayFromNs(ns int64) string {
 	return fmt.Sprintf("%d", d)
 }
 
+func epochDayFromNsInt(ns int64) int64 {
+	s := ns / 1000000000
+	d := s / (3600 * 24)
+	return d
+}
+
 func SegmentFromNs(ns int64) string {
 	return epochDayFromNs(ns)
+}
+
+func SegmentFromNsInt(ns int64) int64 {
+	return epochDayFromNsInt(ns)
 }
 
 func PathForTag(root, tagKey, tagValue string) (string, string) {

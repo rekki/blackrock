@@ -153,7 +153,7 @@ type Counter struct {
 	EventTypes                    *CountPerKey            `json:"event_types"`
 	Sample                        map[uint32][]Hit        `json:"sample"`
 	TotalCount                    uint32                  `json:"total"`
-	TotalCountEventsFromConverter uint32                  `json:"total"`
+	TotalCountEventsFromConverter uint32                  `json:"total_events_from_converter"`
 	ConvertedCache                *ConvertedCache         `json:"convertions"`
 }
 
