@@ -150,7 +150,7 @@ func genUser(times []time.Time) *spec.Context {
 		panic(err)
 	}
 	c := &spec.Context{
-		CreatedAtNs: uint64(times[rand.Intn(len(times))].UnixNano()),
+		CreatedAtNs: times[rand.Intn(len(times))].UnixNano(),
 		ForeignType: "user_id",
 		ForeignId:   s.UUID,
 	}
@@ -171,7 +171,7 @@ func genAuthor(times []time.Time) *spec.Context {
 	}
 
 	c := &spec.Context{
-		CreatedAtNs: uint64(times[rand.Intn(len(times))].UnixNano()),
+		CreatedAtNs: times[rand.Intn(len(times))].UnixNano(),
 		ForeignType: "author_id",
 		ForeignId:   s.UUID,
 	}
@@ -188,7 +188,7 @@ func genBook(times []time.Time, author ...*spec.Context) *spec.Context {
 	}
 
 	c := &spec.Context{
-		CreatedAtNs: uint64(times[rand.Intn(len(times))].UnixNano()),
+		CreatedAtNs: times[rand.Intn(len(times))].UnixNano(),
 		ForeignType: "book_id",
 		ForeignId:   s.UUID,
 	}
@@ -252,7 +252,7 @@ func genEvent(days []time.Time, users []*spec.Context, books []*spec.Context) *s
 
 	ua := UA[rand.Intn(len(UA))]
 	m := &spec.Metadata{
-		CreatedAtNs: uint64(days[rand.Intn(len(days))].UnixNano()),
+		CreatedAtNs: days[rand.Intn(len(days))].UnixNano(),
 		ForeignType: "user_id",
 		ForeignId:   user.ForeignId,
 		EventType:   action,

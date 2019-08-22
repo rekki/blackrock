@@ -576,7 +576,7 @@ func loadTemplate(contextCache *ContextCache) (*template.Template, error) {
 		"banner": func(b string) string {
 			return chart.BannerLeft(b)
 		},
-		"time": func(b uint64) string {
+		"time": func(b int64) string {
 			t := time.Unix(int64(b)/1000000000, 0)
 			return t.Format(time.UnixDate)
 		},
