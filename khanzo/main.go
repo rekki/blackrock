@@ -159,7 +159,7 @@ func main() {
 			Total: 0,
 		}
 		for _, date := range dates {
-			segment := path.Join(root, depths.SegmentFromNs(uint64(date.UnixNano())))
+			segment := path.Join(root, depths.SegmentFromNs(date.UnixNano()))
 			forward, err := disk.NewForwardWriter(segment, "main")
 			if err != nil {
 				return nil, err
@@ -240,7 +240,7 @@ func main() {
 
 		dates := expandYYYYMMDD(qr.From, qr.To)
 		for _, date := range dates {
-			segment := path.Join(root, depths.SegmentFromNs(uint64(date.UnixNano())))
+			segment := path.Join(root, depths.SegmentFromNs(date.UnixNano()))
 			forward, err := disk.NewForwardWriter(segment, "main")
 			if err != nil {
 				c.JSON(400, gin.H{"error": err.Error()})
@@ -290,7 +290,7 @@ func main() {
 	})
 	foreach := func(queryString string, dates []time.Time, cb func(did int32, x *spec.Metadata)) error {
 		for _, date := range dates {
-			segment := path.Join(root, depths.SegmentFromNs(uint64(date.UnixNano())))
+			segment := path.Join(root, depths.SegmentFromNs(date.UnixNano()))
 			forward, err := disk.NewForwardWriter(segment, "main")
 			if err != nil {
 				return err
@@ -555,7 +555,7 @@ func setupSimpleEventAccept(root string, r *gin.Engine) {
 		}
 
 		if ctx.CreatedAtNs == 0 {
-			ctx.CreatedAtNs = uint64(time.Now().UnixNano())
+			ctx.CreatedAtNs = time.Now().UnixNano()
 		}
 
 		giant.Lock()
@@ -590,7 +590,7 @@ func loadTemplate(contextCache *ContextCache) (*template.Template, error) {
 			return strings.Replace(a, b, c, -1)
 		},
 		"ctx": func(key, value string) []*spec.Context {
-			return LoadContextForStat(contextCache, key, value, uint64(time.Now().UnixNano()))
+			return LoadContextForStat(contextCache, key, value, time.Now().UnixNano())
 		},
 		"getN": func(qs template.URL, key string, n int) int {
 			v, err := url.ParseQuery(string(qs))
