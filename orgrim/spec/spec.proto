@@ -15,7 +15,7 @@ message Metadata {
         repeated KV count = 2 [(gogoproto.nullable) = false];
         repeated KV properties = 3 [(gogoproto.nullable) = false];
 
-        fixed64 created_at_ns  = 5;
+        int64 created_at_ns  = 5;
 
         string event_type = 7;
         string foreign_id = 9;
@@ -25,7 +25,7 @@ message Metadata {
 
 message Context {
         repeated KV properties = 2 [(gogoproto.nullable) = false];
-        fixed64 created_at_ns  = 5;
+        int64 created_at_ns  = 5;
 
         string foreign_id = 6;
         string foreign_type = 7;

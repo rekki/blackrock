@@ -145,7 +145,7 @@ func main() {
 		}
 
 		if envelope.Metadata.CreatedAtNs == 0 {
-			envelope.Metadata.CreatedAtNs = uint64(time.Now().UnixNano())
+			envelope.Metadata.CreatedAtNs = time.Now().UnixNano()
 		}
 
 		encoded, err := proto.Marshal(&envelope)
@@ -184,7 +184,7 @@ func main() {
 		}
 
 		if ctx.CreatedAtNs == 0 {
-			ctx.CreatedAtNs = uint64(time.Now().UnixNano())
+			ctx.CreatedAtNs = time.Now().UnixNano()
 		}
 
 		encoded, err := proto.Marshal(&ctx)

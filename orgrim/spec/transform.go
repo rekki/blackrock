@@ -171,7 +171,7 @@ func DecodeAndFlatten(body io.Reader) (*Envelope, error) {
 			Search:      search,
 			Count:       count,
 			Properties:  properties,
-			CreatedAtNs: uint64(metadata.CreatedAtNs),
+			CreatedAtNs: metadata.CreatedAtNs,
 			EventType:   metadata.EventType,
 			ForeignId:   metadata.ForeignId,
 			ForeignType: metadata.ForeignType,
@@ -187,7 +187,7 @@ func DecodeAndFlatten(body io.Reader) (*Envelope, error) {
 	}
 
 	if converted.Metadata.CreatedAtNs == 0 {
-		converted.Metadata.CreatedAtNs = uint64(time.Now().UnixNano())
+		converted.Metadata.CreatedAtNs = time.Now().UnixNano()
 	}
 
 	err = ValidateEnvelope(&converted)

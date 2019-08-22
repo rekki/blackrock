@@ -121,7 +121,7 @@ func ConsumeEvents(segmentId string, envelope *spec.Envelope, forward *disk.Forw
 
 func ConsumeContext(envelope *spec.Context, forward *disk.ForwardWriter) error {
 	if envelope.CreatedAtNs == 0 {
-		envelope.CreatedAtNs = uint64(time.Now().UnixNano())
+		envelope.CreatedAtNs = time.Now().UnixNano()
 	}
 
 	encoded, err := proto.Marshal(envelope)

@@ -477,7 +477,7 @@ func setupSimpleEventAccept(root string, r *gin.Engine) {
 		}
 
 		if envelope.Metadata.CreatedAtNs == 0 {
-			envelope.Metadata.CreatedAtNs = uint64(time.Now().UnixNano())
+			envelope.Metadata.CreatedAtNs = time.Now().UnixNano()
 		}
 
 		segmentId := path.Join(root, depths.SegmentFromNs(envelope.Metadata.CreatedAtNs))

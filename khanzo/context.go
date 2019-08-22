@@ -57,7 +57,7 @@ func (r *ContextCache) Insert(decoded *spec.Context) {
 	log.Infof("setting %s:%s [%d] to %v", decoded.ForeignType, decoded.ForeignId, decoded.CreatedAtNs, decoded)
 }
 
-func (r *ContextCache) Lookup(t string, id string, from uint64) (*spec.Context, bool) {
+func (r *ContextCache) Lookup(t string, id string, from int64) (*spec.Context, bool) {
 	r.RLock()
 	defer r.RUnlock()
 	m, ok := r.cache[t]
@@ -130,7 +130,7 @@ func toContextDeep(seen map[string]map[string]bool, contextCache *ContextCache, 
 	return out
 }
 
-func LoadContextForStat(contextCache *ContextCache, k, v string, t uint64) []*spec.Context {
+func LoadContextForStat(contextCache *ContextCache, k, v string, t int64) []*spec.Context {
 	seen := map[string]map[string]bool{}
 	out := []*spec.Context{}
 
