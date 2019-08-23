@@ -56,10 +56,15 @@ func ConsumeEvents(segmentId string, envelope *spec.Envelope, forward *disk.Forw
 	foreignId := depths.Cleanup(strings.ToLower(meta.ForeignId))
 	foreignType := depths.Cleanup(strings.ToLower(meta.ForeignType))
 	eventType := depths.Cleanup(strings.ToLower(meta.EventType))
+
+	meta.EventType = eventType
+	meta.ForeignType = foreignType
+	meta.ForeignId = foreignId
+
 	for i, kv := range meta.Search {
 		k := kv.Key
 		v := kv.Value
-		lc := depths.CleanupAllowDot(strings.ToLower(k))
+		lc := depths.Cleanup(strings.ToLower(k))
 		if lc == "event_type" || lc == "foreign_type" || lc == "foreign_id" || lc == foreignType || lc == "" {
 			continue
 		}
