@@ -79,7 +79,6 @@ func main() {
 	var verbose = flag.Bool("verbose", false, "print info level logs to stdout")
 	var accept = flag.Bool("not-production-accept-events", false, "also accept events, super simple, so people can test in their laptops without zookeeper, kafka, orgrim, blackhand and jubei setup..")
 	var bind = flag.String("bind", ":9002", "bind to")
-	var pconfig = flag.String("config", "", "config key:limit:sortByName:hide|key...")
 	flag.Parse()
 	if *verbose {
 		log.SetLevel(log.InfoLevel)
@@ -93,11 +92,6 @@ func main() {
 	}()
 	root := *proot
 	os.MkdirAll(root, 0700)
-	config, err := LoadConfigFromString(*pconfig)
-	if err != nil {
-		log.Fatal(err)
-	}
-	log.Warnf("config: %s", depths.DumpObj(config))
 
 	forwardContext, err := disk.NewForwardWriter(root, "context")
 	if err != nil {
@@ -362,6 +356,7 @@ func main() {
 			if len(counter.Sample[0]) < sampleSize {
 				counter.Sample[0] = append(counter.Sample[0], toHit(contextCache, did, cx))
 			}
+
 		})
 
 		if err != nil {
