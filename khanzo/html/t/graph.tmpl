@@ -1,36 +1,45 @@
-<div style="width:80%;">
+<div style="width:100%;">
   <canvas id="canvas"></canvas>
 </div>
 <hr>
-<div style="width:80%;">
+<div style="width:100%;">
   <canvas id="canvas-uniq"></canvas>
 </div>
 <hr>
-<div style="width:80%;">
+<div style="width:100%;">
   <canvas id="canvas-avg"></canvas>
 </div>
 
 <script>
 
 var data = {{ json .Chart.Points }};
-let options = {
-  responsive: true,
-  tooltips: {
-    mode: 'index',
-    intersect: false,
-  },
-  hover: {
-    mode: 'nearest',
-    intersect: true
-  },
-  scales: {
-    xAxes: [{
+let options = function (k) {
+  return {
+    legend: {
+      position: 'left',
+    },
+    responsive: true,
+    title: {
       display: true,
-    }],
-    yAxes: [{
-      display: true,
-    }]
-  }  
+      text: k,
+    },
+    tooltips: {
+      mode: 'index',
+      intersect: false,
+    },
+    hover: {
+      mode: 'nearest',
+      intersect: true
+    },
+    scales: {
+      xAxes: [{
+        display: true,
+      }],
+      yAxes: [{
+        display: true,
+      }]
+    }  
+  }
 }
 
 let countConfig = {
@@ -41,7 +50,7 @@ let countConfig = {
     datasets: [],
     __datasets: {}
   },
-  options
+  options: options("total count")
 }
 
 let countUniqueConfig = {
@@ -53,7 +62,7 @@ let countUniqueConfig = {
     __datasets: {}
 
   },
-  options
+  options: options("per unique user")
 }
 
 let countAvgConfig = {
@@ -64,7 +73,7 @@ let countAvgConfig = {
     datasets: [],
     __datasets: {}
   },
-  options  
+  options: options("avg per userr")
 }
 
 var dateOptions = { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', hour: 'numeric', minute: 'numeric'  };
@@ -99,7 +108,9 @@ var add = function(where,bucket_ns, count, k, orig) {
     s = {
       label: k,
       data: [],
+      fill: false,
       backgroundColor: stringToColour(orig),
+      borderColor: stringToColour(orig),
     }
     where.datasets.push(s)
     where.__datasets[k] = s
