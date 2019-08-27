@@ -77,20 +77,12 @@ let countAvgConfig = {
 }
 
 var dateOptions = { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', hour: 'numeric', minute: 'numeric'  };
-var hashCode = function(s) {
-  var h = 0, l = s.length, i = 0;
-  if ( l > 0 )
-    while (i < l)
-      h = (h << 5) - h + s.charCodeAt(i++) | 0;
-  return h;
-};
-
 function stringToColour(input) {
   return randomColor({
     luminosity: 'light',
     hue: 'blue',
-    seed: hashCode(input),
-    format: 'rgb',
+    seed: input,
+    format: 'rgba',
   });
 }
 
