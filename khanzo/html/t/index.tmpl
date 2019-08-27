@@ -126,16 +126,18 @@
       {{ range pick .Stats.Search "env" "product" "year-month-day" }}
       {{ template "/html/t/chart.tmpl" dict "Data" . "GlobalTotal" $total "BaseUrl" $base "Link" true "QueryString" $query}}
       {{ end }}
-
-      {{ if .Stats.Chart }}
-      {{ template "/html/t/graph.tmpl" .Stats }}
-      {{ end }}
       <tr><td colspan=2><pre class="banner">{{ banner "foreign id"}}</pre></td></tr>
       {{ range (.Stats.SortedKeys .Stats.Foreign) }}
       {{ template "/html/t/chart.tmpl" dict "Data" . "GlobalTotal" $total "BaseUrl" $base "Link" true "QueryString" $query "Foreign" true}}
       {{ end }}
       <tr><td colspan=2><pre class="banner">{{ banner "event type"}}</pre></td></tr>
       {{ template "/html/t/chart.tmpl" dict "Data" .Stats.EventTypes "GlobalTotal" $total  "BaseUrl" $base "Link" true "QueryString" $query}}
+
+      <tr><td colspan=2>
+      {{ if .Stats.Chart }}
+      {{ template "/html/t/graph.tmpl" .Stats }}
+      {{ end }}
+      </tr></td>
 
       <tr><td colspan=2><pre class="banner">{{ banner "search"}}</pre></td></tr>
       {{ range (.Stats.SortedKeys .Stats.Search) }}

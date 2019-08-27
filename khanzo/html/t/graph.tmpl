@@ -79,7 +79,7 @@ var hashCode = function(s) {
 function stringToColour(input) {
   return randomColor({
     luminosity: 'light',
-    hue: 'monochrome',
+    hue: 'blue',
     seed: hashCode(input),
     format: 'rgba',
     alpha: 0.5 
@@ -108,7 +108,7 @@ var add = function(where,bucket_ns, count, k, orig) {
 
 }
 
-let thresh = 1;
+let thresh = 5;
 let topFilter = {}
 {
   let topKeys = {}
