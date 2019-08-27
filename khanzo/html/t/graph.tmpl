@@ -113,14 +113,14 @@ let topFilter = {}
 {
   let topKeys = {}
   for (let d of data) {
-    topKeys[d.event_type] += d.count_unique
+    topKeys[d.event_type] = (topKeys[d.event_type]  || 0) + d.count_unique
   }
 
 
 
 
   let topSorted = Object.keys(topKeys)
-  topSorted.sort((a,b) => top[a] - top[b])
+  topSorted.sort((a,b) => topKeys[a] - topKeys[b])
 
   let j = 0
   for (let x of topSorted) {
@@ -130,6 +130,7 @@ let topFilter = {}
       break;
   }
 }
+
 
 for (let d of data) {
   if (!topFilter[d.event_type]) continue;
