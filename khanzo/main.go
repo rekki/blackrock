@@ -19,6 +19,8 @@ import (
 	"sync"
 	"time"
 
+	ginprometheus "github.com/mcuadros/go-gin-prometheus"
+
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/gogo/protobuf/proto"
@@ -137,6 +139,14 @@ func main() {
 	}()
 
 	r := gin.Default()
+	prometheus := ginprometheus.NewPrometheus("blackrock_khanzo")
+	prometheus.ReqCntURLLabelMappingFn = func(c *gin.Context) string {
+		url := c.Request.URL.Path
+		url = strings.Replace(url, "//", "/", -1)
+		return url
+	}
+	prometheus.Use(r)
+
 	r.Use(cors.Default())
 	r.Use(gin.Recovery())
 	t, err := loadTemplate(contextCache)
