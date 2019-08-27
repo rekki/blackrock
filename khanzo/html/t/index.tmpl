@@ -7,8 +7,8 @@
     <style>
       @font-face {
       font-family: blackrock;
-      src: url('/public/html/font/hack.woff') format('woff'),
-           url('/public/html/font/hack.woff2') format('woff2');
+      src: url('/external/vendor/font/hack.woff') format('woff'),
+           url('/external/vendor/font/hack.woff2') format('woff2');
       }
 
       body {
@@ -64,6 +64,11 @@
       color: white;
       }
     </style>
+
+    <link rel="stylesheet" href="/external/vendor/chart/Chart.min.css"/>
+    <script src="/external/vendor/chart/Chart.min.js"></script>
+    <script src="/external/vendor/chart/randomColor.js"></script>
+
     <script>
   var toggle = function(id) {
     var elements = document.getElementsByClassName('hit-' + id)
@@ -91,7 +96,15 @@
         <input type=hidden name='query_max_documents' value='{{getS $query "query_max_documents"}}'>
         <input name="from" type=date value='{{getS $query "from"}}'>
         <input name="to" type=date value='{{getS $query "to"}}'>
-        <input type=submit value=filter>
+        <select name="bucket">
+          {{ $selected := getS $query "bucket" }}
+          <option  {{ if eq $selected "minute"}}selected{{end}}>minute</option>
+          <option  {{ if eq $selected "hour"}}selected{{end}}>hour</option>
+          <option  {{ if eq $selected "day"}}selected{{end}}>day</option>
+          <option  {{ if eq $selected "week"}}selected{{end}}>week</option>
+        </select>
+
+        <input type=submit value=go>
       </form>
       total events: {{ $total }}
 {{ if .Stats.ConvertedCache }}
@@ -114,6 +127,9 @@
       {{ template "/html/t/chart.tmpl" dict "Data" . "GlobalTotal" $total "BaseUrl" $base "Link" true "QueryString" $query}}
       {{ end }}
 
+      {{ if .Stats.Chart }}
+      {{ template "/html/t/graph.tmpl" .Stats }}
+      {{ end }}
       <tr><td colspan=2><pre class="banner">{{ banner "foreign id"}}</pre></td></tr>
       {{ range (.Stats.SortedKeys .Stats.Foreign) }}
       {{ template "/html/t/chart.tmpl" dict "Data" . "GlobalTotal" $total "BaseUrl" $base "Link" true "QueryString" $query "Foreign" true}}

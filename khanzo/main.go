@@ -72,6 +72,30 @@ func yyyymmdd(t time.Time) string {
 	return fmt.Sprintf("%d-%02d-%02d", year, month, day)
 }
 
+func getTimeBucket(b string) int64 {
+	if b == "hour" {
+		return int64(1 * time.Hour)
+	}
+
+	if b == "minute" {
+		return int64(1 * time.Minute)
+	}
+
+	if b == "second" {
+		return int64(1 * time.Second)
+	}
+
+	if b == "day" {
+		return int64(1*time.Hour) * 24
+	}
+
+	if b == "week" {
+		return int64(1*time.Hour) * 24 * 7
+	}
+
+	return int64(1*time.Hour) * 24
+}
+
 func main() {
 	var proot = flag.String("root", "/blackrock/data-topic", "root directory for the files root/topic")
 	var basicAuth = flag.String("basic-auth", "", "basic auth user and password, leave empty for no auth [just for testing, better hide it behind nginx]")
@@ -86,7 +110,6 @@ func main() {
 		gin.SetMode(gin.ReleaseMode)
 		log.SetLevel(log.WarnLevel)
 	}
-
 	go func() {
 		log.Println(http.ListenAndServe("localhost:6060", nil))
 	}()
@@ -122,13 +145,21 @@ func main() {
 	}
 	r.SetHTMLTemplate(t)
 	r.StaticFS("/public/", Assets)
+	r.StaticFS("/external/", AssetsVendor)
+
 	r.GET("/health", func(c *gin.Context) {
 		c.String(200, "OK")
 	})
 
 	r.GET("/favicon.ico", func(c *gin.Context) {
-		f := Assets.Files["/html/img/favicon.ico"]
+		name := "/vendor/img/favicon.ico"
+		f, ok := AssetsVendor.Files[name]
+		if !ok {
+			c.JSON(400, gin.H{"error": "not found"})
+			return
+		}
 		h, err := ioutil.ReadAll(f)
+
 		if err != nil {
 			c.JSON(400, gin.H{"error": err.Error()})
 			return
@@ -342,12 +373,15 @@ func main() {
 
 	r.GET("/scan/:format/*query", func(c *gin.Context) {
 		sampleSize := intOrDefault(c.Query("sample_size"), 100)
-		counter := NewCounter(nil)
+
+		chart := NewChart(getTimeBucket(c.Query("bucket")))
+		counter := NewCounter(nil, chart)
 
 		from := c.Query("from")
 		to := c.Query("to")
-		if (from == "" || to == "") && c.Param("format") == "html" {
-			c.Redirect(302, fmt.Sprintf("%s?from=%s&to=%s", c.Request.URL.Path, yyyymmdd(time.Now().UTC().AddDate(0, 0, -1)), yyyymmdd(time.Now().UTC())))
+
+		if (from == "" || to == "" || c.Query("bucket") == "") && c.Param("format") == "html" {
+			c.Redirect(302, fmt.Sprintf("%s?from=%s&to=%s&bucket=day", c.Request.URL.Path, yyyymmdd(time.Now().UTC().AddDate(0, 0, -1)), yyyymmdd(time.Now().UTC())))
 			return
 		}
 		dates := expandYYYYMMDD(from, to)
@@ -356,7 +390,6 @@ func main() {
 			if len(counter.Sample[0]) < sampleSize {
 				counter.Sample[0] = append(counter.Sample[0], toHit(contextCache, did, cx))
 			}
-
 		})
 
 		if err != nil {
@@ -369,7 +402,7 @@ func main() {
 
 	r.GET("/exp/:format/:experiment/:metricKey/:metricValue/*query", func(c *gin.Context) {
 		sampleSize := intOrDefault(c.Query("sample_size"), 100)
-		counter := NewCounter(NewConvertedCache())
+		counter := NewCounter(NewConvertedCache(), nil)
 		experiment := c.Param("experiment")
 		metricKey := c.Param("metricKey")
 		metricValue := c.Param("metricValue")
@@ -586,6 +619,9 @@ func loadTemplate(contextCache *ContextCache) (*template.Template, error) {
 		"pretty": func(b interface{}) string {
 			return depths.DumpObj(b)
 		},
+		"json": func(b interface{}) template.JS {
+			return template.JS(depths.DumpObj(b))
+		},
 		"format": func(value uint32) string {
 			return fmt.Sprintf("%8s", chart.Fit(float64(value)))
 		},
@@ -685,6 +721,7 @@ func loadTemplate(contextCache *ContextCache) (*template.Template, error) {
 		"prettyFlat": func(v string) string {
 			return strings.Replace(v, ".", " ", -1)
 		},
+
 		"percent": func(value ...interface{}) string {
 			a := float64(value[0].(uint32))
 			b := float64(value[1].(uint32))

@@ -7,15 +7,16 @@ import (
 )
 
 type ChartPoint struct {
-	ForeignLink map[string]map[string]uint32 `json:"per_user"`
+	ForeignLink map[string]map[string]uint32 `json:"-"`
 	Count       uint32                       `json:"count"`
+	CountUnique uint32                       `json:"count_unique"`
 	CreatedAtNs int64                        `json:"bucket_ns"`
 	EventType   string                       `json:"event_type"`
 }
 
 type Chart struct {
-	PerTimePerType map[int64]map[string]*ChartPoint
-	TimeBucketNs   int64
+	PerTimePerType map[int64]map[string]*ChartPoint `json:"per_time_per_type"`
+	TimeBucketNs   int64                            `json:"time_bucket_ns"`
 }
 
 func NewChart(timebucketns int64) *Chart {
@@ -37,7 +38,7 @@ func (c *Chart) Points() []*ChartPoint {
 		if out[j].CreatedAtNs == out[i].CreatedAtNs {
 			return out[i].EventType < out[j].EventType
 		}
-		return out[j].CreatedAtNs < out[i].CreatedAtNs
+		return out[i].CreatedAtNs < out[j].CreatedAtNs
 	})
 
 	return out
@@ -66,6 +67,13 @@ func (c *Chart) Add(m *spec.Metadata) {
 		ft = map[string]uint32{}
 		point.ForeignLink[m.ForeignType] = ft
 	}
-	ft[m.ForeignId]++
+	v, ok := ft[m.ForeignId]
+	if !ok {
+		point.CountUnique++
+		v = 1
+	} else {
+		v++
+	}
+	ft[m.ForeignId] = v
 	point.Count++
 }

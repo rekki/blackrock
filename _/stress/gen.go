@@ -290,14 +290,19 @@ func expandYYYYMMDD(from string, to string) []time.Time {
 		d, err := time.Parse("2006-01-02", from)
 		if err == nil {
 			fromTime = d
+		} else {
+			panic(err)
 		}
 	}
 	if to != "" {
 		d, err := time.Parse("2006-01-02", to)
 		if err == nil {
 			toTime = d
+		} else {
+			panic(err)
 		}
 	}
+
 	dateQuery := []time.Time{}
 	start := fromTime.AddDate(0, 0, 0)
 	for {
@@ -317,8 +322,8 @@ func main() {
 	from := flag.String("from", "", "from")
 	to := flag.String("to", "", "to")
 	nEvents := flag.Int("n-events", 100, "number of events")
-	times := expandYYYYMMDD(*from, *to)
 	flag.Parse()
+	times := expandYYYYMMDD(*from, *to)
 	users := []*spec.Context{}
 	authors := []*spec.Context{}
 	books := []*spec.Context{}

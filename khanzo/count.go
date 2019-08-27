@@ -155,9 +155,10 @@ type Counter struct {
 	TotalCount                    uint32                  `json:"total"`
 	TotalCountEventsFromConverter uint32                  `json:"total_events_from_converter"`
 	ConvertedCache                *ConvertedCache         `json:"convertions"`
+	Chart                         *Chart
 }
 
-func NewCounter(conv *ConvertedCache) *Counter {
+func NewCounter(conv *ConvertedCache, chart *Chart) *Counter {
 	return &Counter{
 		Search:         map[string]*CountPerKey{},
 		Count:          map[string]*CountPerKey{},
@@ -165,6 +166,7 @@ func NewCounter(conv *ConvertedCache) *Counter {
 		EventTypes:     NewCountPerKey("event_type"),
 		Sample:         map[uint32][]Hit{},
 		ConvertedCache: conv,
+		Chart:          chart,
 		TotalCount:     0,
 	}
 }
@@ -220,6 +222,9 @@ func (c *Counter) Add(converted bool, variant uint32, p *spec.Metadata) {
 	}
 
 	c.EventTypes.Add(p.EventType, 0, false)
+	if c.Chart != nil {
+		c.Chart.Add(p)
+	}
 }
 
 func (c *Counter) String(context *gin.Context) {
