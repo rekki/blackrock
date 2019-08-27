@@ -391,7 +391,7 @@ func main() {
 		to := c.Query("to")
 
 		if (from == "" || to == "" || c.Query("bucket") == "") && c.Param("format") == "html" {
-			c.Redirect(302, fmt.Sprintf("%s?from=%s&to=%s&bucket=day", c.Request.URL.Path, yyyymmdd(time.Now().UTC().AddDate(0, 0, -1)), yyyymmdd(time.Now().UTC())))
+			c.Redirect(302, fmt.Sprintf("%s?from=%s&to=%s&bucket=hour", c.Request.URL.Path, yyyymmdd(time.Now().UTC().AddDate(0, 0, -1)), yyyymmdd(time.Now().UTC())))
 			return
 		}
 		dates := expandYYYYMMDD(from, to)
