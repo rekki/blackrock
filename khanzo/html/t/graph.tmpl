@@ -67,7 +67,7 @@ let countAvgConfig = {
   options  
 }
 
-var dateOptions = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+var dateOptions = { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', hour: 'numeric', minute: 'numeric'  };
 var hashCode = function(s) {
   var h = 0, l = s.length, i = 0;
   if ( l > 0 )
@@ -87,7 +87,7 @@ function stringToColour(input) {
 }
 
 var add = function(where,bucket_ns, count, k, orig) {
-  let label = new Date(bucket_ns / 1000000).toLocaleDateString("en-GB")
+  let label = new Date(bucket_ns / 1000000).toLocaleDateString("en-GB", dateOptions)
   let l = where.__labels[bucket_ns]
   if (!l) {
     where.labels.push(label)
