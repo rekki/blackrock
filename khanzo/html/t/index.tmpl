@@ -91,7 +91,11 @@
       {{ range .Crumbs }}
       <a href="{{ .Base }}/{{.Exact}}?{{$query}}">{{.Exact}}</a> <a href="/scan/html/{{.Exact}}?{{$query}}">=</a> <a href="{{ removeQuery $crumbs .Exact}}?{{$query}}">d</a>{{ if gt (len $crumbs) 1 }} <a href="{{ negateQuery $crumbs .Exact}}?{{$query}}">-</a> {{end}}
       <br>
+      {{end}}
+      {{ range whatIsHidden $query }}
+      <a href="?{{remS $query .}}">+ {{replace . "-hide" ""}}</a><br>
       {{ end }}
+
       <form method=get action='?'>
         <input type=hidden name='query_max_documents' value='{{getS $query "query_max_documents"}}'>
         <input name="from" type=date value='{{getS $query "from"}}'>
@@ -103,8 +107,7 @@
           <option  {{ if eq $selected "day"}}selected{{end}}>day</option>
           <option  {{ if eq $selected "week"}}selected{{end}}>week</option>
         </select>
-
-        <input type=submit value=go>
+        <input type=submit value=go><br>
       </form>
       total events: {{ $total }}
 {{ if .Stats.ConvertedCache }}

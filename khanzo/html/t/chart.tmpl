@@ -1,7 +1,9 @@
+{{ $qs := .QueryString }}
+{{ if notHidden $qs .Data.Key }}
 {{ $sorted := .Data.Sorted }}
 <tr id="{{ .Data.Key }}">
   <td class="left">
-    {{ .Data.Key }} ({{ (len $sorted) }})
+    {{ .Data.Key }} ({{ (len $sorted) }}) <a href="?{{$qs}}&{{ .Data.Key}}-hide=true">-</a>
   </td>
   <td class="right">
     total: {{ .Data.Count }} {{ percent .GlobalTotal .Data.Count }}
@@ -11,14 +13,14 @@
 {{ $total := .Data.Count }}
 {{ $totalConvertions := .Data.CountEventsFromConverter }}
 {{ $b := .BaseUrl }}
-{{ $qs := .QueryString }}
+
 {{ $tag := .Data.Key }}
 {{ $link := .Link }}
 {{ $foreign := .Foreign }}
 {{ $limit := getN $qs .Data.Key 50 }}
 {{ range $i, $val := $sorted }}
 
-{{ if lt $i $limit}}
+{{ if lt $i $limit }}
 <tr>
   <td class="left">
     {{ if $link }}
@@ -82,3 +84,4 @@
 <tr>
   <td>&nbsp;</td>
 </tr>
+{{end}}

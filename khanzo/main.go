@@ -650,6 +650,28 @@ func loadTemplate(contextCache *ContextCache) (*template.Template, error) {
 			off := intOrDefault(v.Get(key), n)
 			return off
 		},
+
+		"notHidden": func(qs template.URL, key string) bool {
+			v, err := url.ParseQuery(string(qs))
+			if err != nil {
+				return false
+			}
+			return v.Get(key+"-hide") != "true"
+		},
+		"whatIsHidden": func(qs template.URL) []string {
+			v, err := url.ParseQuery(string(qs))
+			out := []string{}
+			if err != nil {
+				return out
+			}
+			for k, _ := range v {
+				if strings.HasSuffix(k, "-hide") {
+					out = append(out, k)
+				}
+			}
+			return out
+		},
+
 		"getS": func(qs template.URL, key string) string {
 			v, err := url.ParseQuery(string(qs))
 			if err != nil {
@@ -693,6 +715,16 @@ func loadTemplate(contextCache *ContextCache) (*template.Template, error) {
 			v.Set(key, fmt.Sprintf("%d", off))
 			return template.URL(v.Encode())
 		},
+
+		"remS": func(qs template.URL, key string) template.URL {
+			v, err := url.ParseQuery(string(qs))
+			if err != nil {
+				return template.URL("")
+			}
+			v.Del(key)
+			return template.URL(v.Encode())
+		},
+
 		"pick": func(from map[string]*CountPerKey, which ...string) []*CountPerKey {
 			out := []*CountPerKey{}
 			for _, w := range which {
