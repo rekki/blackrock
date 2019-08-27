@@ -14,6 +14,7 @@ import (
 	"github.com/gogo/protobuf/proto"
 	"github.com/jackdoe/blackrock/depths"
 	"github.com/jackdoe/blackrock/orgrim/spec"
+	ginprometheus "github.com/mcuadros/go-gin-prometheus"
 	"github.com/segmentio/kafka-go"
 	"github.com/segmentio/kafka-go/snappy"
 	log "github.com/sirupsen/logrus"
@@ -117,6 +118,9 @@ func main() {
 	}()
 
 	r := gin.Default()
+	prometheus := ginprometheus.NewPrometheus("blackrock_orgrim")
+	prometheus.Use(r)
+
 	r.Use(gin.Recovery())
 	r.Use(cors.Default())
 
