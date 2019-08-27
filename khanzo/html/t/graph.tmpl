@@ -108,7 +108,7 @@ var add = function(where,bucket_ns, count, k, orig) {
 
 }
 
-let thresh = 5;
+let thresh = 1;
 let topFilter = {}
 {
   let topKeys = {}
@@ -120,7 +120,7 @@ let topFilter = {}
 
 
   let topSorted = Object.keys(topKeys)
-  topSorted.sort((a,b) => topKeys[a] - topKeys[b])
+  topSorted.sort((a,b) => topKeys[b] - topKeys[a])
 
   let j = 0
   for (let x of topSorted) {
