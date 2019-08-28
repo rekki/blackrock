@@ -1,8 +1,12 @@
 package main
 
 import (
+	"sort"
+	"strings"
 	"time"
 
+	"github.com/guptarohit/asciigraph"
+	"github.com/jackdoe/blackrock/khanzo/chart"
 	"github.com/jackdoe/blackrock/orgrim/spec"
 )
 
@@ -27,9 +31,56 @@ func NewChart(timebucket uint32, dates []time.Time) *Chart {
 	return &Chart{
 		PerTimePerType: perBucket,
 		TimeBucket:     timebucket,
-		TimeStart:      uint32(dates[0].Unix()),
-		TimeEnd:        uint32(dates[len(dates)-1].AddDate(0, 0, 1).Unix()),
+		TimeStart:      (uint32(dates[0].Unix()) / timebucket) * timebucket,
+		TimeEnd:        (uint32(dates[len(dates)-1].AddDate(0, 0, 1).Unix()) / timebucket) * timebucket,
 	}
+}
+
+func (c *Chart) String(n int) string {
+	top := map[string]uint32{}
+
+	for _, v := range c.PerTimePerType {
+		for _, vv := range v {
+			top[vv.EventType]++
+		}
+	}
+
+	topKeys := []string{}
+	for k, _ := range top {
+		topKeys = append(topKeys, k)
+	}
+
+	sort.Slice(topKeys, func(i, j int) bool {
+		return top[topKeys[j]] < top[topKeys[j]]
+	})
+
+	if len(topKeys) > n {
+		topKeys = topKeys[:n]
+	}
+	out := []string{}
+	for _, k := range topKeys {
+		data := []float64{}
+
+		for i := c.TimeStart; i < c.TimeEnd; i += c.TimeBucket {
+			pb, ok := c.PerTimePerType[i]
+			if !ok {
+				data = append(data, 0)
+			} else {
+				pt, ok := pb[k]
+				if !ok {
+					data = append(data, 0)
+				} else {
+					data = append(data, float64(pt.Count))
+				}
+			}
+
+		}
+
+		graph := asciigraph.Plot(data, asciigraph.Caption(k), asciigraph.Height(10), asciigraph.Width(72))
+		out = append(out, graph)
+	}
+
+	return chart.Banner("CHART") + strings.Join(out, "\n\n")
 }
 
 func (c *Chart) Add(m *spec.Metadata) {

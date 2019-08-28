@@ -270,10 +270,15 @@ func (c *Counter) Add(converted bool, variant uint32, p *spec.Metadata) {
 
 func (c *Counter) String(context *gin.Context) {
 	makers := prettyStats("FOREIGN", c.SortedKeys(c.Foreign))
+
 	types := prettyStats("EVENT_TYPES", []*CountPerKey{c.EventTypes})
 	properties := prettyStats("COUNT", c.SortedKeys(c.Count))
 	tags := prettyStats("SEARCH", c.SortedKeys(c.Search))
-	out := fmt.Sprintf("%s%s%s%s\n", makers, types, tags, properties)
+	graph := ""
+	if c.Chart != nil {
+		graph = c.Chart.String(3)
+	}
+	out := fmt.Sprintf("%s%s%s%s%s\n", makers, graph, types, tags, properties)
 	out += chart.Banner("SAMPLE")
 	for _, samples := range c.Sample {
 		for _, h := range samples {
