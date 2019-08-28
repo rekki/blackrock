@@ -616,6 +616,10 @@ func setupSimpleEventAccept(root string, geoipPath string, r *gin.Engine) {
 	})
 
 	r.GET("/png/:event_type/:foreign_type/:foreign_id/*extra", func(c *gin.Context) {
+		c.Header("Cache-Control", "no-cache, no-store, must-revalidate")
+		c.Header("Expires", "0")
+		c.Header("Pragma", "no-cache")
+
 		envelope := &spec.Envelope{
 			Metadata: &spec.Metadata{
 				CreatedAtNs: time.Now().UnixNano(),
