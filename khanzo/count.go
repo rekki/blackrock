@@ -156,9 +156,11 @@ type Counter struct {
 	TotalCountEventsFromConverter uint32                  `json:"total_events_from_converter"`
 	ConvertedCache                *ConvertedCache         `json:"convertions"`
 	Chart                         *Chart
+	Whitelist                     map[string]bool
+	Sections                      map[string]uint32 `json:"sections"`
 }
 
-func NewCounter(conv *ConvertedCache, chart *Chart) *Counter {
+func NewCounter(conv *ConvertedCache, Whitelist map[string]bool, chart *Chart) *Counter {
 	return &Counter{
 		Search:         map[string]*CountPerKey{},
 		Count:          map[string]*CountPerKey{},
@@ -168,8 +170,39 @@ func NewCounter(conv *ConvertedCache, chart *Chart) *Counter {
 		ConvertedCache: conv,
 		Chart:          chart,
 		TotalCount:     0,
+		Whitelist:      Whitelist,
+		Sections:       map[string]uint32{},
 	}
 }
+func (c *Counter) IsWhitelisted(s string) bool {
+	if c.Whitelist == nil {
+		return false
+	}
+	return c.Whitelist[s]
+}
+
+type SortedSection struct {
+	Key   string
+	Count uint32
+}
+
+func (c *Counter) SortedSections() []SortedSection {
+	out := []SortedSection{}
+	for k, v := range c.Sections {
+		out = append(out, SortedSection{Key: k, Count: v})
+	}
+
+	sort.Slice(out, func(i, j int) bool {
+		return out[i].Key < out[j].Key
+		//		if out[j].Count == out[i].Count {
+		//		return out[i].Key < out[j].Key
+		//		}
+		//		return out[j].Count < out[j].Count
+	})
+
+	return out
+}
+
 func (c *Counter) SortedKeys(what map[string]*CountPerKey) []*CountPerKey {
 	out := []*CountPerKey{}
 	for _, v := range what {
@@ -193,6 +226,11 @@ func (c *Counter) Add(converted bool, variant uint32, p *spec.Metadata) {
 	for _, kv := range p.Search {
 		k := kv.Key
 		v := kv.Value
+		c.Sections[k]++
+		if !c.IsWhitelisted(k) {
+			continue
+		}
+
 		xm, ok := c.Search[k]
 		if !ok {
 			xm = NewCountPerKey(k)
@@ -204,6 +242,10 @@ func (c *Counter) Add(converted bool, variant uint32, p *spec.Metadata) {
 	for _, kv := range p.Count {
 		k := kv.Key
 		v := kv.Value
+		c.Sections[k]++
+		if !c.IsWhitelisted(k) {
+			continue
+		}
 
 		xm, ok := c.Count[k]
 		if !ok {
@@ -279,9 +321,35 @@ type Breadcrumb struct {
 	Base  string
 	Exact string
 }
+type Breadcrumbs []Breadcrumb
 
-func (c *Counter) HTML(context *gin.Context) {
-	url := context.Request.URL.Path
+func (base Breadcrumbs) RemoveQuery(kv string) string {
+	out := []string{}
+	for _, crumb := range base {
+		if crumb.Exact != kv {
+			out = append(out, crumb.Exact)
+		}
+	}
+	return "/scan/html/" + strings.Join(out, "/")
+}
+
+func (base Breadcrumbs) NegateQuery(kv string) string {
+	out := []string{}
+	toggle := "-"
+	if strings.HasPrefix(kv, "-") {
+		toggle = ""
+	}
+	for _, crumb := range base {
+		if crumb.Exact == kv {
+			out = append(out, toggle+strings.TrimLeft(crumb.Exact, "-"))
+		} else {
+			out = append(out, crumb.Exact)
+		}
+	}
+	return "/scan/html/" + strings.Join(out, "/")
+}
+
+func NewBreadcrumb(url string) Breadcrumbs {
 	splitted := strings.Split(url, "/")
 	crumbs := []Breadcrumb{}
 	for i := 0; i < len(splitted[3:]); i++ {
@@ -291,6 +359,12 @@ func (c *Counter) HTML(context *gin.Context) {
 			crumbs = append(crumbs, Breadcrumb{Base: p, Exact: v})
 		}
 	}
+	return Breadcrumbs(crumbs)
+}
+
+func (c *Counter) HTML(context *gin.Context) {
+	url := context.Request.URL.Path
+	crumbs := NewBreadcrumb(url)
 	if url == "/scan/html" {
 		url = "/scan/html/"
 	}

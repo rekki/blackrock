@@ -74,6 +74,21 @@ func yyyymmdd(t time.Time) string {
 	return fmt.Sprintf("%d-%02d-%02d", year, month, day)
 }
 
+func getWhitelist(query []string) map[string]bool {
+	out := map[string]bool{
+		"year-month-day": true,
+		"env":            true,
+		"product":        true,
+		"experiment":     true,
+		"sizeWH":         true,
+	}
+
+	for _, v := range query {
+		out[v] = true
+	}
+	return out
+}
+
 func getTimeBucketNs(b string) int64 {
 	if b == "hour" {
 		return int64(1 * time.Hour)
@@ -381,6 +396,39 @@ func main() {
 		return nil
 	}
 
+	r.GET("/count/:what/*query", func(c *gin.Context) {
+		from := c.Query("from")
+		to := c.Query("to")
+		dates := expandYYYYMMDD(from, to)
+		possible := map[string]uint32{}
+		query := []string{}
+		what := c.Param("what")
+		crumbs := NewBreadcrumb(c.Request.URL.Path)
+
+		for _, v := range crumbs {
+			if !strings.HasPrefix(v.Exact, what+":") {
+				query = append(query, v.Exact)
+			}
+		}
+
+		err := foreach(strings.Join(query, "/"), dates, func(did int32, cx *spec.Metadata) {
+			if what == "event_type" {
+				possible[cx.EventType]++
+			} else {
+				for _, v := range cx.Search {
+					if v.Key == what {
+						possible[v.Value]++
+					}
+				}
+			}
+		})
+		if err != nil {
+			c.JSON(400, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(400, gin.H{"count": possible, "query": query})
+	})
+
 	r.GET("/scan/:format/*query", func(c *gin.Context) {
 		sampleSize := intOrDefault(c.Query("sample_size"), 100)
 
@@ -394,7 +442,7 @@ func main() {
 
 		dates := expandYYYYMMDD(from, to)
 		chart := NewChart(uint32(getTimeBucketNs(c.Query("bucket"))/1000000000), dates)
-		counter := NewCounter(nil, chart)
+		counter := NewCounter(nil, getWhitelist(c.QueryArray("whitelist")), chart)
 		err := foreach(c.Param("query"), dates, func(did int32, cx *spec.Metadata) {
 			counter.Add(false, 0, cx)
 			if len(counter.Sample[0]) < sampleSize {
@@ -412,7 +460,7 @@ func main() {
 
 	r.GET("/exp/:format/:experiment/:metricKey/:metricValue/*query", func(c *gin.Context) {
 		sampleSize := intOrDefault(c.Query("sample_size"), 100)
-		counter := NewCounter(NewConvertedCache(), nil)
+		counter := NewCounter(NewConvertedCache(), getWhitelist(c.QueryArray("whitelist")), nil)
 		experiment := c.Param("experiment")
 		metricKey := c.Param("metricKey")
 		metricValue := c.Param("metricValue")
@@ -650,27 +698,6 @@ func loadTemplate(contextCache *ContextCache) (*template.Template, error) {
 			off := intOrDefault(v.Get(key), n)
 			return off
 		},
-
-		"notHidden": func(qs template.URL, key string) bool {
-			v, err := url.ParseQuery(string(qs))
-			if err != nil {
-				return false
-			}
-			return v.Get(key+"-hide") != "true"
-		},
-		"whatIsHidden": func(qs template.URL) []string {
-			v, err := url.ParseQuery(string(qs))
-			out := []string{}
-			if err != nil {
-				return out
-			}
-			for k, _ := range v {
-				if strings.HasSuffix(k, "-hide") {
-					out = append(out, k)
-				}
-			}
-			return out
-		},
 		"getS": func(qs template.URL, key string) string {
 			v, err := url.ParseQuery(string(qs))
 			if err != nil {
@@ -678,32 +705,6 @@ func loadTemplate(contextCache *ContextCache) (*template.Template, error) {
 			}
 			return v.Get(key)
 		},
-		"removeQuery": func(base []Breadcrumb, kv string) string {
-			out := []string{}
-			for _, crumb := range base {
-				if crumb.Exact != kv {
-					out = append(out, crumb.Exact)
-				}
-			}
-			return "/scan/html/" + strings.Join(out, "/")
-		},
-
-		"negateQuery": func(base []Breadcrumb, kv string) string {
-			out := []string{}
-			toggle := "-"
-			if strings.HasPrefix(kv, "-") {
-				toggle = ""
-			}
-			for _, crumb := range base {
-				if crumb.Exact == kv {
-					out = append(out, toggle+strings.TrimLeft(crumb.Exact, "-"))
-				} else {
-					out = append(out, crumb.Exact)
-				}
-			}
-			return "/scan/html/" + strings.Join(out, "/")
-		},
-
 		"addN": func(qs template.URL, key string, n int) template.URL {
 			v, err := url.ParseQuery(string(qs))
 			if err != nil {

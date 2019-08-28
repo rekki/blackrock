@@ -1,9 +1,8 @@
 {{ $qs := .QueryString }}
-{{ if notHidden $qs .Data.Key }}
 {{ $sorted := .Data.Sorted }}
 <tr id="{{ .Data.Key }}">
   <td class="left">
-    {{ .Data.Key }} ({{ (len $sorted) }}) <a href="?{{$qs}}&{{ .Data.Key}}-hide=true">-</a>
+    {{ .Data.Key }} ({{ (len $sorted) }})
   </td>
   <td class="right">
     total: {{ .Data.Count }} {{ percent .GlobalTotal .Data.Count }}
@@ -84,4 +83,3 @@
 <tr>
   <td>&nbsp;</td>
 </tr>
-{{end}}
