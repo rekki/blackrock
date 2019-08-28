@@ -194,10 +194,6 @@ func (c *Counter) SortedSections() []SortedSection {
 
 	sort.Slice(out, func(i, j int) bool {
 		return out[i].Key < out[j].Key
-		//		if out[j].Count == out[i].Count {
-		//		return out[i].Key < out[j].Key
-		//		}
-		//		return out[j].Count < out[j].Count
 	})
 
 	return out
@@ -226,6 +222,9 @@ func (c *Counter) Add(converted bool, variant uint32, p *spec.Metadata) {
 	for _, kv := range p.Search {
 		k := kv.Key
 		v := kv.Value
+		if k == "ip" {
+			continue
+		}
 		c.Sections[k]++
 		if !c.IsWhitelisted(k) {
 			continue

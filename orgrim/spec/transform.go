@@ -2,13 +2,19 @@ package spec
 
 import (
 	"encoding/json"
+	fmt "fmt"
 	io "io"
 	"io/ioutil"
+	"net"
+	"net/http"
 	"sort"
 	"strings"
 	"time"
 
 	"github.com/jackdoe/blackrock/depths"
+	"github.com/mssola/user_agent"
+	"github.com/oschwald/geoip2-golang"
+	"github.com/tomasen/realip"
 )
 
 /*
@@ -128,6 +134,38 @@ func Transform(m map[string]interface{}, expand bool) ([]KV, error) {
 	}
 
 	return out, nil
+}
+func Decorate(g *geoip2.Reader, r *http.Request, e *Envelope) error {
+	m := e.Metadata
+	ip := net.ParseIP(realip.FromRequest(r))
+	m.Search = append(m.Search, KV{Key: "ip", Value: ip.String()})
+
+	if g != nil {
+		record, err := g.City(ip)
+		if err != nil {
+			return err
+		}
+		lang := "en"
+
+		m.Search = append(m.Search, KV{Key: "geoip_city", Value: record.City.Names[lang]})
+		m.Search = append(m.Search, KV{Key: "geoip_country", Value: record.Country.Names[lang]})
+	}
+	agent := r.Header.Get("User-Agent")
+	ua := user_agent.New(agent)
+	m.Search = append(m.Search, KV{"ua_is_bot", fmt.Sprintf("%v", ua.Bot())})
+	m.Search = append(m.Search, KV{"ua_is_mobile", fmt.Sprintf("%v", ua.Mobile())})
+	m.Search = append(m.Search, KV{"ua_platform", ua.Platform()})
+	m.Search = append(m.Search, KV{"ua_os", ua.OS()})
+
+	name, version := ua.Engine()
+	m.Search = append(m.Search, KV{"ua_engine_name", name})
+	m.Search = append(m.Search, KV{"ua_engine_version", version})
+
+	name, version = ua.Browser()
+	m.Search = append(m.Search, KV{"ua_browser_name", name})
+	m.Search = append(m.Search, KV{"ua_browser_version", version})
+
+	return nil
 }
 
 func DecodeAndFlatten(body io.Reader) (*Envelope, error) {

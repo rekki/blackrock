@@ -22,7 +22,11 @@
     {{ .Key }}
   </td>
   <td class="right">
+    {{ if eq .Key "ip" }}
+    [ hidden ]
+    {{ else }}
     <a href="/scan/html/{{ $foreignType }}:{{ $foreignId }}/{{ .Key }}:{{ .Value}}?{{$qs}}">{{.Value}}</a>
+    {{ end }}
   </td>
 </tr>
 {{ end }}

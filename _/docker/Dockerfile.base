@@ -1,5 +1,8 @@
 FROM golang:alpine
 
-RUN apk update && apk add bash git
+RUN apk update && apk add bash git curl
+RUN mkdir /geoip && cd /geoip && curl https://geolite.maxmind.com/download/geoip/database/GeoLite2-City.tar.gz | tar -zxvf - && mv /geoip/GeoLite2-City_*/* /geoip
+
+
 
 

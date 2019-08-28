@@ -15,6 +15,7 @@ import (
 	"github.com/jackdoe/blackrock/depths"
 	"github.com/jackdoe/blackrock/orgrim/spec"
 	ginprometheus "github.com/mcuadros/go-gin-prometheus"
+	"github.com/oschwald/geoip2-golang"
 	"github.com/segmentio/kafka-go"
 	"github.com/segmentio/kafka-go/snappy"
 	log "github.com/sirupsen/logrus"
@@ -30,6 +31,7 @@ func main() {
 	var createConfig = flag.String("create-if-not-exist", "", "create topics if they dont exist, format: partitions:replication factor")
 	var verbose = flag.Bool("verbose", false, "print info level logs to stdout")
 	var statSleep = flag.Int("writer-stats", 60, "print writer stats every # seconds")
+	var geoipFile = flag.String("geoip", "", "path to https://dev.maxmind.com/geoip/geoip2/geolite2/ file")
 	var bind = flag.String("bind", ":9001", "bind to")
 	flag.Parse()
 
@@ -39,6 +41,16 @@ func main() {
 		gin.SetMode(gin.ReleaseMode)
 		log.SetLevel(log.WarnLevel)
 	}
+	var geoip *geoip2.Reader
+	var err error
+	if *geoipFile != "" {
+		geoip, err = geoip2.Open(*geoipFile)
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer geoip.Close()
+	}
+
 	if *createConfig != "" {
 		splitted := strings.Split(*createConfig, ":")
 		if len(splitted) != 2 {
@@ -64,7 +76,7 @@ func main() {
 
 	}
 
-	err := depths.HealthCheckKafka(*kafkaServers, *dataTopic)
+	err = depths.HealthCheckKafka(*kafkaServers, *dataTopic)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -131,6 +143,53 @@ func main() {
 			return
 		}
 		c.String(200, "OK")
+	})
+
+	r.GET("/png/:event_type/:foreign_type/:foreign_id/*extra", func(c *gin.Context) {
+		envelope := &spec.Envelope{
+			Metadata: &spec.Metadata{
+				CreatedAtNs: time.Now().UnixNano(),
+				EventType:   c.Param("event_type"),
+				ForeignType: c.Param("foreign_type"),
+				ForeignId:   c.Param("foreign_id"),
+			},
+		}
+		extra := c.Param("extra")
+		splitted := strings.Split(extra, "/")
+		for _, s := range splitted {
+			if s == "" {
+				continue
+			}
+			kv := strings.Split(s, ":")
+			if len(kv) != 2 || kv[0] == "" || kv[1] == "" {
+				continue
+			}
+			envelope.Metadata.Search = append(envelope.Metadata.Search, spec.KV{Key: kv[0], Value: kv[1]})
+		}
+		err = spec.Decorate(geoip, c.Request, envelope)
+		if err != nil {
+			log.Warnf("[orgrim] failed to decorate, err: %s", err.Error())
+		}
+
+		err = spec.ValidateEnvelope(envelope)
+		if err != nil {
+			log.Warnf("[orgrim] invalid input, err: %s", err.Error())
+		} else {
+
+			encoded, err := proto.Marshal(envelope)
+			if err != nil {
+				log.Warnf("[orgrim] error encoding metadata %v, err: %s", envelope.Metadata, err.Error())
+			} else {
+				err = kw.WriteMessages(context.Background(), kafka.Message{
+					Value: encoded,
+				})
+				if err != nil {
+					log.Warnf("[orgrim] error sending message, metadata %v, err: %s", envelope.Metadata, err.Error())
+				}
+			}
+		}
+
+		c.Data(200, "image/png", []byte{137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 1, 0, 0, 0, 1, 8, 4, 0, 0, 0, 181, 28, 12, 2, 0, 0, 0, 11, 73, 68, 65, 84, 120, 218, 99, 100, 168, 7, 0, 0, 133, 0, 129, 69, 180, 70, 56, 0, 0, 0, 0, 73, 69, 78, 68, 174, 66, 96, 130})
 	})
 
 	r.POST("/push/envelope", func(c *gin.Context) {
@@ -220,6 +279,10 @@ func main() {
 			log.Warnf("[orgrim] invalid input, err: %s", err.Error())
 			c.JSON(500, gin.H{"error": err.Error()})
 			return
+		}
+		err = spec.Decorate(geoip, c.Request, converted)
+		if err != nil {
+			log.Warnf("[orgrim] failed to decorate, err: %s", err.Error())
 		}
 
 		encoded, err := proto.Marshal(converted)

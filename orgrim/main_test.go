@@ -5,10 +5,11 @@ import (
 	"sort"
 	"testing"
 
+	"github.com/jackdoe/blackrock/depths"
 	"github.com/jackdoe/blackrock/orgrim/spec"
 )
 
-func Equals(a, b []*spec.KV) bool {
+func Equals(a, b []spec.KV) bool {
 	if len(a) != len(b) {
 		return false
 	}
@@ -38,13 +39,13 @@ func Equals(a, b []*spec.KV) bool {
 type TransformCase struct {
 	json     string
 	expand   bool
-	expected []*spec.KV
+	expected []spec.KV
 }
 
-func makeKV(kv ...string) []*spec.KV {
-	out := []*spec.KV{}
+func makeKV(kv ...string) []spec.KV {
+	out := []spec.KV{}
 	for i := 0; i < len(kv); i += 2 {
-		out = append(out, &spec.KV{Key: kv[i], Value: kv[i+1]})
+		out = append(out, spec.KV{Key: kv[i], Value: kv[i+1]})
 	}
 	return out
 }
@@ -111,12 +112,12 @@ func TestTransform(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		transformed, err := transform(jv, c.expand)
+		transformed, err := spec.Transform(jv, c.expand)
 		if err != nil {
 			t.Fatal(err)
 		}
 		if !Equals(c.expected, transformed) {
-			t.Fatalf("\nexpected:\n%v\ngot:\n%v\njson:\n%s", dumpObj(c.expected), dumpObj(transformed), dumpObj(jv))
+			t.Fatalf("\nexpected:\n%v\ngot:\n%v\njson:\n%s", depths.DumpObj(c.expected), depths.DumpObj(transformed), depths.DumpObj(jv))
 		}
 	}
 
