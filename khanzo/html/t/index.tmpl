@@ -107,6 +107,7 @@
         </select>
         <input type=submit value=go><br>
         <select name="whitelist" multiple style="width: 50%" size=10>
+          <option disabled></option>
           {{ range $stats.SortedSections }}
           <option value="{{.Key}}" {{ if $stats.IsWhitelisted .Key }}selected{{end}}>{{.Key}}</option>
           {{ end }}

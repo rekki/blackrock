@@ -77,11 +77,16 @@ func yyyymmdd(t time.Time) string {
 
 func getWhitelist(query []string) map[string]bool {
 	out := map[string]bool{
-		"year-month-day": true,
-		"env":            true,
-		"product":        true,
-		"experiment":     true,
-		"sizeWH":         true,
+		"year-month-day":  true,
+		"env":             true,
+		"product":         true,
+		"experiment":      true,
+		"sizeWH":          true,
+		"geoip_city":      true,
+		"geoip_country":   true,
+		"ua_is_mobile":    true,
+		"ua_is_bot":       true,
+		"ua_browser_name": true,
 	}
 
 	for _, v := range query {
