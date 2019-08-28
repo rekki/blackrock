@@ -136,7 +136,7 @@ let topFilter = {}
   }
 }
 
-for (let b = time_start - time_bucket; b <= time_end; b += time_bucket) {
+for (let b = time_start; b < time_end; b += time_bucket) {
   let perBucket = (data[b] || {})
   for (k in topFilter) {
     let value = perBucket[k] || { event_type: k, count: 0, count_unique: 0, bucket: b}
