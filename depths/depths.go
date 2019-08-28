@@ -184,3 +184,11 @@ func DumpObj(src interface{}) string {
 	}
 	return string(out.Bytes())
 }
+
+func DumpObjNoIndent(src interface{}) string {
+	data, err := json.Marshal(src)
+	if err != nil {
+		log.Fatalf("marshaling to JSON failed: %s", err.Error())
+	}
+	return string(data)
+}

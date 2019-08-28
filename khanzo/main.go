@@ -74,7 +74,7 @@ func yyyymmdd(t time.Time) string {
 	return fmt.Sprintf("%d-%02d-%02d", year, month, day)
 }
 
-func getTimeBucket(b string) int64 {
+func getTimeBucketNs(b string) int64 {
 	if b == "hour" {
 		return int64(1 * time.Hour)
 	}
@@ -384,9 +384,6 @@ func main() {
 	r.GET("/scan/:format/*query", func(c *gin.Context) {
 		sampleSize := intOrDefault(c.Query("sample_size"), 100)
 
-		chart := NewChart(getTimeBucket(c.Query("bucket")))
-		counter := NewCounter(nil, chart)
-
 		from := c.Query("from")
 		to := c.Query("to")
 
@@ -394,7 +391,10 @@ func main() {
 			c.Redirect(302, fmt.Sprintf("%s?from=%s&to=%s&bucket=hour", c.Request.URL.Path, yyyymmdd(time.Now().UTC().AddDate(0, 0, -1)), yyyymmdd(time.Now().UTC())))
 			return
 		}
+
 		dates := expandYYYYMMDD(from, to)
+		chart := NewChart(uint32(getTimeBucketNs(c.Query("bucket"))/1000000000), dates)
+		counter := NewCounter(nil, chart)
 		err := foreach(c.Param("query"), dates, func(did int32, cx *spec.Metadata) {
 			counter.Add(false, 0, cx)
 			if len(counter.Sample[0]) < sampleSize {
@@ -627,7 +627,7 @@ func loadTemplate(contextCache *ContextCache) (*template.Template, error) {
 			return t.Format(time.UnixDate)
 		},
 		"pretty": func(b interface{}) string {
-			return depths.DumpObj(b)
+			return depths.DumpObjNoIndent(b)
 		},
 		"json": func(b interface{}) template.JS {
 			return template.JS(depths.DumpObj(b))
@@ -671,7 +671,6 @@ func loadTemplate(contextCache *ContextCache) (*template.Template, error) {
 			}
 			return out
 		},
-
 		"getS": func(qs template.URL, key string) string {
 			v, err := url.ParseQuery(string(qs))
 			if err != nil {
@@ -688,6 +687,7 @@ func loadTemplate(contextCache *ContextCache) (*template.Template, error) {
 			}
 			return "/scan/html/" + strings.Join(out, "/")
 		},
+
 		"negateQuery": func(base []Breadcrumb, kv string) string {
 			out := []string{}
 			toggle := "-"

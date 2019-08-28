@@ -11,8 +11,12 @@
 </div>
 
 <script>
+var time_bucket = {{ .Chart.TimeBucket }};
+var time_start = {{ .Chart.TimeStart }};
+var time_end = {{ .Chart.TimeEnd }};
 
-var data = {{ json .Chart.Points }};
+var data = JSON.parse('{{ json .Chart.PerTimePerType }}'); // faster than AST parsing
+
 let options = function (k) {
   return {
     legend: {
@@ -79,19 +83,20 @@ let countAvgConfig = {
 var dateOptions = { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', hour: 'numeric', minute: 'numeric'  };
 function stringToColour(input) {
   return randomColor({
-    luminosity: 'light',
+    luminosity: 'bright',
     hue: 'blue',
     seed: input,
     format: 'rgba',
+    alpha: 0.5
   });
 }
 
-var add = function(where,bucket_ns, count, k, orig) {
-  let label = new Date(bucket_ns / 1000000).toLocaleDateString("en-GB", dateOptions)
-  let l = where.__labels[bucket_ns]
+var add = function(where,bucket, count, k, orig) {
+  let label = new Date(bucket * 1000).toLocaleDateString("en-GB", dateOptions)
+  let l = where.__labels[bucket]
   if (!l) {
     where.labels.push(label)
-    where.__labels[bucket_ns] = true
+    where.__labels[bucket] = true
   }
   
   s = where.__datasets[k]
@@ -107,19 +112,18 @@ var add = function(where,bucket_ns, count, k, orig) {
     where.__datasets[k] = s
   }
   s.data.push(count)
-
 }
 
 let thresh = 5;
 let topFilter = {}
 {
   let topKeys = {}
-  for (let d of data) {
-    topKeys[d.event_type] = (topKeys[d.event_type]  || 0) + d.count_unique
+  for (let bucket in data) {
+    for (let k in data[bucket]) {
+      let d = data[bucket][k]
+      topKeys[d.event_type] = (topKeys[d.event_type]  || 0) + d.count_unique
+    }
   }
-
-
-
 
   let topSorted = Object.keys(topKeys)
   topSorted.sort((a,b) => topKeys[b] - topKeys[a])
@@ -133,13 +137,15 @@ let topFilter = {}
   }
 }
 
+for (let b = time_start - time_bucket; b <= time_end; b += time_bucket) {
+  let perBucket = (data[b] || {})
+  for (k in topFilter) {
+    let value = perBucket[k] || { event_type: k, count: 0, count_unique: 0, bucket: b}
 
-for (let d of data) {
-  if (!topFilter[d.event_type]) continue;
-
-  add(countConfig.data, d.bucket_ns, d.count, d.event_type, d.event_type)
-  add(countUniqueConfig.data, d.bucket_ns, d.count_unique, d.event_type + '_uniq', d.event_type)
-  add(countAvgConfig.data, d.bucket_ns, d.count / d.count_unique, d.event_type + '_avg', d.event_type)
+    add(countConfig.data, value.bucket, value.count, value.event_type, value.event_type)
+    add(countUniqueConfig.data, value.bucket, value.count_unique, value.event_type + '_uniq', value.event_type)
+    add(countAvgConfig.data, value.bucket, value.count_unique == 0 ? 0 : value.count / value.count_unique, value.event_type + '_avg', value.event_type)
+  }
 }
 
 
