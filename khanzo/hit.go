@@ -66,22 +66,10 @@ func toHit(contextCache *ContextCache, did int32, p *spec.Metadata) Hit {
 	for _, kv := range p.Search {
 		k := kv.Key
 		v := kv.Value
-
 		if px, ok := contextCache.Lookup(k, v, p.CreatedAtNs); ok {
 			hit.Context = append(hit.Context, toContextDeep(seen, contextCache, px)...)
 		}
 	}
 
 	return hit
-}
-
-type ByCtxName []*spec.Context
-
-func (a ByCtxName) Len() int      { return len(a) }
-func (a ByCtxName) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
-func (a ByCtxName) Less(i, j int) bool {
-	if a[i].ForeignType != a[j].ForeignType {
-		return a[i].ForeignType < a[j].ForeignType
-	}
-	return a[i].ForeignId < a[j].ForeignId
 }

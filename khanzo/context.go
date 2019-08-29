@@ -2,6 +2,7 @@ package main
 
 import (
 	"sort"
+	"strings"
 	"sync"
 
 	"github.com/gogo/protobuf/proto"
@@ -58,8 +59,7 @@ func (r *ContextCache) Insert(decoded *spec.Context) {
 }
 
 func (r *ContextCache) Lookup(t string, id string, from int64) (*spec.Context, bool) {
-	r.RLock()
-	defer r.RUnlock()
+	// XXX: use r.RLock() per request
 	m, ok := r.cache[t]
 	if !ok {
 		return nil, false
@@ -122,8 +122,11 @@ func toContextDeep(seen map[string]map[string]bool, contextCache *ContextCache, 
 			continue
 		}
 		m[v] = true
-		if px, ok := contextCache.Lookup(k, v, p.CreatedAtNs); ok {
-			out = append(out, toContextDeep(seen, contextCache, px)...)
+
+		if strings.HasSuffix(k, "_id") {
+			if px, ok := contextCache.Lookup(k, v, p.CreatedAtNs); ok {
+				out = append(out, toContextDeep(seen, contextCache, px)...)
+			}
 		}
 	}
 

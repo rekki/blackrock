@@ -215,7 +215,8 @@ func main() {
 
 	search := func(qr QueryRequest) (*QueryResponse, error) {
 		dates := expandYYYYMMDD(qr.From, qr.To)
-
+		contextCache.RLock()
+		defer contextCache.RUnlock()
 		out := &QueryResponse{
 			Hits:  []Hit{},
 			Total: 0,
@@ -294,6 +295,8 @@ func main() {
 
 	r.POST("/v0/fetch/", func(c *gin.Context) {
 		var qr QueryRequest
+		contextCache.RLock()
+		defer contextCache.RUnlock()
 
 		if err := c.ShouldBindJSON(&qr); err != nil {
 			c.JSON(400, gin.H{"error": err.Error()})
@@ -437,6 +440,9 @@ func main() {
 	})
 
 	r.GET("/scan/:format/*query", func(c *gin.Context) {
+		contextCache.RLock()
+		defer contextCache.RUnlock()
+
 		sampleSize := intOrDefault(c.Query("sample_size"), 100)
 
 		from := c.Query("from")
@@ -466,6 +472,9 @@ func main() {
 	})
 
 	r.GET("/exp/:format/:experiment/:metricKey/:metricValue/*query", func(c *gin.Context) {
+		contextCache.RLock()
+		defer contextCache.RUnlock()
+
 		sampleSize := intOrDefault(c.Query("sample_size"), 100)
 		counter := NewCounter(NewConvertedCache(), contextCache, getWhitelist(c.QueryArray("whitelist")), nil)
 		experiment := c.Param("experiment")

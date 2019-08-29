@@ -136,6 +136,11 @@ type Author struct {
 	DateOfBirth string `faker:"date"`
 }
 
+type Country struct {
+	UUID string `faker:"uuid_digit"`
+	Name string `faker:"word"`
+}
+
 type Book struct {
 	UUID        string `faker:"uuid_digit"`
 	Name        string `faker:"word"`
@@ -150,7 +155,7 @@ func genUser(times []time.Time) *spec.Context {
 		panic(err)
 	}
 	c := &spec.Context{
-		CreatedAtNs: times[rand.Intn(len(times))].UnixNano(),
+		CreatedAtNs: 1,
 		ForeignType: "user_id",
 		ForeignId:   s.UUID,
 	}
@@ -163,7 +168,22 @@ func genUser(times []time.Time) *spec.Context {
 	return c
 }
 
-func genAuthor(times []time.Time) *spec.Context {
+func genCountry(times []time.Time) *spec.Context {
+	var s Country
+	err := faker.FakeData(&s)
+	if err != nil {
+		panic(err)
+	}
+	c := &spec.Context{
+		CreatedAtNs: 1,
+		ForeignType: "country_id",
+		ForeignId:   s.UUID,
+	}
+	c.Properties = append(c.Properties, spec.KV{Key: "name", Value: s.Name})
+	return c
+}
+
+func genAuthor(times []time.Time, countries []*spec.Context) *spec.Context {
 	var s Author
 	err := faker.FakeData(&s)
 	if err != nil {
@@ -171,11 +191,12 @@ func genAuthor(times []time.Time) *spec.Context {
 	}
 
 	c := &spec.Context{
-		CreatedAtNs: times[rand.Intn(len(times))].UnixNano(),
+		CreatedAtNs: 1,
 		ForeignType: "author_id",
 		ForeignId:   s.UUID,
 	}
 	c.Properties = append(c.Properties, spec.KV{Key: "name", Value: s.Name})
+	c.Properties = append(c.Properties, spec.KV{Key: "country_id", Value: countries[rand.Intn(len(countries))].ForeignId})
 	c.Properties = append(c.Properties, spec.KV{Key: "date_of_birth", Value: s.DateOfBirth})
 	return c
 }
@@ -188,13 +209,16 @@ func genBook(times []time.Time, author ...*spec.Context) *spec.Context {
 	}
 
 	c := &spec.Context{
-		CreatedAtNs: times[rand.Intn(len(times))].UnixNano(),
+		CreatedAtNs: 1,
 		ForeignType: "book_id",
 		ForeignId:   s.UUID,
 	}
 	c.Properties = append(c.Properties, spec.KV{Key: "name", Value: s.Name})
 	c.Properties = append(c.Properties, spec.KV{Key: "genre", Value: s.Genre})
 	c.Properties = append(c.Properties, spec.KV{Key: "published_at", Value: s.PublishDate})
+	if len(author) == 0 {
+		panic("no author")
+	}
 	for _, a := range author {
 		c.Properties = append(c.Properties, spec.KV{Key: "author_id", Value: a.ForeignId})
 	}
@@ -204,7 +228,7 @@ func genBook(times []time.Time, author ...*spec.Context) *spec.Context {
 func pickAuthors(authors []*spec.Context) []*spec.Context {
 	out := []*spec.Context{}
 	seen := map[string]bool{}
-	for i := 1; i < rand.Intn(5); i++ {
+	for i := 1; i < 2+rand.Intn(5); i++ {
 		a := authors[rand.Intn(len(authors))]
 		if _, ok := seen[a.ForeignId]; !ok {
 			out = append(out, a)
@@ -327,12 +351,18 @@ func main() {
 	users := []*spec.Context{}
 	authors := []*spec.Context{}
 	books := []*spec.Context{}
+	countries := []*spec.Context{}
 
 	for i := 0; i < *nUsers; i++ {
 		users = append(users, genUser(times))
 	}
+
+	for i := 0; i < 255; i++ {
+		countries = append(countries, genCountry(times))
+	}
+
 	for i := 0; i < *nAuthors; i++ {
-		authors = append(authors, genAuthor(times))
+		authors = append(authors, genAuthor(times, countries))
 	}
 
 	for i := 0; i < *nBooks; i++ {
@@ -341,6 +371,7 @@ func main() {
 
 	orgrim := client.NewClient("http://localhost:9001/", nil)
 	pushMany(orgrim, users)
+	pushMany(orgrim, countries)
 	pushMany(orgrim, authors)
 	pushMany(orgrim, books)
 
