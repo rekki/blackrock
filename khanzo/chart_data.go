@@ -51,7 +51,7 @@ func (c *Chart) String(n int) string {
 	}
 
 	sort.Slice(topKeys, func(i, j int) bool {
-		return top[topKeys[j]] < top[topKeys[j]]
+		return top[topKeys[j]] < top[topKeys[i]]
 	})
 
 	if len(topKeys) > n {
