@@ -449,7 +449,7 @@ func main() {
 
 		dates := expandYYYYMMDD(from, to)
 		chart := NewChart(uint32(getTimeBucketNs(c.Query("bucket"))/1000000000), dates)
-		counter := NewCounter(nil, getWhitelist(c.QueryArray("whitelist")), chart)
+		counter := NewCounter(nil, contextCache, getWhitelist(c.QueryArray("whitelist")), chart)
 		err := foreach(c.Param("query"), dates, func(did int32, cx *spec.Metadata) {
 			counter.Add(false, 0, cx)
 			if len(counter.Sample[0]) < sampleSize {
@@ -467,7 +467,7 @@ func main() {
 
 	r.GET("/exp/:format/:experiment/:metricKey/:metricValue/*query", func(c *gin.Context) {
 		sampleSize := intOrDefault(c.Query("sample_size"), 100)
-		counter := NewCounter(NewConvertedCache(), getWhitelist(c.QueryArray("whitelist")), nil)
+		counter := NewCounter(NewConvertedCache(), contextCache, getWhitelist(c.QueryArray("whitelist")), nil)
 		experiment := c.Param("experiment")
 		metricKey := c.Param("metricKey")
 		metricValue := c.Param("metricValue")

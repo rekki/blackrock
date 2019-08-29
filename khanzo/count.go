@@ -148,6 +148,7 @@ func NewCountPerKey(s string) *CountPerKey {
 
 type Counter struct {
 	Search                        map[string]*CountPerKey `json:"search"`
+	Context                       map[string]*CountPerKey `json:"context"`
 	Count                         map[string]*CountPerKey `json:"count"`
 	Foreign                       map[string]*CountPerKey `json:"foreign"`
 	EventTypes                    *CountPerKey            `json:"event_types"`
@@ -158,12 +159,14 @@ type Counter struct {
 	Chart                         *Chart
 	Whitelist                     map[string]bool
 	Sections                      map[string]uint32 `json:"sections"`
+	contextCache                  *ContextCache
 }
 
-func NewCounter(conv *ConvertedCache, Whitelist map[string]bool, chart *Chart) *Counter {
+func NewCounter(conv *ConvertedCache, contextCache *ContextCache, Whitelist map[string]bool, chart *Chart) *Counter {
 	return &Counter{
 		Search:         map[string]*CountPerKey{},
 		Count:          map[string]*CountPerKey{},
+		Context:        map[string]*CountPerKey{},
 		Foreign:        map[string]*CountPerKey{},
 		EventTypes:     NewCountPerKey("event_type"),
 		Sample:         map[uint32][]Hit{},
@@ -172,6 +175,7 @@ func NewCounter(conv *ConvertedCache, Whitelist map[string]bool, chart *Chart) *
 		TotalCount:     0,
 		Whitelist:      Whitelist,
 		Sections:       map[string]uint32{},
+		contextCache:   contextCache,
 	}
 }
 func (c *Counter) IsWhitelisted(s string) bool {
@@ -219,6 +223,7 @@ func (c *Counter) Add(converted bool, variant uint32, p *spec.Metadata) {
 		c.TotalCountEventsFromConverter++
 	}
 	c.TotalCount++
+	seen := map[string]map[string]bool{}
 	for _, kv := range p.Search {
 		k := kv.Key
 		v := kv.Value
@@ -229,7 +234,19 @@ func (c *Counter) Add(converted bool, variant uint32, p *spec.Metadata) {
 		if !c.IsWhitelisted(k) {
 			continue
 		}
+		if strings.HasSuffix(k, "_id") {
+			if px, ok := c.contextCache.Lookup(k, v, p.CreatedAtNs); ok {
+				for _, ctx := range toContextDeep(seen, c.contextCache, px) {
+					xm, ok := c.Context[ctx.ForeignType]
+					if !ok {
+						xm = NewCountPerKey(ctx.ForeignType)
+						c.Context[k] = xm
+					}
+					xm.Add(ctx.ForeignId, variant, converted)
+				}
+			}
 
+		}
 		xm, ok := c.Search[k]
 		if !ok {
 			xm = NewCountPerKey(k)
@@ -274,11 +291,12 @@ func (c *Counter) String(context *gin.Context) {
 	types := prettyStats("EVENT_TYPES", []*CountPerKey{c.EventTypes})
 	properties := prettyStats("COUNT", c.SortedKeys(c.Count))
 	tags := prettyStats("SEARCH", c.SortedKeys(c.Search))
+	sc := prettyStats("CONTEXT", c.SortedKeys(c.Context))
 	graph := ""
 	if c.Chart != nil {
 		graph = c.Chart.String(3)
 	}
-	out := fmt.Sprintf("%s%s%s%s%s\n", makers, graph, types, tags, properties)
+	out := fmt.Sprintf("%s%s%s%s%s%s\n", makers, graph, types, tags, sc, properties)
 	out += chart.Banner("SAMPLE")
 	for _, samples := range c.Sample {
 		for _, h := range samples {
