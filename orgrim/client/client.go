@@ -109,7 +109,7 @@ func ToString(v interface{}) string {
 	return value
 }
 
-func KV(key string, v interface{}) *spec.KV {
+func KV(key string, v interface{}) spec.KV {
 	value := ToString(v)
-	return &spec.KV{Key: key, Value: value}
+	return spec.KV{Key: key, Value: value}
 }

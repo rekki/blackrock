@@ -81,7 +81,7 @@ func main() {
 			slow = true
 		}
 		tookMs := uint64(upstreamTime * 1000)
-		properties := []*spec.KV{}
+		properties := []spec.KV{}
 		for k, v := range f {
 			if k == "status" || k == "time_local" {
 				continue
@@ -94,7 +94,7 @@ func main() {
 				ForeignType: "nginx",
 				ForeignId:   hostname,
 				EventType:   "request",
-				Search: []*spec.KV{
+				Search: []spec.KV{
 					orgrim.KV("status", f["status"]),
 					orgrim.KV("method", method),
 					orgrim.KV("path", requestPath),
@@ -102,7 +102,7 @@ func main() {
 					orgrim.KV("slow", slow),
 					orgrim.KV("bot", IsBot(f["http_user_agent"])),
 				},
-				Count: []*spec.KV{
+				Count: []spec.KV{
 					orgrim.KV("took_round", tookMs/100*100),
 				},
 

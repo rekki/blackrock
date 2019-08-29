@@ -55,7 +55,7 @@ func Blackrock(eventType string, foreignType string, foreignId string, og *orgri
 				ForeignType: foreignType,
 				ForeignId:   foreignId,
 				EventType:   eventType,
-				Search: []*spec.KV{
+				Search: []spec.KV{
 					orgrim.KV("status", status),
 					orgrim.KV("method", r.Method),
 					orgrim.KV("proto", r.Proto),
@@ -64,10 +64,10 @@ func Blackrock(eventType string, foreignType string, foreignId string, og *orgri
 					orgrim.KV("took_seconds", nSeconds),
 					orgrim.KV("bot", IsBot(c.Request.UserAgent())),
 				},
-				Count: []*spec.KV{
+				Count: []spec.KV{
 					orgrim.KV("took_ms_round", took/100*100),
 				},
-				Properties: []*spec.KV{
+				Properties: []spec.KV{
 					orgrim.KV("took_ms", took),
 				},
 			},
