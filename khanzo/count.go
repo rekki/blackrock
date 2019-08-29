@@ -223,7 +223,11 @@ func (c *Counter) Add(converted bool, variant uint32, p *spec.Metadata) {
 		c.TotalCountEventsFromConverter++
 	}
 	c.TotalCount++
-	seen := map[string]map[string]bool{}
+	seen := map[string]map[string]bool{
+		p.ForeignType: map[string]bool{
+			p.ForeignId: true,
+		},
+	}
 	for _, kv := range p.Search {
 		k := kv.Key
 		v := kv.Value
