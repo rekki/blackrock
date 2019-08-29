@@ -453,11 +453,19 @@ func main() {
 			return
 		}
 
+		// hack, will delete later
+		contextAlias := map[string]string{}
+		for _, v := range c.QueryArray("alias") {
+			splitted := strings.Split(v, ":")
+			if len(splitted) == 2 {
+				contextAlias[splitted[0]] = splitted[1]
+			}
+		}
 		dates := expandYYYYMMDD(from, to)
 		chart := NewChart(uint32(getTimeBucketNs(c.Query("bucket"))/1000000000), dates)
 		counter := NewCounter(nil, contextCache, getWhitelist(c.QueryArray("whitelist")), chart)
 		err := foreach(c.Param("query"), dates, func(did int32, cx *spec.Metadata) {
-			counter.Add(false, 0, cx)
+			counter.Add(contextAlias, false, 0, cx)
 			if len(counter.Sample[0]) < sampleSize {
 				counter.Sample[0] = append(counter.Sample[0], toHit(contextCache, did, cx))
 			}
@@ -541,7 +549,7 @@ func main() {
 			if len(counter.Sample[variant]) < sampleSize {
 				counter.Sample[variant] = append(counter.Sample[variant], toHit(contextCache, did, cx))
 			}
-			counter.Add(converted, variant, cx)
+			counter.Add(map[string]string{}, converted, variant, cx)
 		})
 		if err != nil {
 			c.JSON(400, gin.H{"error": err.Error()})

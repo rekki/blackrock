@@ -218,7 +218,7 @@ func (c *Counter) SortedKeys(what map[string]*CountPerKey) []*CountPerKey {
 	return out
 }
 
-func (c *Counter) Add(converted bool, variant uint32, p *spec.Metadata) {
+func (c *Counter) Add(contextAlias map[string]string, converted bool, variant uint32, p *spec.Metadata) {
 	if c.ConvertedCache != nil {
 		c.TotalCountEventsFromConverter++
 	}
@@ -239,9 +239,11 @@ func (c *Counter) Add(converted bool, variant uint32, p *spec.Metadata) {
 			continue
 		}
 		if strings.HasSuffix(k, "_id") {
-
-			if px, ok := c.contextCache.Lookup(k, v, p.CreatedAtNs); ok {
-
+			lookupKey, ok := contextAlias[k]
+			if !ok {
+				lookupKey = k
+			}
+			if px, ok := c.contextCache.Lookup(lookupKey, v, p.CreatedAtNs); ok {
 				for i, ctx := range toContextDeep(seen, c.contextCache, px) {
 					if i == 0 {
 						continue // already shown in Search section, so just ignore it
