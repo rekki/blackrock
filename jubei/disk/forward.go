@@ -72,7 +72,7 @@ func (fw *ForwardWriter) Read(offset uint32) ([]byte, uint32, error) {
 
 	metadataLen := binary.LittleEndian.Uint32(header)
 	nextOffset := (offset + ((uint32(len(header))+(uint32(metadataLen)))+PAD-1)/PAD)
-	if metadataLen > 102400 {
+	if metadataLen > 1024000 {
 		return nil, 0, EBADRQC
 	}
 	readInto := make([]byte, metadataLen)
