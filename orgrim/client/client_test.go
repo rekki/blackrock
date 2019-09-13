@@ -39,8 +39,8 @@ func RandStringBytesMaskImprSrcUnsafe(n int) string {
 func doio(t *testing.T, c *Client, size int) {
 	data := &spec.Envelope{
 		Metadata: &spec.Metadata{
-			Properties:  []*spec.KV{&spec.KV{Key: "hello", Value: "world"}},
-			Tags:        []*spec.KV{&spec.KV{Key: "open", Value: RandStringBytesMaskImprSrcUnsafe(size)}},
+			Properties:  []spec.KV{spec.KV{Key: "hello", Value: "world"}},
+			Search:      []spec.KV{spec.KV{Key: "product", Value: "test"}, spec.KV{Key: "open", Value: RandStringBytesMaskImprSrcUnsafe(size)}},
 			ForeignId:   RandStringBytesMaskImprSrcUnsafe(5),
 			ForeignType: RandStringBytesMaskImprSrcUnsafe(5),
 			EventType:   RandStringBytesMaskImprSrcUnsafe(5),
@@ -53,18 +53,28 @@ func doio(t *testing.T, c *Client, size int) {
 	}
 
 	dataContext := &spec.Context{
-		Properties:  []*spec.KV{&spec.KV{Key: "hello", Value: "world"}},
+		Properties:  []spec.KV{spec.KV{Key: "hello", Value: "world"}},
 		ForeignId:   RandStringBytesMaskImprSrcUnsafe(5),
-		ForeignType: RandStringBytesMaskImprSrcUnsafe(5),
+		ForeignType: "test_ctx",
 	}
 	err = c.PushContext(dataContext)
 	if err != nil {
 		t.Fatal(err)
 	}
 
+	dataContext = &spec.Context{
+		Properties:  []spec.KV{spec.KV{Key: "hello", Value: "world"}},
+		ForeignId:   RandStringBytesMaskImprSrcUnsafe(5),
+		ForeignType: "test_ctx_wrong",
+	}
+	err = c.PushContext(dataContext)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+
 }
 func TestExample(t *testing.T) {
-	c := NewClient("http://localhost:9001/", nil)
+	c := NewClient("http://localhost:9001/", "test_token", nil)
 	for i := 0; i < 1000; i++ {
 		doio(t, c, i)
 	}

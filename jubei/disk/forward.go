@@ -9,6 +9,7 @@ import (
 	"path"
 	"sync/atomic"
 
+	"github.com/golang/snappy"
 	"github.com/jackdoe/blackrock/depths"
 	log "github.com/sirupsen/logrus"
 )
@@ -86,11 +87,16 @@ func (fw *ForwardWriter) Read(offset uint32) ([]byte, uint32, error) {
 	if checksumHeader != computedChecksumData {
 		return nil, 0, EBADSLT
 	}
-	return readInto, nextOffset, nil
+	decompressed, err := snappy.Decode(nil, readInto)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	return decompressed, nextOffset, nil
 }
 
-func (fw *ForwardWriter) Close() {
-	fw.forward.Close()
+func (fw *ForwardWriter) Close() error {
+	return fw.forward.Close()
 }
 
 func (fw *ForwardWriter) Size() (uint32, error) {
@@ -101,8 +107,8 @@ func (fw *ForwardWriter) Size() (uint32, error) {
 	return uint32(s.Size()), nil
 }
 
-func (fw *ForwardWriter) Sync() {
-	fw.forward.Sync()
+func (fw *ForwardWriter) Sync() error {
+	return fw.forward.Sync()
 }
 
 func (fw *ForwardWriter) Offset() uint32 {
@@ -110,11 +116,12 @@ func (fw *ForwardWriter) Offset() uint32 {
 }
 
 func (fw *ForwardWriter) Append(encoded []byte) (uint32, error) {
-	blobSize := 8 + len(encoded)
+	compressed := snappy.Encode(nil, encoded)
+	blobSize := 8 + len(compressed)
 	blob := make([]byte, blobSize)
-	copy(blob[8:], encoded)
-	binary.LittleEndian.PutUint32(blob[0:], uint32(len(encoded)))
-	binary.LittleEndian.PutUint32(blob[4:], uint32(depths.Hash(encoded)))
+	copy(blob[8:], compressed)
+	binary.LittleEndian.PutUint32(blob[0:], uint32(len(compressed)))
+	binary.LittleEndian.PutUint32(blob[4:], uint32(depths.Hash(compressed)))
 
 	padded := ((uint32(blobSize) + PAD - 1) / PAD)
 

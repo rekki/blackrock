@@ -192,3 +192,14 @@ func DumpObjNoIndent(src interface{}) string {
 	}
 	return string(data)
 }
+func ForeachCSV(csv string, cb func(a, b string)) {
+	for _, t := range strings.Split(csv, ",") {
+		splitted := strings.Split(t, ":")
+		if len(splitted) != 2 {
+			log.Fatalf("expected a:b, got %v", splitted)
+		}
+		k := splitted[0]
+		v := splitted[1]
+		cb(k, v)
+	}
+}

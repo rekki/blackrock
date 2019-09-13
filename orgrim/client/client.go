@@ -18,9 +18,10 @@ type Client struct {
 	h                *http.Client
 	endpointEnvelope string
 	endpointContext  string
+	token            string
 }
 
-func NewClient(url string, h *http.Client) *Client {
+func NewClient(url string, token string, h *http.Client) *Client {
 	if h == nil {
 		tr := &http.Transport{
 			MaxIdleConns:       10,
@@ -32,7 +33,7 @@ func NewClient(url string, h *http.Client) *Client {
 	if !strings.HasSuffix(url, "/") {
 		url = url + "/"
 	}
-	return &Client{endpointEnvelope: fmt.Sprintf("%spush/envelope", url), endpointContext: fmt.Sprintf("%spush/context", url), h: h}
+	return &Client{token: token, endpointEnvelope: fmt.Sprintf("%spush/envelope", url), endpointContext: fmt.Sprintf("%spush/context", url), h: h}
 }
 
 type success struct {
@@ -45,7 +46,15 @@ func (c *Client) push(endpoint string, message proto.Message) error {
 		return err
 	}
 
-	resp, err := c.h.Post(endpoint, "application/protobuf", bytes.NewReader(blob))
+	req, err := http.NewRequest("POST", endpoint, bytes.NewReader(blob))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/protobuf")
+	if c.token != "" {
+		req.Header.Set("Authorization", "Bearer "+c.token)
+	}
+	resp, err := c.h.Do(req)
 	if err != nil {
 		return err
 	}

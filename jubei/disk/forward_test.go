@@ -43,7 +43,7 @@ type Case struct {
 	data     []byte
 }
 
-func TestForward(t *testing.T) {
+func TestFile(t *testing.T) {
 	dir, err := ioutil.TempDir("", "forward")
 	if err != nil {
 		t.Fatal(err)
