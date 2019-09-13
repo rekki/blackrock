@@ -2,11 +2,14 @@ package disk
 
 import (
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"path"
 	"strings"
+
+	"github.com/jackdoe/blackrock/depths"
 )
 
 func ReadAllTermsInSegment(root string) (map[string][]uint32, error) {
@@ -53,4 +56,29 @@ func ReadAllTermsInSegment(root string) (map[string][]uint32, error) {
 		}
 	}
 	return segment, nil
+}
+
+func WriteCompactedIndex(root string, segment map[string][]uint32) error {
+	offsets := map[string]uint32{}
+	dw, err := NewForwardWriter(root, "segment.data")
+	if err != nil {
+		return err
+	}
+	defer dw.Close()
+	for term, postings := range segment {
+		off, err := dw.Append(depths.UintsToBytes(postings))
+		if err != nil {
+			return err
+		}
+		offsets[term] = off
+	}
+
+	encoded, err := json.Marshal(offsets)
+	if err != nil {
+		return err
+	}
+
+	err = ioutil.WriteFile(path.Join(root, "segment.header"), encoded, 0600)
+
+	return err
 }

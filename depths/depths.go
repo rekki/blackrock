@@ -3,6 +3,7 @@ package depths
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -202,4 +203,44 @@ func ForeachCSV(csv string, cb func(a, b string)) {
 		v := splitted[1]
 		cb(k, v)
 	}
+}
+
+func UintsToBytes(postings []uint32) []byte {
+	n := len(postings) * 4
+	longed := make([]byte, n)
+	for i := 0; i < len(postings); i++ {
+		binary.LittleEndian.PutUint32(longed[i*4:], postings[i])
+	}
+	return longed
+}
+
+func BytesToUints(postings []byte) []uint32 {
+	n := len(postings) / 4
+	longed := make([]uint32, n)
+	j := 0
+	for i := 0; i < n*4; i += 4 {
+		longed[j] = uint32(binary.LittleEndian.Uint32(postings[i:]))
+		j++
+	}
+	return longed
+}
+
+func IntsToBytes(postings []int32) []byte {
+	n := len(postings) * 4
+	longed := make([]byte, n)
+	for i := 0; i < len(postings); i++ {
+		binary.LittleEndian.PutUint32(longed[i*4:], uint32(postings[i]))
+	}
+	return longed
+}
+
+func BytesToInts(postings []byte) []int32 {
+	n := len(postings) / 4
+	longed := make([]int32, n)
+	j := 0
+	for i := 0; i < n*4; i += 4 {
+		longed[j] = int32(binary.LittleEndian.Uint32(postings[i:]))
+		j++
+	}
+	return longed
 }

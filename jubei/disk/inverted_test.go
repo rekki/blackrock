@@ -82,6 +82,11 @@ func TestInverted(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	err = WriteCompactedIndex(segmentId, segment)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	if len(segment) != 4 {
 		t.Fatalf("expected 4 got %d", len(segment))
 	}

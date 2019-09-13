@@ -71,14 +71,7 @@ func InvertedReadRaw(root string, maxDocuments int32, tagKey, tagValue string) [
 		log.Warnf("failed to read file: %s, error: %s", fn, err.Error())
 		return []int32{}
 	}
-	n := len(postings) / 4
-	longed := make([]int32, n)
-	j := 0
-	for i := 0; i < n*4; i += 4 {
-		longed[j] = int32(binary.LittleEndian.Uint32(postings[i:]))
-		j++
-	}
-	return longed
+	return depths.BytesToInts(postings)
 }
 
 func (fw *InvertedWriter) Append(root string, docId int32, tagKey, tagValue string) error {
