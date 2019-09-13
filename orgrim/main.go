@@ -276,7 +276,7 @@ func main() {
 		at := tp.ExtractFromRequest(c.Request)
 		if !at.AllowContext(&ctx) && *allowOnlyIdentified {
 			log.Warnf("[orgrim] contex type %s not allowed for token", ctx.ForeignType)
-			c.JSON(http.StatusForbidden, gin.H{"error": "not allowed type for this token"})
+			c.JSON(http.StatusForbidden, gin.H{"error": "invalid token"})
 			return
 		}
 

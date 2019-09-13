@@ -52,6 +52,21 @@ func doio(t *testing.T, c *Client, size int) {
 		t.Fatal(err)
 	}
 
+	data = &spec.Envelope{
+		Metadata: &spec.Metadata{
+			Properties:  []spec.KV{spec.KV{Key: "hello", Value: "world"}},
+			Search:      []spec.KV{spec.KV{Key: "product", Value: "test_wrong"}, spec.KV{Key: "open", Value: RandStringBytesMaskImprSrcUnsafe(size)}},
+			ForeignId:   RandStringBytesMaskImprSrcUnsafe(5),
+			ForeignType: RandStringBytesMaskImprSrcUnsafe(5),
+			EventType:   RandStringBytesMaskImprSrcUnsafe(5),
+		},
+		Payload: []byte(RandStringBytesMaskImprSrcUnsafe(size)),
+	}
+	err = c.Push(data)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+
 	dataContext := &spec.Context{
 		Properties:  []spec.KV{spec.KV{Key: "hello", Value: "world"}},
 		ForeignId:   RandStringBytesMaskImprSrcUnsafe(5),
