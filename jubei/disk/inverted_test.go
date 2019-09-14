@@ -87,6 +87,22 @@ func TestInverted(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	err = DeleteUncompactedPostings(segmentId)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cache := NewCompactIndexCache()
+
+	for _, v := range cases {
+		data := cache.FindPostingsList(segmentId, fmt.Sprintf("%d", v.key), fmt.Sprintf("%d", v.value))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !Equal(data, v.data) {
+			t.Fatalf("mismatch got %v expected %v", data, v.data)
+		}
+	}
+
 	if len(segment) != 4 {
 		t.Fatalf("expected 4 got %d", len(segment))
 	}

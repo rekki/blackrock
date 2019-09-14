@@ -353,6 +353,7 @@ func main() {
 	r.GET("/", func(c *gin.Context) {
 		c.Redirect(302, "/scan/html/")
 	})
+
 	foreach := func(queryString string, dates []time.Time, cb func(did int32, x *spec.Metadata)) error {
 		for _, date := range dates {
 			ns := date.UnixNano()
@@ -366,13 +367,12 @@ func main() {
 			// FIXME: this needs major cleanup
 			queryPath := strings.Trim(queryString, "/")
 			and := strings.Replace(queryPath, "/", " AND ", -1)
-
 			andor := strings.Replace(and, "|", " OR ", -1)
 			make := func(k, v string) Query {
 				return NewTermQuery(segment, k, v)
 			}
-			query, nQueries, err := fromString(andor, make)
 
+			query, nQueries, err := fromString(andor, make)
 			if err != nil {
 				return err
 			}

@@ -8,9 +8,35 @@ import (
 	"os"
 	"path"
 	"strings"
+	"sync"
 
 	"github.com/jackdoe/blackrock/depths"
+	log "github.com/sirupsen/logrus"
 )
+
+func DeleteUncompactedPostings(root string) error {
+	fields, err := ioutil.ReadDir(path.Join(root))
+	if err != nil {
+		return nil
+	}
+
+	for _, field := range fields {
+		shards, err := ioutil.ReadDir(path.Join(root, field.Name()))
+		if err != nil {
+			return nil
+		}
+
+		for _, shardDir := range shards {
+			if strings.HasPrefix(shardDir.Name(), "shard_") {
+				err := os.RemoveAll(path.Join(root, field.Name(), shardDir.Name()))
+				if err != nil {
+					return err
+				}
+			}
+		}
+	}
+	return nil
+}
 
 func ReadAllTermsInSegment(root string) (map[string][]uint32, error) {
 	fields, err := ioutil.ReadDir(path.Join(root))
@@ -78,7 +104,78 @@ func WriteCompactedIndex(root string, segment map[string][]uint32) error {
 		return err
 	}
 
-	err = ioutil.WriteFile(path.Join(root, "segment.header"), encoded, 0600)
+	err = ioutil.WriteFile(path.Join(root, "segment.header.temp"), encoded, 0600)
+	if err != nil {
+		return err
+	}
+	err = os.Rename(path.Join(root, "segment.header.temp"), path.Join(root, "segment.header"))
+	if err != nil {
+		return err
+	}
 
 	return err
+}
+
+type CompactIndexCache struct {
+	sync.RWMutex
+	offsets map[string]map[string]uint32
+}
+
+func NewCompactIndexCache() *CompactIndexCache {
+	return &CompactIndexCache{
+		offsets: map[string]map[string]uint32{},
+	}
+}
+
+func (c *CompactIndexCache) FindPostingsList(root, k, v string) []int32 {
+	tagKey := depths.Cleanup(strings.ToLower(k))
+	tagValue := depths.Cleanup(strings.ToLower(v))
+	headerPath := path.Join(root, "segment.header")
+	if _, err := os.Stat(headerPath); os.IsNotExist(err) {
+		return InvertedReadRaw(root, -1, tagKey, tagValue)
+	}
+
+	c.RLock()
+	offsets, ok := c.offsets[root]
+	c.RUnlock()
+	if !ok {
+		header, err := ioutil.ReadFile(headerPath)
+		if err != nil {
+			// invariant
+			log.Warnf("failed to read header, err: %s", err.Error())
+			return []int32{}
+		}
+
+		offsets = map[string]uint32{}
+		err = json.Unmarshal(header, &offsets)
+		if err != nil {
+			// invariant
+			log.Warnf("failed to decode header, err: %s", err.Error())
+			return []int32{}
+		}
+
+		c.Lock()
+		c.offsets[root] = offsets
+		c.Unlock()
+	}
+
+	offset, ok := offsets[fmt.Sprintf("%s:%s", tagKey, tagValue)]
+	if !ok {
+		return []int32{}
+	}
+	fw, err := NewForwardWriter(root, "segment.data")
+	if err != nil {
+		// invariant
+		log.Warnf("failed to open data, err: %s", err.Error())
+		return []int32{}
+	}
+	defer fw.Close()
+	data, _, err := fw.Read(offset)
+	if err != nil {
+		// invariant
+		log.Warnf("failed to read data, err: %s", err.Error())
+		return []int32{}
+	}
+
+	return depths.BytesToInts(data)
 }
