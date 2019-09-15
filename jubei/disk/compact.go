@@ -15,24 +15,20 @@ import (
 )
 
 func DeleteUncompactedPostings(root string) error {
-	fields, err := ioutil.ReadDir(path.Join(root))
+	fields, err := ioutil.ReadDir(root)
 	if err != nil {
-		return nil
+		return err
 	}
 
 	for _, field := range fields {
-		shards, err := ioutil.ReadDir(path.Join(root, field.Name()))
-		if err != nil {
-			return nil
+		if !field.IsDir() {
+			continue
 		}
-
-		for _, shardDir := range shards {
-			if strings.HasPrefix(shardDir.Name(), "shard_") {
-				err := os.RemoveAll(path.Join(root, field.Name(), shardDir.Name()))
-				if err != nil {
-					return err
-				}
-			}
+		p := path.Join(root, field.Name())
+		log.Warnf("removing %s", p)
+		err := os.RemoveAll(p)
+		if err != nil {
+			return err
 		}
 	}
 	return nil
@@ -46,6 +42,10 @@ func ReadAllTermsInSegment(root string) (map[string][]uint32, error) {
 
 	segment := map[string][]uint32{}
 	for _, field := range fields {
+		if !field.IsDir() {
+			continue
+		}
+
 		shards, err := ioutil.ReadDir(path.Join(root, field.Name()))
 		if err != nil {
 			return nil, err

@@ -244,3 +244,11 @@ func BytesToInts(postings []byte) []int32 {
 	}
 	return longed
 }
+func IsDigit(s string) bool {
+	for _, r := range s {
+		if !unicode.IsDigit(r) {
+			return false
+		}
+	}
+	return true
+}

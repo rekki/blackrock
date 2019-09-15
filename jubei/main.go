@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"path"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -92,6 +93,56 @@ func consumeContext(r *kafka.Reader, forward *disk.ForwardWriter) error {
 	}
 }
 
+func compactEverything(root string) error {
+	days, err := ioutil.ReadDir(path.Join(root))
+	if err != nil {
+		return err
+	}
+
+	for _, day := range days {
+		if !day.IsDir() || !depths.IsDigit(day.Name()) {
+			continue
+		}
+
+		n, err := strconv.Atoi(day.Name())
+		if err != nil {
+			log.Warnf("skipping %s", day.Name())
+			continue
+		}
+		ts := n * 3600 * 24
+		t := time.Unix(int64(ts), 0)
+		since := time.Since(t)
+		if since < time.Hour*48 {
+			log.Warnf("skipping %s, too new: %s", day.Name(), since)
+			continue
+		}
+		p := path.Join(root, day.Name())
+
+		if _, err := os.Stat(path.Join(p, "segment.header")); !os.IsNotExist(err) {
+			log.Warnf("skipping %s, already compacted", day.Name())
+			continue
+		}
+
+		log.Warnf("reading %v", p)
+		segment, err := disk.ReadAllTermsInSegment(p)
+		if err != nil {
+			return err
+		}
+
+		log.Warnf("compacting %v, %d terms", p, len(segment))
+		err = disk.WriteCompactedIndex(p, segment)
+		if err != nil {
+			return err
+		}
+		log.Warnf("deleting raw files %v", p)
+		err = disk.DeleteUncompactedPostings(p)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func main() {
 	var dataTopic = flag.String("topic-data", "blackrock-data", "topic for the data")
 	var contextTopic = flag.String("topic-context", "blackrock-context", "topic for the context")
@@ -100,6 +151,7 @@ func main() {
 	var kafkaServers = flag.String("kafka", "localhost:9092,localhost:9092", "kafka addrs")
 	var verbose = flag.Bool("verbose", false, "print info level logs to stdout")
 	var maxDescriptors = flag.Int("max-descriptors", 1000, "max open descriptors")
+	var compact = flag.Bool("compact", false, "compact everything until today and exit")
 	flag.Parse()
 	go func() {
 		log.Println(http.ListenAndServe("localhost:6061", nil))
@@ -113,6 +165,17 @@ func main() {
 	} else {
 		log.SetLevel(log.WarnLevel)
 	}
+
+	if *compact {
+		err := compactEverything(root)
+		t0 := time.Now()
+		if err != nil {
+			log.Fatal(err)
+		}
+		log.Warnf("successfully compacted everything in %s, took %s", root, time.Since(t0))
+		os.Exit(0)
+	}
+
 	err := depths.HealthCheckKafka(*kafkaServers, *dataTopic)
 	if err != nil {
 		log.Fatal(err)

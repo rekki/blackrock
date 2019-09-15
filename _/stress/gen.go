@@ -369,7 +369,7 @@ func main() {
 		books = append(books, genBook(times, pickAuthors(authors)...))
 	}
 
-	orgrim := client.NewClient("http://localhost:9001/", nil)
+	orgrim := client.NewClient("http://localhost:9001/", "", nil)
 	pushMany(orgrim, users)
 	pushMany(orgrim, countries)
 	pushMany(orgrim, authors)
