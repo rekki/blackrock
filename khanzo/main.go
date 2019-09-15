@@ -168,7 +168,7 @@ func main() {
 		return url
 	}
 	prometheus.Use(r)
-
+	compact := disk.NewCompactIndexCache()
 	r.Use(cors.Default())
 	r.Use(gin.Recovery())
 	t, err := loadTemplate(contextCache)
@@ -229,7 +229,7 @@ func main() {
 			}
 
 			query, _, err := fromJson(qr.Query, func(k, v string) Query {
-				return NewTermQuery(segment, k, v)
+				return NewTermQuery(segment, k, v, compact)
 			})
 			if err != nil {
 				return nil, err
@@ -313,7 +313,7 @@ func main() {
 			}
 
 			query, _, err := fromJson(qr.Query, func(k, v string) Query {
-				return NewTermQuery(segment, k, v)
+				return NewTermQuery(segment, k, v, compact)
 			})
 
 			if err != nil {
@@ -369,7 +369,7 @@ func main() {
 			and := strings.Replace(queryPath, "/", " AND ", -1)
 			andor := strings.Replace(and, "|", " OR ", -1)
 			make := func(k, v string) Query {
-				return NewTermQuery(segment, k, v)
+				return NewTermQuery(segment, k, v, compact)
 			}
 
 			query, nQueries, err := fromString(andor, make)

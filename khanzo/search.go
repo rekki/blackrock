@@ -39,9 +39,9 @@ func (qr *QueryResponse) HTML(c *gin.Context) {
 	c.YAML(200, qr)
 }
 
-func NewTermQuery(root string, tagKey string, tagValue string) Query {
+func NewTermQuery(root string, tagKey string, tagValue string, c *disk.CompactIndexCache) Query {
 	tagKey = depths.Cleanup(strings.ToLower(tagKey))
 	tagValue = depths.Cleanup(strings.ToLower(tagValue))
 	s := fmt.Sprintf("%s:%s", tagKey, tagValue)
-	return NewTerm(s, disk.InvertedReadRaw(root, -1, tagKey, tagValue))
+	return NewTerm(s, c.FindPostingsList(root, tagKey, tagValue))
 }
