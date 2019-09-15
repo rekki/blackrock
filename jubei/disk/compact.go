@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/golang/snappy"
 	"github.com/jackdoe/blackrock/depths"
 	log "github.com/sirupsen/logrus"
 )
@@ -103,8 +104,8 @@ func WriteCompactedIndex(root string, segment map[string][]uint32) error {
 	if err != nil {
 		return err
 	}
-
-	err = ioutil.WriteFile(path.Join(root, "segment.header.temp"), encoded, 0600)
+	compressed := snappy.Encode(nil, encoded)
+	err = ioutil.WriteFile(path.Join(root, "segment.header.temp"), compressed, 0600)
 	if err != nil {
 		return err
 	}
@@ -139,7 +140,14 @@ func (c *CompactIndexCache) FindPostingsList(root, k, v string) []int32 {
 	offsets, ok := c.offsets[root]
 	c.RUnlock()
 	if !ok {
-		header, err := ioutil.ReadFile(headerPath)
+		compressedHeader, err := ioutil.ReadFile(headerPath)
+		if err != nil {
+			// invariant
+			log.Warnf("failed to read header, err: %s", err.Error())
+			return []int32{}
+		}
+
+		header, err := snappy.Decode(nil, compressedHeader)
 		if err != nil {
 			// invariant
 			log.Warnf("failed to read header, err: %s", err.Error())
@@ -153,7 +161,7 @@ func (c *CompactIndexCache) FindPostingsList(root, k, v string) []int32 {
 			log.Warnf("failed to decode header, err: %s", err.Error())
 			return []int32{}
 		}
-
+		log.Warnf("openned %s", root)
 		c.Lock()
 		c.offsets[root] = offsets
 		c.Unlock()
