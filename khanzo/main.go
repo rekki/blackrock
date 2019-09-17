@@ -14,6 +14,7 @@ import (
 	"path"
 	"reflect"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -395,6 +396,19 @@ func main() {
 					if err != nil {
 						return err
 					}
+
+					sort.Slice(p.Search, func(i, j int) bool {
+						return p.Search[i].Key < p.Search[j].Key
+					})
+
+					sort.Slice(p.Count, func(i, j int) bool {
+						return p.Count[i].Key < p.Count[j].Key
+					})
+
+					sort.Slice(p.Properties, func(i, j int) bool {
+						return p.Properties[i].Key < p.Properties[j].Key
+					})
+
 					cache.Add(cacheKey, &p)
 					cached = &p
 				}

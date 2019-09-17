@@ -97,6 +97,9 @@ func (r *ContextCache) Scan() error {
 			log.Warnf("rend failed to unmarshal, data: %s, error: %s", string(data), err.Error())
 			return nil
 		}
+		sort.Slice(decoded.Properties, func(i, j int) bool {
+			return decoded.Properties[i].Key < decoded.Properties[j].Key
+		})
 		r.Insert(decoded)
 		r.offset = offset
 		n++
