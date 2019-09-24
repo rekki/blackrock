@@ -11,6 +11,7 @@ func TestFixme(t *testing.T) {
 		"a.b.c.d.e.b_code.c", "true",
 		"a.b.c.d_code.e.b.c", "true",
 		"a_code.b.c", "true",
+		"a_code.b", "true",
 	}
 
 	expected := []string{
@@ -19,6 +20,7 @@ func TestFixme(t *testing.T) {
 		"a.b.c.d.e.b_code", "c",
 		"a.b.c.d_code", "e.b.c",
 		"a_code", "b.c",
+		"a_code", "b",
 	}
 	for i := 0; i < len(cases); i += 2 {
 		k, v := Fixme(cases[i], cases[i+1])

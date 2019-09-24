@@ -64,14 +64,15 @@ func ConsumeEvents(segmentId string, envelope *spec.Envelope, forward *disk.Forw
 	for i, kv := range meta.Search {
 		k := kv.Key
 		v := kv.Value
-		lc := depths.Cleanup(strings.ToLower(k))
+
+		lc := strings.ToLower(k)
+		lc, v = Fixme(lc, v)
+		lc = depths.Cleanup(lc)
 		if lc == "event_type" || lc == "foreign_type" || lc == "foreign_id" || lc == foreignType || lc == "" {
 			continue
 		}
 
-		lc, v = Fixme(lc, v)
-
-		value := depths.Cleanup(strings.ToLower(v))
+		value := depths.Cleanup(v)
 		if value == "" {
 			value = "__empty"
 		}
