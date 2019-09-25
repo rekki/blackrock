@@ -88,7 +88,6 @@ func ConsumeEvents(segmentId string, envelope *spec.Envelope, forward *disk.Forw
 			}
 		}
 	}
-
 	// add some automatic tags
 	{
 		ns := meta.CreatedAtNs

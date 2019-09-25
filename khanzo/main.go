@@ -699,6 +699,7 @@ func setupSimpleEventAccept(root string, geoipPath string, r *gin.Engine) {
 			c.JSON(500, gin.H{"error": err.Error()})
 			return
 		}
+
 		err = spec.Decorate(geoip, c.Request, converted)
 		if err != nil {
 			log.Warnf("[orgrim] failed to decorate, err: %s", err.Error())

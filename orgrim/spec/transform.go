@@ -7,7 +7,6 @@ import (
 	"io/ioutil"
 	"net"
 	"net/http"
-	"sort"
 	"strings"
 	"time"
 
@@ -83,54 +82,31 @@ func Transform(m map[string]interface{}, expand bool) ([]KV, error) {
 	if err != nil {
 		return nil, err
 	}
-	seen := map[string]bool{}
-	add := func(k, v string) {
-		key := k + "_" + v
-		if _, ok := seen[key]; ok {
-			return
-		}
-		seen[key] = true
-		out = append(out, KV{Key: k, Value: v})
-	}
 	hasID := func(s string) bool {
 		return strings.HasSuffix(s, "_id") || strings.HasSuffix(s, "_ids") || strings.HasSuffix(s, "_code")
 	}
 	for k, v := range flatten {
 		if expand {
+
 			// a lot of CoC here, path like example.restaurant_id.92e2e4af-f833-492e-9ade-f797bbaa80fd.updated = true
 			// will be expanded to restaurant_id:92e2e4af-f833-492e-9ade-f797bbaa80fd and example.updated:true
 			// so that it can be found, this of course is not ideal
+			if v == "true" {
+				splitted := strings.Split(k, ".")
+				if len(splitted) > 1 {
+					for i := 0; i < len(splitted)-1; i++ {
+						p := splitted[i]
+						if hasID(p) {
+							k = strings.Join(splitted[:i+1], ".")
+							v = strings.Join(splitted[i+1:], ".")
 
-			splitted := strings.Split(k, ".")
-			noid := []string{}
-
-			for i := len(splitted) - 1; i >= 0; i-- {
-				part := splitted[i]
-				prev := ""
-				if i > 0 {
-					prev = splitted[i-1]
-				}
-				if hasID(part) {
-					add(part, v)
-				} else {
-					if hasID(prev) {
-						add(prev, part)
-						i--
-					} else {
-						noid = append(noid, part)
+							break
+						}
 					}
 				}
 			}
-
-			sort.SliceStable(noid, func(i, j int) bool {
-				return true
-			})
-			if len(noid) > 0 {
-				add(strings.Join(noid, "."), v)
-			}
-		} else {
-			out = append(out, KV{Key: k, Value: v})
 		}
+		out = append(out, KV{Key: k, Value: v})
 	}
 
 	return out, nil
