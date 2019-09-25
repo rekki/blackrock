@@ -28,6 +28,105 @@ Composed of the following characters:
 
 # do not use in production, it is 1 day old
 
+# running it locally
+
+You can run it locally without any dependencies, there is
+special parameter to khanzo that embeds orgrim and jubei(for testing
+purposes).
+
+```
+$ cd khanzo && go build
+$ ./khanzo -root /tmp/gen13  -not-production-accept-events -not-production-geoip GeoLite2-City.mmdb -bind :9001
+```
+you can download GeoLite2-City from https://dev.maxmind.com/geoip/geoip2/geolite2/
+
+this will start khanzo at port 9001, so you can already start using it both to search (http://localhost:9001/scan/html/) and to send events to.
+
+example event:
+
+```
+curl -d '{
+  "count": {
+    "sizeWH": "1455x906",
+    "tz_offset": -120,
+    "window_scroll": {
+      "x": 0,
+      "y": 66
+    }
+  },
+  "event_type": "buy_book",
+  "foreign_id": "c2ace436-cbb9-46e5-8bf8-fcae013c904b",
+  "foreign_type": "user_id",
+  "properties": {
+    "user_agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/76.0.3809.87 Safari/537.36"
+  },
+  "search": {
+    "book_isbn_code": {
+      "9783161484100": true,
+      "9781234567897": true
+    },
+    "campaign": "google",
+    "version": {
+      "branch": "test",
+      "sha": "878345202",
+      "version": "1.2.3"
+    }
+  }
+}' http://127.0.0.1:9001/push/flatten
+
+```
+
+Now if you go to http://localhost:9001/scan/html/event_type:buy_book you will see all events with this type.
+
+## event structure
+
+There are 3 endpoints on orgrim /push/flatten, /push/envelope and
+/push/context, /push/envelope takes a protobuf Envelope object from
+[orgrim/spec/spec.proto](orgrim/spec/spec.proto), /push/context takes
+Context object from [orgrim/spec/spec.proto](orgrim/spec/spec.proto),
+/push/flatten can take complex json and flatten it into Envelope using
+the dot notation (meaning `{a:{b:true}}` becomes `{a.b: true}`)
+
+### EVENT_TYPE, FOREIGN_ID, FOREIGN_TYPE
+
+Those are mandatory fields
+
+* event_type: this is the type of the event (haha its in the name), there are also charts of events per event type per time
+* foreign_type: e.g. user_id or book_id or whatever foreign_id refers to
+* foreign_id: the id of the event creator (for example the user id that is buying the book)
+
+### SEARCH
+
+Everything in this section is searchable and postings lists are
+created for every key:value pair e.g. going to
+http://localhost:9001/scan/html/event_type:buy_book/campaign:google
+will give you all events that match on the query `event_type=book AND
+campaign=google`, the url DSL is not very sophisticated but works for
+now, you can do
+`http://localhost:9001/scan/html/event_type:buy_book|event_type:click_book`
+to do `event_type=buy_book OR event_type=click_book`, and you can also
+do AND NOT with
+`http://localhost:9001/scan/html/event_type:buy_book/-campaign:google`
+
+All fields are also aggregated and counted
+
+### COUNT
+
+Everything in this section is used only in the aggregations views but it is not indexed
+
+### PROPERTIES
+
+This is not indexed nor counted, so good for stuff like user-agent
+
+# Query DSL
+
+README:TODO
+
+# Experimentation
+
+README:TODO
+
+
 # cool text
 
 example khanzo output (see full output on [baxx.dev](https://baxx.dev/s/72eb433e-4bae-4533-a0f3-86dcbca835aa))
