@@ -48,7 +48,7 @@ func consumeEvents(root string, r *kafka.Reader, maxDescriptors int) error {
 			continue
 		}
 
-		if envelope.Metadata != nil && envelope.Metadata.Id == 0 {
+		if envelope.Metadata != nil {
 			envelope.Metadata.Id = uint64(m.Partition)<<56 | uint64(m.Offset)
 		}
 
