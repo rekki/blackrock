@@ -267,7 +267,7 @@ func (tp *TokenToProduct) ExtractFromRequest(r *http.Request) *AccessToken {
 	splitToken := strings.Split(reqToken, "Bearer")
 
 	if len(splitToken) != 2 {
-		return nil
+		return NewAccessToken()
 	}
 
 	reqToken = strings.TrimSpace(splitToken[1])
