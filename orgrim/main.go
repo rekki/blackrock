@@ -138,6 +138,14 @@ func main() {
 
 	r := gin.Default()
 	prometheus := ginprometheus.NewPrometheus("blackrock_orgrim")
+	prometheus.ReqCntURLLabelMappingFn = func(c *gin.Context) string {
+		url := c.Request.URL.Path
+		if strings.HasPrefix(url, "/png/") {
+			return "png"
+		}
+		return url
+	}
+
 	prometheus.Use(r)
 
 	r.Use(gin.Recovery())
