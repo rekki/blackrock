@@ -12,7 +12,7 @@ import (
 
 type Hit struct {
 	Score    float32         `json:"score,omitempty"`
-	ID       int32           `json:"id,omitempty"`
+	ID       uint64          `json:"id,omitempty"`
 	Metadata spec.Metadata   `json:"metadata,omitempty"`
 	Context  []*spec.Context `json:"context,omitempty"`
 }
@@ -59,7 +59,7 @@ func getScoredHit(contextCache *ContextCache, forward *disk.ForwardWriter, did i
 
 func toHit(contextCache *ContextCache, did int32, p *spec.Metadata) Hit {
 	hit := Hit{
-		ID:       did,
+		ID:       p.Id,
 		Metadata: *p,
 	}
 	seen := map[string]map[string]bool{}

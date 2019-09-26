@@ -21,6 +21,7 @@ message Metadata {
         string foreign_id = 9;
         string foreign_type = 10;
         map<string,uint32> track = 11;
+        fixed64 id = 12;
 }
 
 message Context {

@@ -48,6 +48,10 @@ func consumeEvents(root string, r *kafka.Reader, maxDescriptors int) error {
 			continue
 		}
 
+		if envelope.Metadata != nil && envelope.Metadata.Id == 0 {
+			envelope.Metadata.Id = uint64(m.Partition)<<56 | uint64(m.Offset)
+		}
+
 		segmentId := path.Join(root, depths.SegmentFromNs(envelope.Metadata.CreatedAtNs))
 		forward, ok := writers[segmentId]
 		if !ok {
