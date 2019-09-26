@@ -120,9 +120,6 @@ func ConsumeEvents(segmentId string, envelope *spec.Envelope, forward *disk.Forw
 	for ex, _ := range meta.Track {
 		inverted.Append(segmentId, int32(docId), "__experiment", ex)
 	}
-	if envelope.Metadata.Id == 0 {
-		envelope.Metadata.Id = 1 + uint64(docId)
-	}
 
 	return nil
 }

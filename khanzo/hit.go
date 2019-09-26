@@ -58,8 +58,12 @@ func getScoredHit(contextCache *ContextCache, forward *disk.ForwardWriter, did i
 }
 
 func toHit(contextCache *ContextCache, did int32, p *spec.Metadata) Hit {
+	id := p.Id
+	if id == 0 {
+		id = uint64(did) + 1
+	}
 	hit := Hit{
-		ID:       p.Id,
+		ID:       id,
 		Metadata: *p,
 	}
 	seen := map[string]map[string]bool{}
