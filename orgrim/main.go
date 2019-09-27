@@ -137,16 +137,19 @@ func main() {
 	}()
 
 	r := gin.Default()
-	prometheus := ginprometheus.NewPrometheus("blackrock_orgrim")
-	prometheus.ReqCntURLLabelMappingFn = func(c *gin.Context) string {
-		url := c.Request.URL.Path
-		if strings.HasPrefix(url, "/png/") {
-			return "png"
-		}
-		return url
-	}
 
-	prometheus.Use(r)
+	if listenAddress := os.Getenv("PROMETHEUS"); len(listenAddress) > 0 && listenAddress != "false" {
+		prometheus := ginprometheus.NewPrometheus("blackrock_khanzo")
+		prometheus.ReqCntURLLabelMappingFn = func(c *gin.Context) string {
+			url := c.Request.URL.Path
+			url = strings.Replace(url, "//", "/", -1)
+			return url
+		}
+		if listenAddress != "true" {
+			prometheus.SetListenAddress(listenAddress)
+		}
+		prometheus.Use(r)
+	}
 
 	r.Use(gin.Recovery())
 	r.Use(cors.Default())

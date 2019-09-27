@@ -162,13 +162,20 @@ func main() {
 	}()
 
 	r := gin.Default()
-	prometheus := ginprometheus.NewPrometheus("blackrock_khanzo")
-	prometheus.ReqCntURLLabelMappingFn = func(c *gin.Context) string {
-		url := c.Request.URL.Path
-		url = strings.Replace(url, "//", "/", -1)
-		return url
+
+	if listenAddress := os.Getenv("PROMETHEUS"); len(listenAddress) > 0 && listenAddress != "false" {
+		prometheus := ginprometheus.NewPrometheus("blackrock_khanzo")
+		prometheus.ReqCntURLLabelMappingFn = func(c *gin.Context) string {
+			url := c.Request.URL.Path
+			url = strings.Replace(url, "//", "/", -1)
+			return url
+		}
+		if listenAddress != "true" {
+			prometheus.SetListenAddress(listenAddress)
+		}
+		prometheus.Use(r)
 	}
-	prometheus.Use(r)
+
 	compact := disk.NewCompactIndexCache()
 	r.Use(cors.Default())
 	r.Use(gin.Recovery())
