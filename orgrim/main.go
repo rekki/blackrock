@@ -37,6 +37,7 @@ func main() {
 	var tokentoproductmap = flag.String("token-to-product", "", "csv token to product e.g.: xyz:bookshop,abc:mobile_app if you send token xyz (as auth bearer header) the product will be set to bookshop")
 	var tokentocontext = flag.String("token-to-context", "", "which token is allowed to push which context type")
 	var bind = flag.String("bind", ":9001", "bind to")
+	var prometheusListenAddress = flag.String("prometheus", "false", "true to enable prometheus (you can also specify a listener address")
 	flag.Parse()
 
 	if *verbose {
@@ -138,15 +139,15 @@ func main() {
 
 	r := gin.Default()
 
-	if listenAddress := os.Getenv("PROMETHEUS"); len(listenAddress) > 0 && listenAddress != "false" {
+	if listenerAddress := *prometheusListenAddress; len(listenerAddress) > 0 && listenerAddress != "false" {
 		prometheus := ginprometheus.NewPrometheus("blackrock_khanzo")
 		prometheus.ReqCntURLLabelMappingFn = func(c *gin.Context) string {
 			url := c.Request.URL.Path
 			url = strings.Replace(url, "//", "/", -1)
 			return url
 		}
-		if listenAddress != "true" {
-			prometheus.SetListenAddress(listenAddress)
+		if listenerAddress != "true" {
+			prometheus.SetListenAddress(listenerAddress)
 		}
 		prometheus.Use(r)
 	}
