@@ -20,6 +20,7 @@ import (
 	"sync"
 	"time"
 
+	ginprometheus "github.com/mcuadros/go-gin-prometheus"
 	"github.com/oschwald/geoip2-golang"
 
 	"github.com/gin-contrib/cors"
@@ -161,6 +162,13 @@ func main() {
 	}()
 
 	r := gin.Default()
+	prometheus := ginprometheus.NewPrometheus("blackrock_khanzo")
+	prometheus.ReqCntURLLabelMappingFn = func(c *gin.Context) string {
+		url := c.Request.URL.Path
+		url = strings.Replace(url, "//", "/", -1)
+		return url
+	}
+	prometheus.Use(r)
 	compact := disk.NewCompactIndexCache()
 	r.Use(cors.Default())
 	r.Use(gin.Recovery())
