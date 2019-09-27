@@ -20,6 +20,7 @@ import (
 	"sync"
 	"time"
 
+	ginprometheus "github.com/mcuadros/go-gin-prometheus"
 	"github.com/oschwald/geoip2-golang"
 
 	"github.com/gin-contrib/cors"
@@ -127,6 +128,7 @@ func main() {
 	var accept = flag.Bool("not-production-accept-events", false, "also accept events, super simple, so people can test in their laptops without zookeeper, kafka, orgrim, blackhand and jubei setup..")
 	var geoipFile = flag.String("not-production-geoip", "", "path to https://dev.maxmind.com/geoip/geoip2/geolite2/ file")
 	var bind = flag.String("bind", ":9002", "bind to")
+	var prometheusListenAddress = flag.String("prometheus", "false", "true to enable prometheus (you can also specify a listener address")
 	flag.Parse()
 	if *verbose {
 		log.SetLevel(log.InfoLevel)
@@ -161,6 +163,20 @@ func main() {
 	}()
 
 	r := gin.Default()
+
+	if listenerAddress := *prometheusListenAddress; len(listenerAddress) > 0 && listenerAddress != "false" {
+		prometheus := ginprometheus.NewPrometheus("blackrock_khanzo")
+		prometheus.ReqCntURLLabelMappingFn = func(c *gin.Context) string {
+			url := c.Request.URL.Path
+			url = strings.Replace(url, "//", "/", -1)
+			return url
+		}
+		if listenerAddress != "true" {
+			prometheus.SetListenAddress(listenerAddress)
+		}
+		prometheus.Use(r)
+	}
+
 	compact := disk.NewCompactIndexCache()
 	r.Use(cors.Default())
 	r.Use(gin.Recovery())
