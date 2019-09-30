@@ -47,5 +47,5 @@ docker-compose-down:
 
 clean-all: clean docker-compose-down docker-clean
 
-# cat Makefile | grep -v '^.PHONY' | grep -oE '^[a-z$][^:]+' | tr '\n' ' '
+# cat Makefile | grep -v '^.PHONY:' | grep -oE '^[a-z$][^:]+' | tr '\n' ' '
 .PHONY: all build $(COMMANDS) test clean $(patsubst %,clean-%,$(COMMANDS)) docker-build $(patsubst %,docker-build-%,$(COMMANDS)) docker-push $(patsubst %,docker-push-%,$(COMMANDS)) docker-clean $(patsubst %,docker-clean-%,$(COMMANDS)) docker-compose docker-compose-up docker-compose-logs docker-compose-down clean-all
