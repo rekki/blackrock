@@ -3,17 +3,15 @@ VERSION ?= 0.100
 COMMANDS = $(patsubst cmd/%,%,$(wildcard cmd/*))
 GO_MOD ?= github.com/rekki/blackrock
 
-all:
+all: build test
 
 build: $(COMMANDS)
 
 $(COMMANDS):
 	CGO_ENABLED=0 go build -a -o ./$@ $(GO_MOD)/cmd/$@
 
-test: $(patsubst %,test-%,$(COMMANDS))
-
-$(patsubst %,test-%,$(COMMANDS)):
-	go test $(GO_MOD)/cmd/$(patsubst test-%,%,$@)
+test:
+	go test -v ./...
 
 clean: $(patsubst %,clean-%,$(COMMANDS))
 
@@ -49,4 +47,5 @@ docker-compose-down:
 
 clean-all: clean docker-compose-down docker-clean
 
-.PHONY: # TODO
+# cat Makefile | grep -v '^.PHONY' | grep -oE '^[a-z$][^:]+' | tr '\n' ' '
+.PHONY: all build $(COMMANDS) test clean $(patsubst %,clean-%,$(COMMANDS)) docker-build $(patsubst %,docker-build-%,$(COMMANDS)) docker-push $(patsubst %,docker-push-%,$(COMMANDS)) docker-clean $(patsubst %,docker-clean-%,$(COMMANDS)) docker-compose docker-compose-up docker-compose-logs docker-compose-down clean-all
