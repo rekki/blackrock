@@ -1,16 +1,19 @@
 VERSION ?= 0.100
+
 COMMANDS = $(patsubst cmd/%,%,$(wildcard cmd/*))
+GO_MOD ?= github.com/rekki/blackrock
 
 all:
-
-clean-all: clean docker-compose-down docker-clean
-
-deploy: $(patsubst %,docker-deploy-%,$(COMMANDS))
 
 build: $(COMMANDS)
 
 $(COMMANDS):
-	CGO_ENABLED=0 go build -a -o ./$@ github.com/rekki/blackrock/cmd/$@
+	CGO_ENABLED=0 go build -a -o ./$@ $(GO_MOD)/cmd/$@
+
+test: $(patsubst %,test-%,$(COMMANDS))
+
+$(patsubst %,test-%,$(COMMANDS)):
+	go test $(GO_MOD)/cmd/$(patsubst test-%,%,$@)
 
 clean: $(patsubst %,clean-%,$(COMMANDS))
 
@@ -44,6 +47,6 @@ docker-compose-logs:
 docker-compose-down:
 	$(shell make docker-compose) down
 
-$(patsubst %,docker-deploy-%,$(COMMANDS)): $(patsubst docker-deploy-%,docker-build-%,$@) $(patsubst docker-deploy-%,docker-push-%,$@)
+clean-all: clean docker-compose-down docker-clean
 
-.PHONY: all build image
+.PHONY: # TODO
