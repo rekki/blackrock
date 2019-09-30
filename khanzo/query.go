@@ -158,6 +158,49 @@ func fromJson(input interface{}, makeTermQuery func(string, string) Query) (Quer
 			}
 		}
 
+		if v, ok := mapped["and-then"]; ok && v != nil {
+			kv, ok := v.(map[string]interface{})
+			if !ok {
+				return nil, 0, errors.New("[and-then] must be map containing {a,b}")
+			}
+			added := false
+			if ta, ok := kv["a"]; ok && ta != nil {
+				if tb, ok := kv["b"]; ok && tb != nil {
+					if tdelta, ok := kv["delta"]; ok && tdelta != nil {
+						sa, ok := ta.(interface{})
+						if !ok {
+							return nil, 0, errors.New("[and-then][a] must be interface")
+						}
+						sb, ok := tb.(interface{})
+						if !ok {
+							return nil, 0, errors.New("[and-then][b] must be interface")
+						}
+
+						sdelta, ok := tdelta.(int)
+						if !ok {
+							return nil, 0, errors.New("[and-then][delta] must be int")
+						}
+
+						a, _, err := fromJson(sa, makeTermQuery)
+						if err != nil {
+							return nil, 0, err
+						}
+						b, _, err := fromJson(sb, makeTermQuery)
+						if err != nil {
+							return nil, 0, err
+						}
+
+						queries = append(queries, NewAndThenQuery(a, b, int32(sdelta)))
+
+						added = true
+					}
+				}
+			}
+			if !added {
+				return nil, 0, errors.New("[and-then] must be map containing {a,b,delta}")
+			}
+		}
+
 		if v, ok := mapped["or"]; ok && v != nil {
 			list, ok := v.([]interface{})
 			if ok {
@@ -187,7 +230,7 @@ type Query interface {
 	advance(int32) int32
 	Next() int32
 	GetDocId() int32
-	GetTime() (int32, int32)
+	GetTime() int32
 	Score() float32
 	Reset()
 	String() string
@@ -195,17 +238,21 @@ type Query interface {
 
 type QueryBase struct {
 	docId int32
+	time  int32
 }
 
 func (q *QueryBase) GetDocId() int32 {
 	return q.docId
 }
 
+func (q *QueryBase) GetTime() int32 {
+	return q.time
+}
+
 type Term struct {
 	cursor   int
 	postings []uint64
 	term     string
-	time     int32
 	QueryBase
 }
 
@@ -214,12 +261,8 @@ func NewTerm(t string, postings []uint64) *Term {
 		term:      t,
 		cursor:    -1,
 		postings:  postings,
-		QueryBase: QueryBase{NOT_READY},
+		QueryBase: QueryBase{NOT_READY, 0},
 	}
-}
-
-func (t *Term) GetTime() (int32, int32) {
-	return t.time, t.time
 }
 
 func (t *Term) String() string {
@@ -250,7 +293,7 @@ func (t *Term) advance(target int32) int32 {
 
 	for start < end {
 		mid := start + ((end - start) / 2)
-		current, timeSecond := extractDocId(t.postings[mid])
+		current, timeSecond := split(t.postings[mid])
 		if current == target {
 			t.cursor = mid
 			t.docId = target
@@ -270,11 +313,11 @@ func (t *Term) advance(target int32) int32 {
 		return NO_MORE
 	}
 	t.cursor = start
-	t.docId, t.time = extractDocId(t.postings[start])
+	t.docId, t.time = split(t.postings[start])
 	return t.docId
 }
 
-func extractDocId(x uint64) (int32, int32) {
+func split(x uint64) (int32, int32) {
 	return int32(x >> 32), int32(x & 0xffffffff)
 }
 
@@ -284,7 +327,7 @@ func (t *Term) Next() int32 {
 		t.docId = NO_MORE
 		t.time = 0
 	} else {
-		t.docId, t.time = extractDocId(t.postings[t.cursor])
+		t.docId, t.time = split(t.postings[t.cursor])
 	}
 	return t.docId
 }
@@ -305,32 +348,13 @@ type BoolOrQuery struct {
 func NewBoolOrQuery(queries ...Query) *BoolOrQuery {
 	return &BoolOrQuery{
 		BoolQueryBase: BoolQueryBase{queries},
-		QueryBase:     QueryBase{NOT_READY},
+		QueryBase:     QueryBase{NOT_READY, 0},
 	}
-}
-
-func (q *BoolOrQuery) GetTime() (int32, int32) {
-	min := int32(math.MaxInt32)
-	max := int32(0)
-	n := len(q.queries)
-	for i := 0; i < n; i++ {
-		sub_query := q.queries[i]
-		if sub_query.GetDocId() == q.docId {
-			qmin, qmax := sub_query.GetTime()
-			if qmin < min {
-				min = qmin
-			}
-			if qmax > max {
-				max = qmax
-			}
-		}
-	}
-	return min, max
-
 }
 
 func (q *BoolOrQuery) Reset() {
 	q.docId = NOT_READY
+	q.time = 0
 	for _, v := range q.queries {
 		v.Reset()
 	}
@@ -365,6 +389,7 @@ func (q *BoolOrQuery) advance(target int32) int32 {
 	q.docId = new_doc
 	return q.docId
 }
+
 func (q *BoolOrQuery) String() string {
 	out := []string{}
 	for _, v := range q.queries {
@@ -404,31 +429,13 @@ func NewBoolAndNotQuery(not Query, queries ...Query) *BoolAndQuery {
 func NewBoolAndQuery(queries ...Query) *BoolAndQuery {
 	return &BoolAndQuery{
 		BoolQueryBase: BoolQueryBase{queries},
-		QueryBase:     QueryBase{NOT_READY},
+		QueryBase:     QueryBase{NOT_READY, 0},
 	}
 }
 
 func (q *BoolAndQuery) SetNot(not Query) *BoolAndQuery {
 	q.not = not
 	return q
-}
-
-func (q *BoolAndQuery) GetTime() (int32, int32) {
-	min := int32(math.MaxInt32)
-	max := int32(0)
-	n := len(q.queries)
-	for i := 0; i < n; i++ {
-		sub_query := q.queries[i]
-		qmin, qmax := sub_query.GetTime()
-		if qmin < min {
-			min = qmin
-		}
-		if qmax > max {
-			max = qmax
-		}
-	}
-	return min, max
-
 }
 
 func (q *BoolAndQuery) Score() float32 {
@@ -479,6 +486,7 @@ AGAIN:
 }
 func (q *BoolAndQuery) Reset() {
 	q.docId = NOT_READY
+	q.time = 0
 	for _, v := range q.queries {
 		v.Reset()
 	}
@@ -513,4 +521,74 @@ func (q *BoolAndQuery) Next() int32 {
 
 	// XXX: pick cheapest leading query
 	return q.nextAndedDoc(q.queries[0].Next())
+}
+
+type BoolAndThenQuery struct {
+	A     Query
+	B     Query
+	delta int32
+	QueryBase
+}
+
+func NewAndThenQuery(a, b Query, delta int32) *BoolAndThenQuery {
+	return &BoolAndThenQuery{
+		A:         a,
+		B:         b,
+		delta:     delta,
+		QueryBase: QueryBase{NOT_READY, 0},
+	}
+}
+
+func (q *BoolAndThenQuery) Score() float32 {
+	return 2
+}
+
+func (q *BoolAndThenQuery) nextAndedDoc(target int32) int32 {
+	if q.docId == target {
+		return q.docId
+	}
+	if q.A.GetDocId() == NOT_READY {
+		q.A.Next()
+	}
+	target = q.B.advance(target)
+	for {
+		if target == NO_MORE || q.A.GetDocId() == NO_MORE {
+			q.docId = NO_MORE
+			q.time = 0
+			return q.docId
+		}
+
+		tB := q.B.GetTime()
+		tA := q.A.GetTime()
+		diff := (tB - tA)
+		if diff > 0 && diff <= q.delta {
+			q.docId = target
+			q.time = tB
+			return q.docId
+		}
+		if tB > tA {
+			q.A.Next()
+		} else {
+			target = q.B.Next()
+		}
+	}
+}
+
+func (q *BoolAndThenQuery) Reset() {
+	q.docId = NOT_READY
+	q.time = 0
+	q.A.Reset()
+	q.B.Reset()
+}
+
+func (q *BoolAndThenQuery) String() string {
+	return fmt.Sprintf("%s AND THEN(%d) %s", q.A.String(), q.delta, q.B.String())
+}
+
+func (q *BoolAndThenQuery) advance(target int32) int32 {
+	return q.nextAndedDoc(q.B.advance(target))
+}
+
+func (q *BoolAndThenQuery) Next() int32 {
+	return q.nextAndedDoc(q.B.Next())
 }
