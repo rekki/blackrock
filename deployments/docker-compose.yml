@@ -7,12 +7,14 @@ services:
       dockerfile: ./build/docker/Dockerfile
       args:
         COMMAND: jubei
+    image: 'rekki/jubei:docker-compose'
   khanzo:
     build:
       context: ..
       dockerfile: ./build/docker/Dockerfile
       args:
         COMMAND: khanzo
+    image: 'rekki/khanzo:docker-compose'
     ports:
       - "127.0.0.1:9002:9002"
   orgrim:
@@ -21,6 +23,7 @@ services:
       dockerfile: ./build/docker/Dockerfile
       args:
         COMMAND: orgrim
+    image: 'rekki/orgrim:docker-compose'
     ports:
       - "127.0.0.1:9001:9001"
 
