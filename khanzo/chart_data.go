@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"github.com/guptarohit/asciigraph"
-	"github.com/jackdoe/blackrock/khanzo/chart"
-	"github.com/jackdoe/blackrock/orgrim/spec"
+	"github.com/rekki/blackrock/khanzo/chart"
+	"github.com/rekki/blackrock/orgrim/spec"
 )
 
 type ChartPoint struct {

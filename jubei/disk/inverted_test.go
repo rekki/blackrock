@@ -8,16 +8,16 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jackdoe/blackrock/depths"
+	"github.com/rekki/blackrock/depths"
 )
 
 type InvertedCase struct {
 	key   uint32
 	value uint32
-	data  []int32
+	data  []uint64
 }
 
-func Equal(a, b []int32) bool {
+func Equal(a, b []uint64) bool {
 	if len(a) != len(b) {
 		return false
 	}
@@ -27,6 +27,14 @@ func Equal(a, b []int32) bool {
 		}
 	}
 	return true
+}
+
+func makePostingsList(a ...int) []uint64 {
+	out := make([]uint64, len(a))
+	for i, v := range a {
+		out[i] = uint64(v)<<32 | 1
+	}
+	return out
 }
 func TestInverted(t *testing.T) {
 	dir, err := ioutil.TempDir("", "inverted")
@@ -41,29 +49,29 @@ func TestInverted(t *testing.T) {
 	cases := []InvertedCase{InvertedCase{
 		key:   0,
 		value: 0,
-		data:  []int32{1, 2, 3},
+		data:  makePostingsList(1, 2, 3),
 	},
 		InvertedCase{
 			key:   1,
 			value: 1,
-			data:  []int32{6, 7, 9},
+			data:  makePostingsList(6, 7, 9),
 		},
 		InvertedCase{
 			key:   0,
 			value: 1,
-			data:  []int32{6, 7, 9},
+			data:  makePostingsList(6, 7, 9),
 		},
 		InvertedCase{
 			key:   1,
 			value: 0,
-			data:  []int32{6, 7, 9},
+			data:  makePostingsList(6, 7, 9),
 		},
 	}
 
 	segmentId := path.Join(dir, depths.SegmentFromNs(time.Now().UnixNano()))
 	for _, v := range cases {
 		for _, id := range v.data {
-			err := inv.Append(segmentId, id, fmt.Sprintf("%d", v.key), fmt.Sprintf("%d", v.value))
+			err := inv.Append(segmentId, int32(id>>32), 1, fmt.Sprintf("%d", v.key), fmt.Sprintf("%d", v.value))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -100,7 +108,7 @@ func TestInverted(t *testing.T) {
 		}
 
 		data = cache.FindPostingsList(segmentId, fmt.Sprintf("%d_wrong", v.key), fmt.Sprintf("%d", v.value))
-		if !Equal(data, []int32{}) {
+		if !Equal(data, []uint64{}) {
 			t.Fatalf("mismatch got %v expected %v", data, []int32{})
 		}
 

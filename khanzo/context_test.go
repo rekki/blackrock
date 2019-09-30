@@ -3,7 +3,7 @@ package main
 import (
 	"testing"
 
-	"github.com/jackdoe/blackrock/orgrim/spec"
+	"github.com/rekki/blackrock/orgrim/spec"
 )
 
 func makeExample(created int64, id string) *spec.Context {

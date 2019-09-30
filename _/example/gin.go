@@ -8,8 +8,8 @@ import (
 
 	"github.com/avct/uasurfer"
 	"github.com/gin-gonic/gin"
-	orgrim "github.com/jackdoe/blackrock/orgrim/client"
-	"github.com/jackdoe/blackrock/orgrim/spec"
+	orgrim "github.com/rekki/blackrock/orgrim/client"
+	"github.com/rekki/blackrock/orgrim/spec"
 )
 
 func main() {

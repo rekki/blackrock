@@ -247,6 +247,27 @@ func BytesToInts(postings []byte) []int32 {
 	}
 	return longed
 }
+
+func Uints64ToBytes(postings []uint64) []byte {
+	n := len(postings) * 8
+	longed := make([]byte, n)
+	for i := 0; i < len(postings); i++ {
+		binary.LittleEndian.PutUint64(longed[i*8:], postings[i])
+	}
+	return longed
+}
+
+func BytesToUints64(postings []byte) []uint64 {
+	n := len(postings) / 8
+	longed := make([]uint64, n)
+	j := 0
+	for i := 0; i < n*8; i += 8 {
+		longed[j] = binary.LittleEndian.Uint64(postings[i:])
+		j++
+	}
+	return longed
+}
+
 func IsDigit(s string) bool {
 	for _, r := range s {
 		if !unicode.IsDigit(r) {

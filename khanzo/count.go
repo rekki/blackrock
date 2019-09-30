@@ -8,9 +8,9 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"github.com/jackdoe/blackrock/khanzo/chart"
-	"github.com/jackdoe/blackrock/khanzo/stat"
-	"github.com/jackdoe/blackrock/orgrim/spec"
+	"github.com/rekki/blackrock/khanzo/chart"
+	"github.com/rekki/blackrock/khanzo/stat"
+	"github.com/rekki/blackrock/orgrim/spec"
 )
 
 type ConvertedCache map[uint32]map[string]map[string]uint32

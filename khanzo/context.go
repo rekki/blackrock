@@ -6,8 +6,8 @@ import (
 	"sync"
 
 	"github.com/gogo/protobuf/proto"
-	"github.com/jackdoe/blackrock/jubei/disk"
-	"github.com/jackdoe/blackrock/orgrim/spec"
+	"github.com/rekki/blackrock/jubei/disk"
+	"github.com/rekki/blackrock/orgrim/spec"
 	log "github.com/sirupsen/logrus"
 )
 

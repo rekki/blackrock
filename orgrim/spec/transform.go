@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jackdoe/blackrock/depths"
 	"github.com/mssola/user_agent"
 	"github.com/oschwald/geoip2-golang"
+	"github.com/rekki/blackrock/depths"
 	"github.com/tomasen/realip"
 )
 

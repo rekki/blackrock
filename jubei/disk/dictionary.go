@@ -10,7 +10,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/jackdoe/blackrock/depths"
+	"github.com/rekki/blackrock/depths"
 	log "github.com/sirupsen/logrus"
 )
 

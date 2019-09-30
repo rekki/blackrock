@@ -8,10 +8,10 @@ import (
 	"log"
 	"time"
 
-	"github.com/jackdoe/blackrock/depths"
-	orgrim "github.com/jackdoe/blackrock/orgrim/client"
-	"github.com/jackdoe/blackrock/orgrim/spec"
 	_ "github.com/lib/pq"
+	"github.com/rekki/blackrock/depths"
+	orgrim "github.com/rekki/blackrock/orgrim/client"
+	"github.com/rekki/blackrock/orgrim/spec"
 )
 
 func tryAnything(b []byte) map[string]interface{} {

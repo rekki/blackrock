@@ -1,11 +1,9 @@
 package main
 
 import (
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"math"
-	"os"
 	"strings"
 	"time"
 )
@@ -189,6 +187,7 @@ type Query interface {
 	advance(int32) int32
 	Next() int32
 	GetDocId() int32
+	GetTime() (int32, int32)
 	Score() float32
 	Reset()
 	String() string
@@ -204,18 +203,23 @@ func (q *QueryBase) GetDocId() int32 {
 
 type Term struct {
 	cursor   int
-	postings []int32
+	postings []uint64
 	term     string
+	time     int32
 	QueryBase
 }
 
-func NewTerm(t string, postings []int32) *Term {
+func NewTerm(t string, postings []uint64) *Term {
 	return &Term{
 		term:      t,
 		cursor:    -1,
 		postings:  postings,
 		QueryBase: QueryBase{NOT_READY},
 	}
+}
+
+func (t *Term) GetTime() (int32, int32) {
+	return t.time, t.time
 }
 
 func (t *Term) String() string {
@@ -225,6 +229,7 @@ func (t *Term) String() string {
 func (t *Term) Reset() {
 	t.cursor = -1
 	t.docId = NOT_READY
+	t.time = 0
 }
 
 func (t *Term) Score() float32 {
@@ -245,10 +250,11 @@ func (t *Term) advance(target int32) int32 {
 
 	for start < end {
 		mid := start + ((end - start) / 2)
-		current := t.postings[mid]
+		current, timeSecond := extractDocId(t.postings[mid])
 		if current == target {
 			t.cursor = mid
 			t.docId = target
+			t.time = timeSecond
 			return target
 		}
 
@@ -260,19 +266,25 @@ func (t *Term) advance(target int32) int32 {
 	}
 	if start >= len(t.postings) {
 		t.docId = NO_MORE
+		t.time = 0
 		return NO_MORE
 	}
 	t.cursor = start
-	t.docId = t.postings[start]
+	t.docId, t.time = extractDocId(t.postings[start])
 	return t.docId
+}
+
+func extractDocId(x uint64) (int32, int32) {
+	return int32(x >> 32), int32(x & 0xffffffff)
 }
 
 func (t *Term) Next() int32 {
 	t.cursor++
 	if t.cursor >= len(t.postings) {
 		t.docId = NO_MORE
+		t.time = 0
 	} else {
-		t.docId = t.postings[t.cursor]
+		t.docId, t.time = extractDocId(t.postings[t.cursor])
 	}
 	return t.docId
 }
@@ -296,6 +308,27 @@ func NewBoolOrQuery(queries ...Query) *BoolOrQuery {
 		QueryBase:     QueryBase{NOT_READY},
 	}
 }
+
+func (q *BoolOrQuery) GetTime() (int32, int32) {
+	min := int32(math.MaxInt32)
+	max := int32(0)
+	n := len(q.queries)
+	for i := 0; i < n; i++ {
+		sub_query := q.queries[i]
+		if sub_query.GetDocId() == q.docId {
+			qmin, qmax := sub_query.GetTime()
+			if qmin < min {
+				min = qmin
+			}
+			if qmax > max {
+				max = qmax
+			}
+		}
+	}
+	return min, max
+
+}
+
 func (q *BoolOrQuery) Reset() {
 	q.docId = NOT_READY
 	for _, v := range q.queries {
@@ -380,6 +413,24 @@ func (q *BoolAndQuery) SetNot(not Query) *BoolAndQuery {
 	return q
 }
 
+func (q *BoolAndQuery) GetTime() (int32, int32) {
+	min := int32(math.MaxInt32)
+	max := int32(0)
+	n := len(q.queries)
+	for i := 0; i < n; i++ {
+		sub_query := q.queries[i]
+		qmin, qmax := sub_query.GetTime()
+		if qmin < min {
+			min = qmin
+		}
+		if qmax > max {
+			max = qmax
+		}
+	}
+	return min, max
+
+}
+
 func (q *BoolAndQuery) Score() float32 {
 	return float32(len(q.queries))
 }
@@ -462,93 +513,4 @@ func (q *BoolAndQuery) Next() int32 {
 
 	// XXX: pick cheapest leading query
 	return q.nextAndedDoc(q.queries[0].Next())
-}
-
-type TermFile struct {
-	cursor int32
-	size   int32
-	file   *os.File
-	term   string
-	QueryBase
-}
-
-func NewTermFile(t string, f *os.File) *TermFile {
-	fs, err := f.Stat()
-	size := int32(0)
-	if err == nil {
-		size = int32(fs.Size())
-	}
-	return &TermFile{
-		term:      t,
-		cursor:    -1,
-		size:      size / 8,
-		file:      f,
-		QueryBase: QueryBase{NOT_READY},
-	}
-}
-
-func (t *TermFile) String() string {
-	return t.term
-}
-
-func (t *TermFile) Reset() {
-	t.cursor = -1
-	t.docId = NOT_READY
-}
-
-func (t *TermFile) Score() float32 {
-	return float32(1)
-}
-
-func (t *TermFile) read(pos int32) int32 {
-	data := make([]byte, 4)
-	_, err := t.file.ReadAt(data, int64(pos))
-	if err != nil {
-		return NO_MORE
-	}
-	return int32(binary.LittleEndian.Uint32(data))
-}
-
-func (t *TermFile) advance(target int32) int32 {
-	// FIXME(jackdoe): add buffer with few hundred integers to dramatically reduce the reads
-	if t.docId == NO_MORE || t.docId == target || target == NO_MORE {
-		t.docId = target
-		return t.docId
-	}
-
-	if t.cursor < 0 {
-		t.cursor = 0
-	}
-
-	start := t.cursor
-	end := t.size
-
-	for start < end {
-		mid := start + ((end - start) / 2)
-		current := t.read(mid * 8)
-		if current == target {
-			t.cursor = mid
-			t.docId = target
-			return target
-		}
-
-		if current < target {
-			start = mid + 1
-		} else {
-			end = mid
-		}
-	}
-	if start >= t.size {
-		t.docId = NO_MORE
-		return NO_MORE
-	}
-	t.cursor = start
-	t.docId = t.read(start * 8)
-	return t.docId
-}
-
-func (t *TermFile) Next() int32 {
-	t.cursor++
-	t.docId = t.read(t.cursor * 8)
-	return t.docId
 }

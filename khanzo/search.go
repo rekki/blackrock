@@ -5,8 +5,8 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"github.com/jackdoe/blackrock/depths"
-	"github.com/jackdoe/blackrock/jubei/disk"
+	"github.com/rekki/blackrock/depths"
+	"github.com/rekki/blackrock/jubei/disk"
 )
 
 type ExpQueryRequest struct {

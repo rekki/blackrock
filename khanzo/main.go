@@ -27,12 +27,12 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/gogo/protobuf/proto"
 	lru "github.com/hashicorp/golang-lru"
-	"github.com/jackdoe/blackrock/depths"
-	"github.com/jackdoe/blackrock/jubei/consume"
-	"github.com/jackdoe/blackrock/jubei/disk"
-	"github.com/jackdoe/blackrock/khanzo/chart"
-	"github.com/jackdoe/blackrock/orgrim/spec"
 	auth "github.com/jackdoe/gin-basic-auth-dynamic"
+	"github.com/rekki/blackrock/depths"
+	"github.com/rekki/blackrock/jubei/consume"
+	"github.com/rekki/blackrock/jubei/disk"
+	"github.com/rekki/blackrock/khanzo/chart"
+	"github.com/rekki/blackrock/orgrim/spec"
 	log "github.com/sirupsen/logrus"
 )
 

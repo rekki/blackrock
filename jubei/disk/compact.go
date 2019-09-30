@@ -11,7 +11,7 @@ import (
 	"sync"
 
 	"github.com/golang/snappy"
-	"github.com/jackdoe/blackrock/depths"
+	"github.com/rekki/blackrock/depths"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -35,13 +35,13 @@ func DeleteUncompactedPostings(root string) error {
 	return nil
 }
 
-func ReadAllTermsInSegment(root string) (map[string][]uint32, error) {
+func ReadAllTermsInSegment(root string) (map[string][]uint64, error) {
 	fields, err := ioutil.ReadDir(path.Join(root))
 	if err != nil {
 		return nil, err
 	}
 
-	segment := map[string][]uint32{}
+	segment := map[string][]uint64{}
 	for _, field := range fields {
 		if !field.IsDir() {
 			continue
@@ -67,11 +67,11 @@ func ReadAllTermsInSegment(root string) (map[string][]uint32, error) {
 						}
 
 						postings, err := ioutil.ReadAll(file)
-						n := len(postings) / 4
-						longed := make([]uint32, n)
+						n := len(postings) / 8
+						longed := make([]uint64, n)
 						j := 0
-						for i := 0; i < n*4; i += 4 {
-							longed[j] = binary.LittleEndian.Uint32(postings[i:])
+						for i := 0; i < n*8; i += 8 {
+							longed[j] = binary.LittleEndian.Uint64(postings[i:])
 							j++
 						}
 						t := strings.TrimSuffix(term.Name(), ".p")
@@ -85,7 +85,7 @@ func ReadAllTermsInSegment(root string) (map[string][]uint32, error) {
 	return segment, nil
 }
 
-func WriteCompactedIndex(root string, segment map[string][]uint32) error {
+func WriteCompactedIndex(root string, segment map[string][]uint64) error {
 	offsets := map[string]uint32{}
 	dw, err := NewForwardWriter(root, "segment.data")
 	if err != nil {
@@ -93,7 +93,7 @@ func WriteCompactedIndex(root string, segment map[string][]uint32) error {
 	}
 	defer dw.Close()
 	for term, postings := range segment {
-		off, err := dw.Append(depths.UintsToBytes(postings))
+		off, err := dw.Append(depths.Uints64ToBytes(postings))
 		if err != nil {
 			return err
 		}
@@ -128,7 +128,7 @@ func NewCompactIndexCache() *CompactIndexCache {
 	}
 }
 
-func (c *CompactIndexCache) FindPostingsList(root, k, v string) []int32 {
+func (c *CompactIndexCache) FindPostingsList(root, k, v string) []uint64 {
 	tagKey := depths.Cleanup(strings.ToLower(k))
 	tagValue := depths.Cleanup(strings.ToLower(v))
 	headerPath := path.Join(root, "segment.header")
@@ -144,14 +144,14 @@ func (c *CompactIndexCache) FindPostingsList(root, k, v string) []int32 {
 		if err != nil {
 			// invariant
 			log.Warnf("failed to read header, err: %s", err.Error())
-			return []int32{}
+			return []uint64{}
 		}
 
 		header, err := snappy.Decode(nil, compressedHeader)
 		if err != nil {
 			// invariant
 			log.Warnf("failed to read header, err: %s", err.Error())
-			return []int32{}
+			return []uint64{}
 		}
 
 		offsets = map[string]uint32{}
@@ -159,7 +159,7 @@ func (c *CompactIndexCache) FindPostingsList(root, k, v string) []int32 {
 		if err != nil {
 			// invariant
 			log.Warnf("failed to decode header, err: %s", err.Error())
-			return []int32{}
+			return []uint64{}
 		}
 		log.Warnf("openned %s", root)
 		c.Lock()
@@ -169,21 +169,21 @@ func (c *CompactIndexCache) FindPostingsList(root, k, v string) []int32 {
 
 	offset, ok := offsets[fmt.Sprintf("%s:%s", tagKey, tagValue)]
 	if !ok {
-		return []int32{}
+		return []uint64{}
 	}
 	fw, err := NewForwardWriter(root, "segment.data")
 	if err != nil {
 		// invariant
 		log.Warnf("failed to open data, err: %s", err.Error())
-		return []int32{}
+		return []uint64{}
 	}
 	defer fw.Close()
 	data, _, err := fw.Read(offset)
 	if err != nil {
 		// invariant
 		log.Warnf("failed to read data, err: %s", err.Error())
-		return []int32{}
+		return []uint64{}
 	}
 
-	return depths.BytesToInts(data)
+	return depths.BytesToUints64(data)
 }

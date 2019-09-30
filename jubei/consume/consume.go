@@ -7,9 +7,9 @@ import (
 	"time"
 
 	"github.com/gogo/protobuf/proto"
-	"github.com/jackdoe/blackrock/depths"
-	"github.com/jackdoe/blackrock/jubei/disk"
-	"github.com/jackdoe/blackrock/orgrim/spec"
+	"github.com/rekki/blackrock/depths"
+	"github.com/rekki/blackrock/jubei/disk"
+	"github.com/rekki/blackrock/orgrim/spec"
 	"github.com/spaolacci/murmur3"
 )
 
@@ -60,7 +60,7 @@ func ConsumeEvents(segmentId string, envelope *spec.Envelope, forward *disk.Forw
 	meta.EventType = eventType
 	meta.ForeignType = foreignType
 	meta.ForeignId = foreignId
-
+	second := int32(meta.CreatedAtNs / 1e9)
 	for i, kv := range meta.Search {
 		k := kv.Key
 		v := kv.Value
@@ -91,8 +91,6 @@ func ConsumeEvents(segmentId string, envelope *spec.Envelope, forward *disk.Forw
 	}
 	// add some automatic tags
 	{
-		ns := meta.CreatedAtNs
-		second := ns / 1000000000
 		t := time.Unix(int64(second), 0).UTC()
 		year, month, day := t.Date()
 		hour, _, _ := t.Clock()
@@ -112,14 +110,14 @@ func ConsumeEvents(segmentId string, envelope *spec.Envelope, forward *disk.Forw
 		return err
 	}
 
-	inverted.Append(segmentId, int32(docId), foreignType, foreignId)
-	inverted.Append(segmentId, int32(docId), "event_type", eventType)
+	inverted.Append(segmentId, int32(docId), second, foreignType, foreignId)
+	inverted.Append(segmentId, int32(docId), second, "event_type", eventType)
 
 	for _, kv := range meta.Search {
-		inverted.Append(segmentId, int32(docId), kv.Key, kv.Value)
+		inverted.Append(segmentId, int32(docId), second, kv.Key, kv.Value)
 	}
 	for ex, _ := range meta.Track {
-		inverted.Append(segmentId, int32(docId), "__experiment", ex)
+		inverted.Append(segmentId, int32(docId), second, "__experiment", ex)
 	}
 
 	return nil
