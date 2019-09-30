@@ -3,6 +3,7 @@ module github.com/rekki/blackrock
 go 1.12
 
 require (
+	github.com/avct/uasurfer v0.0.0-20190821150637-906cc7dc6197
 	github.com/bxcodec/faker v2.0.1+incompatible // indirect
 	github.com/dgryski/go-metro v0.0.0-20180109044635-280f6062b5bc
 	github.com/gin-contrib/cors v1.3.0
@@ -13,6 +14,7 @@ require (
 	github.com/hashicorp/golang-lru v0.5.3
 	github.com/jackdoe/gin-basic-auth-dynamic v0.0.0-20180623204608-9063d1759bcd
 	github.com/jessevdk/go-assets v0.0.0-20160921144138-4f4301a06e15
+	github.com/lib/pq v1.2.0
 	github.com/mcuadros/go-gin-prometheus v0.1.0
 	github.com/mssola/user_agent v0.5.0
 	github.com/oschwald/geoip2-golang v1.3.0
