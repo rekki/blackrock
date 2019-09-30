@@ -100,13 +100,13 @@ func dt(docId, t int32) uint64 {
 }
 func TestAndThen(t *testing.T) {
 	click := []uint64{dt(1, 100), dt(2, 100), dt(3, 250)}
-	buy := []uint64{dt(30, 10), dt(40, 101), dt(50, 251), dt(100, 300)}
+	buy := []uint64{dt(30, 10), dt(40, 101), dt(41, 102), dt(42, 120), dt(50, 251), dt(100, 300)}
 	res := query(NewAndThenQuery(
 		NewTerm("click", click),
 		NewTerm("buy", buy),
-		1,
+		2,
 	))
-	eq(t, []int32{40, 50}, res)
+	eq(t, []int32{40, 41, 50}, res)
 }
 
 func TestModify(t *testing.T) {
