@@ -9,6 +9,7 @@ services:
         CMD: jubei
     image: 'rekki/jubei:docker-compose'
     command: -kafka=kafka_1:19091,kafka_2:19092,kafka_3:19093
+    restart: always
   khanzo:
     build:
       context: ..
@@ -18,6 +19,7 @@ services:
     image: 'rekki/khanzo:docker-compose'
     ports:
       - "127.0.0.1:9002:9002"
+    restart: always
   orgrim:
     build:
       context: ..
@@ -28,3 +30,4 @@ services:
     command: -kafka=kafka_1:19091,kafka_2:19092,kafka_3:19093
     ports:
       - "127.0.0.1:9001:9001"
+    restart: always
