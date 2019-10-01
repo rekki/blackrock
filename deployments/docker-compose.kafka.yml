@@ -3,6 +3,7 @@ services:
 
   zookeeper:
     image: wurstmeister/zookeeper:latest
+
   kafka_1:
     image: wurstmeister/kafka:latest
     ports:
@@ -14,6 +15,7 @@ services:
       KAFKA_INTER_BROKER_LISTENER_NAME: INSIDE
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
     restart: always
+
   kafka_2:
     image: wurstmeister/kafka:latest
     ports:
@@ -25,6 +27,7 @@ services:
       KAFKA_INTER_BROKER_LISTENER_NAME: INSIDE
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
     restart: always
+
   kafka_3:
     image: wurstmeister/kafka:latest
     ports:
