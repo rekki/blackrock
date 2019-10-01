@@ -1,5 +1,5 @@
 # KHANZO scout : searcher
-![khanzo](../_/img/khanzo.jpg)
+![khanzo](../../assets/khanzo.jpg)
 
 # [LORE](https://wow.gamepedia.com/Khanzo)
 
@@ -35,7 +35,7 @@ event stream
    {created: "Sun 14 Jul 21:19:58", user: 5, book: 10, event: "click"},
    {created: "Sun 14 Jul 21:20:55", user: 5, book: 10, event: "click"},
    {created: "Sun 14 Jul 22:41:02", user: 5, book: 10, event: "book"}
-[   
+[
 
 ```
 
@@ -60,9 +60,9 @@ context and if found it will lookup from the book's properties and try
 to find accessible context for them, so it will lookup for `author:
 60` and join with the author.
 
-![context](../_/img/context_thumb.jpg)
+![context](../../assets/context_thumb.jpg)
 
-[full size image](https://github.com/rekki/blackrock/raw/master/_/img/context_full.jpg)
+[full size image](../../assets/context_full.jpg)
 
 # searching
 

@@ -1,6 +1,6 @@
 # JUBEI'THOS blademaster : indexer
 
-![jubei](../_/img/jubei.jpg)
+![jubei](../../assets/jubei.jpg)
 
 # [LORE](https://wow.gamepedia.com/Jubei%27Thos)
 
@@ -30,5 +30,3 @@ consume events from the topic, for each tag K:V build append the
 offset(uint64) to `root/topic/forward.bin`, then gets this offset and
 builds inverted index in `root/topic/tagKey/tagValue.p` which is
 searched by [khanzo](../khanzo)
-
-

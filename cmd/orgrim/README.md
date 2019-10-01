@@ -1,6 +1,6 @@
 # ORGRIM DOOMHAMMER  warchief : leader
 
-![orgrim](../_/img/orgrim.jpg)
+![orgrim](../../assets/orgrim.jpg)
 
 > “I rule the Horde now, Gul'dan. Not you, not your
 >  warlocks. Doomhammer alone. And there will be no more dishonor. No
@@ -50,7 +50,7 @@ message KV {
 }
 
 message Metadata {
-        repeated KV tags = 1; 
+        repeated KV tags = 1;
         repeated KV properties = 2;
         int64 created_at_ns  = 5;
         string event_type = 7;
@@ -73,4 +73,3 @@ message Envelope {
 }
 
 ```
-

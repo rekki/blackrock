@@ -1,6 +1,6 @@
 # BLACKROCK CLAN
 
-![blackrock](_/img/blackrock.jpg)
+![blackrock](assets/blackrock.jpg)
 
 # [LORE](https://wow.gamepedia.com/Blackrock_clan)
 
@@ -22,9 +22,9 @@ ordered within a partition, and builds inverted indexes that can be searched
 
 Composed of the following characters:
 
-* [orgrim ](orgrim/) - consume events
-* [jubei](jubei/) - create indexes
-* [khanzo](khanzo/) - search
+* [orgrim](cmd/orgrim) - consume events
+* [jubei](cmd/jubei) - create indexes
+* [khanzo](cmd/khanzo) - search
 
 # do not use in production, it is 1 day old
 
@@ -82,8 +82,8 @@ Now if you go to http://localhost:9001/scan/html/event_type:buy_book you will se
 
 There are 3 endpoints on orgrim /push/flatten, /push/envelope and
 /push/context, /push/envelope takes a protobuf Envelope object from
-[orgrim/spec/spec.proto](orgrim/spec/spec.proto), /push/context takes
-Context object from [orgrim/spec/spec.proto](orgrim/spec/spec.proto),
+[cmd/orgrim/spec/spec.proto](cmd/orgrim/spec/spec.proto), /push/context takes
+Context object from [cmd/orgrim/spec/spec.proto](cmd/orgrim/spec/spec.proto),
 /push/flatten can take complex json and flatten it into Envelope using
 the dot notation (meaning `{a:{b:true}}` becomes `{a.b: true}`)
 
@@ -129,7 +129,7 @@ README:TODO
 
 # cool text
 
-example khanzo output (see full output on [baxx.dev](https://baxx.dev/s/72eb433e-4bae-4533-a0f3-86dcbca835aa))
+example khanzo output (see [full output](https://baxx.dev/s/72eb433e-4bae-4533-a0f3-86dcbca835aa))
 
 ```
 ┌                                                                              ┐
