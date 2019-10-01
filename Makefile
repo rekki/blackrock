@@ -9,13 +9,14 @@ all: build test
 build: $(CMDS) $(EXAMPLES)
 
 $(CMDS):
-	CGO_ENABLED=0 go build -a -o ./$@ $(GO_MOD)/cmd/$@
+	CGO_ENABLED=0 go build -o ./$@ $(GO_MOD)/cmd/$@
 
 $(EXAMPLES):
-	CGO_ENABLED=0 go build -a -o ./$@ $(GO_MOD)/examples/$(patsubst example-%,%,$@)
+	CGO_ENABLED=0 go build -o ./$@ $(GO_MOD)/examples/$(patsubst example-%,%,$@)
 
 test:
-	go test -v ./...
+	go vet ./...
+	go test -vet=off ./...
 
 clean: $(patsubst %,clean-%,$(CMDS)) $(patsubst %,clean-%,$(EXAMPLES))
 
