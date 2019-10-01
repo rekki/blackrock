@@ -1,21 +1,26 @@
 VERSION ?= 0.100
 
-CMDS ?= $(patsubst cmd/%,%,$(wildcard cmd/*))
 GO_MOD ?= github.com/rekki/blackrock
+CMDS ?= $(patsubst cmd/%,%,$(wildcard cmd/*))
+EXAMPLES ?= $(patsubst examples/%,example-%,$(wildcard examples/*))
 
 all: build test
 
-build: $(CMDS)
+build: $(CMDS) $(EXAMPLES)
 
 $(CMDS):
-	CGO_ENABLED=0 go build -a -o ./$@ $(GO_MOD)/cmd/$@
+	CGO_ENABLED=0 go build -o ./$@ $(GO_MOD)/cmd/$@
+
+$(EXAMPLES):
+	CGO_ENABLED=0 go build -o ./$@ $(GO_MOD)/examples/$(patsubst example-%,%,$@)
 
 test:
-	go test -v ./...
+	go vet ./...
+	go test -vet=off ./...
 
-clean: $(patsubst %,clean-%,$(CMDS))
+clean: $(patsubst %,clean-%,$(CMDS)) $(patsubst %,clean-%,$(EXAMPLES))
 
-$(patsubst %,clean-%,$(CMDS)):
+$(patsubst %,clean-%,$(CMDS)) $(patsubst %,clean-%,$(EXAMPLES)):
 	rm -f $(patsubst clean-%,%,$@)
 
 docker-build: $(patsubst %,docker-build-%,$(CMDS))
@@ -52,4 +57,4 @@ clean-all: clean docker-compose-down docker-clean
 
 # Do not forget to update the .PHONY target with the command below:
 #   echo ".PHONY: $(cat Makefile | grep -v '^.PHONY:' | grep -oE '^[a-z$][^:]+' | tr '\n' ' ')"
-.PHONY: all build $(CMDS) test clean $(patsubst %,clean-%,$(CMDS)) docker-build $(patsubst %,docker-build-%,$(CMDS)) docker-push $(patsubst %,docker-push-%,$(CMDS)) docker-clean $(patsubst %,docker-clean-%,$(CMDS)) docker-compose-up docker-compose-up-kafka docker-compose-ps docker-compose-logs docker-compose-down clean-all
+.PHONY: all build $(CMDS) $(EXAMPLES) test clean $(patsubst %,clean-%,$(CMDS)) docker-build $(patsubst %,docker-build-%,$(CMDS)) docker-push $(patsubst %,docker-push-%,$(CMDS)) docker-clean $(patsubst %,docker-clean-%,$(CMDS)) docker-compose-up docker-compose-up-kafka docker-compose-ps docker-compose-logs docker-compose-down clean-all

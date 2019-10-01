@@ -1,6 +1,25 @@
-os:
-  - linux
-  - osx
-language: go
-go:
-  - 1.x
+notifications:
+  email: false
+
+git:
+  depth: 1
+
+matrix:
+  include:
+    - os: linux
+      language: go
+      go:
+        - 1.x
+      cache:
+        directories:
+          - $HOME/.cache/go-build
+          - $HOME/gopath/pkg/mod
+
+    - os: osx
+      language: go
+      go:
+        - 1.x
+      cache:
+        directories:
+          - $HOME/Library/Caches/go-build
+          - $HOME/gopath/pkg/mod

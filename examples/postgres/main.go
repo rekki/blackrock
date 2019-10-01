@@ -9,9 +9,9 @@ import (
 	"time"
 
 	_ "github.com/lib/pq"
-	"github.com/rekki/blackrock/pkg/depths"
 	orgrim "github.com/rekki/blackrock/cmd/orgrim/client"
 	"github.com/rekki/blackrock/cmd/orgrim/spec"
+	"github.com/rekki/blackrock/pkg/depths"
 )
 
 func tryAnything(b []byte) map[string]interface{} {
@@ -33,7 +33,7 @@ func main() {
 	pgurl := flag.String("postgres-url", "host=localhost user=postgres dbname=example password=example", "Postgres URL")
 	flag.Parse()
 
-	og := orgrim.NewClient(*fdest, nil)
+	og := orgrim.NewClient(*fdest, "", nil)
 	if *ftype == "" {
 		log.Fatal("need -foreign-type")
 	}
@@ -99,13 +99,13 @@ func main() {
 			case []interface{}:
 				flattened, err = depths.FlattenArray(v.([]interface{}), k+".", depths.DotStyle)
 				if err != nil {
-					log.Panic("failed to flatten: err: %s, value: %v", err.Error(), parsed)
+					log.Panicf("failed to flatten: err: %s, value: %v", err.Error(), parsed)
 				}
 
 			case map[string]interface{}:
 				flattened, err = depths.Flatten(v.(map[string]interface{}), k+".", depths.DotStyle)
 				if err != nil {
-					log.Panic("failed to flatten: err: %s, value: %v", err.Error(), parsed)
+					log.Panicf("failed to flatten: err: %s, value: %v", err.Error(), parsed)
 				}
 			default:
 				flattened[k] = orgrim.ToString(v)

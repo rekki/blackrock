@@ -13,7 +13,7 @@ import (
 )
 
 func main() {
-	og := orgrim.NewClient("http://localhost:9001/", nil)
+	og := orgrim.NewClient("http://localhost:9001/", "", nil)
 	r := gin.New()
 
 	r.Use(Blackrock("request", "gin", "example", og, nil))

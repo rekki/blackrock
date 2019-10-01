@@ -88,9 +88,11 @@ func doio(t *testing.T, c *Client, size int) {
 	}
 
 }
-func TestExample(t *testing.T) {
-	c := NewClient("http://localhost:9001/", "test_token", nil)
-	for i := 0; i < 1000; i++ {
-		doio(t, c, i)
-	}
-}
+
+// TODO(aymeric): launch an orgrim instance
+// func TestExample(t *testing.T) {
+// 	c := NewClient("http://localhost:9001/", "test_token", nil)
+// 	for i := 0; i < 1000; i++ {
+// 		doio(t, c, i)
+// 	}
+// }
