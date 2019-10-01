@@ -16,7 +16,7 @@ import (
 	"github.com/satyrius/gonx"
 )
 
-func IsBot(x string) bool {
+func isBot(x string) bool {
 	ua := uasurfer.Parse(x)
 	return ua.IsBot()
 }
@@ -24,7 +24,7 @@ func IsBot(x string) bool {
 func main() {
 	format := flag.String("format", `"$remote_addr [$time_local] "$request" $status`, "the format line format")
 	input := flag.String("input", "", "file to tail")
-	orgrimUrl := flag.String("orgrim", "http://127.0.0.1:9001", "orgrim url")
+	orgrimURL := flag.String("orgrim", "http://127.0.0.1:9001", "orgrim url")
 	flag.Parse()
 
 	if *input == "" {
@@ -44,7 +44,7 @@ func main() {
 		log.Panic(err)
 	}
 
-	og := orgrim.NewClient(*orgrimUrl, nil)
+	og := orgrim.NewClient(*orgrimURL, "", nil)
 
 	t, err := tail.TailFile(*input, tail.Config{Follow: true, ReOpen: true})
 	for line := range t.Lines {
@@ -53,10 +53,16 @@ func main() {
 			log.Printf("err: %s", err.Error())
 			continue
 		}
-		f := rec.Fields()
+
+		timeLocalField, _ := rec.Field("time_local")
+		requestField, _ := rec.Field("request")
+		upstreamResponseTimeField, _ := rec.Field("upstream_response_time")
+		statusField, _ := rec.Field("status")
+		httpUserAgentField, _ := rec.Field("http_user_agent_field")
+
 		method := ""
 		requestPath := ""
-		splitted := strings.Split(f["request"], " ")
+		splitted := strings.Split(requestField, " ")
 		if len(splitted) > 0 {
 			method = splitted[0]
 			requestPath = splitted[1]
@@ -66,8 +72,8 @@ func main() {
 			}
 		}
 
-		localTime, _ := time.Parse("02/Jan/2006:15:04:05 -0700", f["time_local"])
-		supstreamTime := f["upstream_response_time"]
+		localTime, _ := time.Parse("02/Jan/2006:15:04:05 -0700", timeLocalField)
+		supstreamTime := upstreamResponseTimeField
 		upstreamTime := float64(0)
 		slow := false
 		if supstreamTime != "" {
@@ -81,13 +87,15 @@ func main() {
 			slow = true
 		}
 		tookMs := uint64(upstreamTime * 1000)
+
+		// TODO(aymeric): we can no longer iterate on those keys
 		properties := []spec.KV{}
-		for k, v := range f {
-			if k == "status" || k == "time_local" {
-				continue
-			}
-			properties = append(properties, orgrim.KV(k, v))
-		}
+		// for k, v := range f {
+		// 	if k == "status" || k == "time_local" {
+		// 		continue
+		// 	}
+		// 	properties = append(properties, orgrim.KV(k, v))
+		// }
 
 		kv := &spec.Envelope{
 			Metadata: &spec.Metadata{
@@ -95,12 +103,12 @@ func main() {
 				ForeignId:   hostname,
 				EventType:   "request",
 				Search: []spec.KV{
-					orgrim.KV("status", f["status"]),
+					orgrim.KV("status", statusField),
 					orgrim.KV("method", method),
 					orgrim.KV("path", requestPath),
 					orgrim.KV("hostname", hostname),
 					orgrim.KV("slow", slow),
-					orgrim.KV("bot", IsBot(f["http_user_agent"])),
+					orgrim.KV("bot", isBot(httpUserAgentField)),
 				},
 				Count: []spec.KV{
 					orgrim.KV("took_round", tookMs/100*100),
