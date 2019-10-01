@@ -1,138 +1,211 @@
-# blackrock
+# KHANZO scout : searcher
+![khanzo](../../assets/khanzo.jpg)
 
-[![travis](https://img.shields.io/travis/rekki/blackrock?style=flat-square&logo=travis)](https://travis-ci.org/rekki/blackrock)
-[![github](https://img.shields.io/github/issues/rekki/blackrock?style=flat-square&logo=github)](https://github.com/rekki/blackrock/issues)
+# [LORE](https://wow.gamepedia.com/Khanzo)
 
-![blackrock](assets/blackrock.jpg)
+Khanzo was an orc blademaster of the Blackrock clan, and commander of
+the Blackrock Scouts, who guarded a demon gate in the Alterac
+Mountains of Lordaeron. Arthas and the lich Kel'Thuzad killed him
+along with four other orcs, in order for Kel'Thuzad to commune with
+the demon lord Archimonde.
 
-# [LORE](https://wow.gamepedia.com/Blackrock_clan)
+# speed
 
-The Blackrock clan is a prominent orcish clan originally hailing from
-the caverns of Gorgrond. On Draenor, they were known for their strict
-military discipline and skills in mining and blacksmithing. One of the
-first orcish clans to be taught the ways of fel magic, the Blackrocks
-were the strongest faction within the Old Horde during the course of
-the First and Second Wars, and the Horde's first two Warchiefs —
-Blackhand and his deposer Orgrim Doomhammer — were both Blackrocks.
+By default khanzo picks last 100k documents by simply seeking the
+inverted index file to size(file) - (100_000 * 8), and for scanning it
+seeks the forward file (event log) to size(file) - 50mb, this allow
+all basic operations to be semi constant.
 
-# heroes
+Imagine a scenario where you are generating 100 errors per second, any
+conventional log store starts being delayed because it has O(n)
+somewhere, where N is the number of events(oversimplification of
+course.  could be in log tree merges or sst compactions), but this is
+not the case here, because we just seek to near the end.
 
-This is simple proof of concept events index and search system.
+You can parameterize the queries to specify if you want to start from
+the beginning (`scan_max_documents: -1` in the query), also things can
+be faster if you decide not to decode the metadata in the hit.
 
-It has only kafka as dependency, it abuses the fact that offsets are
-ordered within a partition, and builds inverted indexes that can be searched
 
+# context
 
-Composed of the following characters:
-
-* [orgrim](cmd/orgrim) - consume events
-* [jubei](cmd/jubei) - create indexes
-* [khanzo](cmd/khanzo) - search
-
-# do not use in production, it is 1 day old
-
-# running it locally
-
-You can run it locally without any dependencies, there is
-special parameter to khanzo that embeds orgrim and jubei(for testing
-purposes).
+event stream
+```
+[
+   {created: "Sun 14 Jul 21:19:58", user: 5, book: 10, event: "click"},
+   {created: "Sun 14 Jul 21:20:55", user: 5, book: 10, event: "click"},
+   {created: "Sun 14 Jul 22:41:02", user: 5, book: 10, event: "book"}
+[
 
 ```
-$ cd khanzo && go build
-$ ./khanzo -root /tmp/gen13  -not-production-accept-events -not-production-geoip GeoLite2-City.mmdb -bind :9001
-```
-you can download GeoLite2-City from https://dev.maxmind.com/geoip/geoip2/geolite2/
 
-this will start khanzo at port 9001, so you can already start using it both to search (http://localhost:9001/scan/html/) and to send events to.
-
-example event:
+context stream
 
 ```
-curl -d '{
-  "count": {
-    "sizeWH": "1455x906",
-    "tz_offset": -120,
-    "window_scroll": {
-      "x": 0,
-      "y": 66
-    }
+[
+   {created: "Sun 14 Jul 21:28:55", author:60, name: "jrr tolkien",... }
+   {created: "Sun 14 Jul 21:29:55", book:10, name: "lotr", author: 60,... }
+   {created: "Sun 14 Jul 21:30:55", user:5, name: "jack",... }
+]
+```
+
+In this example, the context for `user:5` is created at `"Sun 14 Jul
+21:30:55"`, and will be visible to all events after that (keep in mind
+you can also insert context in the past).
+
+Khanzo will automatically and recursively join the context with the
+event stream. So for the event `{created: "Sun 14 Jul 22:41:02", user:
+5, book: 10, event: "book"}`, we will lookup `book:10` from the
+context and if found it will lookup from the book's properties and try
+to find accessible context for them, so it will lookup for `author:
+60` and join with the author.
+
+![context](../../assets/context_thumb.jpg)
+
+[full size image](../../assets/context_full.jpg)
+
+# searching
+
+```
+% curl -d '{
+  "size": 1,
+  "scan_max_documents": -1,
+  "query": {
+    "or": [
+      {
+        "tag": {
+          "key": "user_id",
+          "value": "717f780d067d4abf95b28e013f4570c1"
+        }
+      }
+    ]
   },
-  "event_type": "buy_book",
-  "foreign_id": "c2ace436-cbb9-46e5-8bf8-fcae013c904b",
-  "foreign_type": "user_id",
-  "properties": {
-    "user_agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/76.0.3809.87 Safari/537.36"
-  },
-  "search": {
-    "book_isbn_code": {
-      "9783161484100": true,
-      "9781234567897": true
+  "decode_metadata": true
+}' http://khanzo/search/json
+
+{
+  "hits": [
+    {
+      "context": [
+        {
+          "created_at_ns": 1563131082772484400,
+          "foreign_id": "3f40a264710d4874aadc2ba88b3ed0d3",
+          "foreign_type": "author_id",
+          "properties": [
+            {
+              "key": "date_of_birth",
+              "value": "1974-11-29"
+            },
+            {
+              "key": "name",
+              "value": "quidem"
+            }
+          ]
+        },
+        {
+          "created_at_ns": 1563131082772820500,
+          "foreign_id": "d2ab0acd480c46b2920fed7f8db9af5f",
+          "foreign_type": "book_id",
+          "properties": [
+            {
+              "key": "author_id",
+              "value": "3f40a264710d4874aadc2ba88b3ed0d3"
+            },
+            {
+              "key": "genre",
+              "value": "ea"
+            },
+            {
+              "key": "name",
+              "value": "velit"
+            },
+            {
+              "key": "published_at",
+              "value": "1970-03-20"
+            }
+          ]
+        }
+      ],
+      "foreign_id": "dfe5992d20004791be066b0dc67558a1",
+      "foreign_type": "user_id",
+      "id": 8394,
+      "kafka": {
+        "offset": 37,
+        "partition": 3
+      },
+      "metadata": {
+        "created_at_ns": 1563131082828701400,
+        "event_type": "skip",
+        "foreign_id": "dfe5992d20004791be066b0dc67558a1",
+        "foreign_type": "user_id",
+        "properties": [
+          {
+            "key": "currency",
+            "value": "UAH"
+          },
+          {
+            "key": "timezone",
+            "value": "America/Cayenne"
+          },
+          {
+            "key": "user_agent",
+            "value": "urlfan-bot/1.0; +http://www.urlfan.com/site/bot/350.html"
+          }
+        ],
+        "tags": [
+          {
+            "key": "book_id",
+            "value": "d2ab0acd480c46b2920fed7f8db9af5f"
+          }
+        ]
+      },
+      "score": 1
     },
-    "campaign": "google",
-    "version": {
-      "branch": "test",
-      "sha": "878345202",
-      "version": "1.2.3"
-    }
-  }
-}' http://127.0.0.1:9001/push/flatten
+    {
+      "context": [
+        {
+          "created_at_ns": 1563131082772584000,
+          "foreign_id": "772e1c891915440288565a861bd5ce7a",
+          "foreign_type": "author_id",
+          "properties": [
+            {
+              "key": "date_of_birth",
+              "value": "1980-08-20"
+            },
+            {
+              "key": "name",
+              "value": "labore"
+            }
+          ]
+        },
+        {
+          "created_at_ns": 1563131082772648200,
+          "foreign_id": "f1f503b783b345faacdcdb5fdd0e8fee",
+          "foreign_type": "author_id",
+          "properties": [
+            {
+              "key": "date_of_birth",
+              "value": "2000-03-21"
+            },
+            {
+              "key": "name",
+              "value": "qui"
+            }
+          ]
+        },
+        ...
+  ],
+  "total": 2045
+}
+
 
 ```
 
-Now if you go to http://localhost:9001/scan/html/event_type:buy_book you will see all events with this type.
+# scan
 
-## event structure
+http://khanzo/scan/html/ (or /scan/text/ for text), example output of
+/scan/text/ (see [full output](https://baxx.dev/s/72eb433e-4bae-4533-a0f3-86dcbca835aa))
 
-There are 3 endpoints on orgrim /push/flatten, /push/envelope and
-/push/context, /push/envelope takes a protobuf Envelope object from
-[cmd/orgrim/spec/spec.proto](cmd/orgrim/spec/spec.proto), /push/context takes
-Context object from [cmd/orgrim/spec/spec.proto](cmd/orgrim/spec/spec.proto),
-/push/flatten can take complex json and flatten it into Envelope using
-the dot notation (meaning `{a:{b:true}}` becomes `{a.b: true}`)
-
-### EVENT_TYPE, FOREIGN_ID, FOREIGN_TYPE
-
-Those are mandatory fields
-
-* event_type: this is the type of the event (haha its in the name), there are also charts of events per event type per time
-* foreign_type: e.g. user_id or book_id or whatever foreign_id refers to
-* foreign_id: the id of the event creator (for example the user id that is buying the book)
-
-### SEARCH
-
-Everything in this section is searchable and postings lists are
-created for every key:value pair e.g. going to
-http://localhost:9001/scan/html/event_type:buy_book/campaign:google
-will give you all events that match on the query `event_type=book AND
-campaign=google`, the url DSL is not very sophisticated but works for
-now, you can do
-`http://localhost:9001/scan/html/event_type:buy_book|event_type:click_book`
-to do `event_type=buy_book OR event_type=click_book`, and you can also
-do AND NOT with
-`http://localhost:9001/scan/html/event_type:buy_book/-campaign:google`
-
-All fields are also aggregated and counted
-
-### COUNT
-
-Everything in this section is used only in the aggregations views but it is not indexed
-
-### PROPERTIES
-
-This is not indexed nor counted, so good for stuff like user-agent
-
-# Query DSL
-
-README:TODO
-
-# Experimentation
-
-README:TODO
-
-
-# cool text
-
-example khanzo output (see [full output](https://baxx.dev/s/72eb433e-4bae-4533-a0f3-86dcbca835aa))
 
 ```
 ┌                                                                              ┐
@@ -272,4 +345,29 @@ Fri Jul 19 13:58:11 CEST 2019
 
   [ ...cut ]
 
+```
+
+
+# favicon
+
+* <div>Made by <a href="https://www.freepik.com/" title="Freepik">Freepik</a> from <a href="https://www.flaticon.com/"                 title="Flaticon">www.flaticon.com</a> is licensed by <a href="http://creativecommons.org/licenses/by/3.0/"                 title="Creative Commons BY 3.0" target="_blank">CC 3.0 BY</a></div>
+
+
+
+# fetching many (one event per line)
+size:0 means unlimited
+
+```
+ curl -d '{
+  "size": 5000,
+  "from":"2019-08-08",
+  "to":"2019-08-10",
+  "query": {
+        "tag": {
+          "key": "product",
+          "value": "amazon_com"
+        }
+   },
+   "decode_metadata": true
+ }' http://localhost:9001/v0/fetch/
 ```
