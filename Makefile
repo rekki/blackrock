@@ -17,9 +17,9 @@ $(EXAMPLES):
 test:
 	go test -v ./...
 
-clean: $(patsubst %,clean-%,$(CMDS))
+clean: $(patsubst %,clean-%,$(CMDS)) $(patsubst %,clean-%,$(EXAMPLES))
 
-$(patsubst %,clean-%,$(CMDS)):
+$(patsubst %,clean-%,$(CMDS)) $(patsubst %,clean-%,$(EXAMPLES)):
 	rm -f $(patsubst clean-%,%,$@)
 
 docker-build: $(patsubst %,docker-build-%,$(CMDS))
