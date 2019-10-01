@@ -6,14 +6,15 @@ services:
       context: ..
       dockerfile: ./build/docker/Dockerfile
       args:
-        COMMAND: jubei
+        CMD: jubei
     image: 'rekki/jubei:docker-compose'
+    command: -kafka=kafka_1:19091,kafka_2:19092,kafka_3:19093
   khanzo:
     build:
       context: ..
       dockerfile: ./build/docker/Dockerfile
       args:
-        COMMAND: khanzo
+        CMD: khanzo
     image: 'rekki/khanzo:docker-compose'
     ports:
       - "127.0.0.1:9002:9002"
@@ -22,40 +23,8 @@ services:
       context: ..
       dockerfile: ./build/docker/Dockerfile
       args:
-        COMMAND: orgrim
+        CMD: orgrim
     image: 'rekki/orgrim:docker-compose'
+    command: -kafka=kafka_1:19091,kafka_2:19092,kafka_3:19093
     ports:
       - "127.0.0.1:9001:9001"
-
-  zookeeper:
-    image: wurstmeister/zookeeper:latest
-  kafka_1:
-    image: wurstmeister/kafka:latest
-    ports:
-      - "127.0.0.1:9091:9091"
-    environment:
-      KAFKA_ADVERTISED_LISTENERS: INSIDE://kafka_1:19091,OUTSIDE://127.0.0.1:9091
-      KAFKA_LISTENERS: INSIDE://:19091,OUTSIDE://:9091
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INSIDE:PLAINTEXT,OUTSIDE:PLAINTEXT
-      KAFKA_INTER_BROKER_LISTENER_NAME: INSIDE
-      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-  kafka_2:
-    image: wurstmeister/kafka:latest
-    ports:
-      - "127.0.0.1:9092:9092"
-    environment:
-      KAFKA_ADVERTISED_LISTENERS: INSIDE://kafka_2:19092,OUTSIDE://127.0.0.1:9092
-      KAFKA_LISTENERS: INSIDE://:19092,OUTSIDE://:9092
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INSIDE:PLAINTEXT,OUTSIDE:PLAINTEXT
-      KAFKA_INTER_BROKER_LISTENER_NAME: INSIDE
-      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-  kafka_3:
-    image: wurstmeister/kafka:latest
-    ports:
-      - "127.0.0.1:9093:9093"
-    environment:
-      KAFKA_ADVERTISED_LISTENERS: INSIDE://kafka_3:19093,OUTSIDE://127.0.0.1:9093
-      KAFKA_LISTENERS: INSIDE://:19093,OUTSIDE://:9093
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INSIDE:PLAINTEXT,OUTSIDE:PLAINTEXT
-      KAFKA_INTER_BROKER_LISTENER_NAME: INSIDE
-      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181

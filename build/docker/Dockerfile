@@ -3,7 +3,7 @@
 ###
 
 FROM golang:alpine AS builder
-ARG COMMAND
+ARG CMD
 
 WORKDIR /
 
@@ -17,16 +17,16 @@ COPY go.mod go.sum /
 RUN go mod download
 
 COPY . /
-RUN GOOS=linux GOARCH=amd64 make ${COMMAND}
+RUN GOOS=linux GOARCH=amd64 make ${CMD}
 
 ###
 # runtime image
 ###
 
 FROM scratch
-ARG COMMAND
+ARG CMD
 
-COPY --from=builder /${COMMAND} /entrypoint
+COPY --from=builder /${CMD} /entrypoint
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=builder /geoip /
 
