@@ -43,7 +43,7 @@ docker-compose-ps:
 	docker-compose -f ./deployments/docker-compose.yml -f ./deployments/docker-compose.kafka.yml ps
 
 docker-compose-logs:
-	docker-compose -f ./deployments/docker-compose.yml -f ./deployments/docker-compose.kafka.yml logs --tail=all
+	docker-compose -f ./deployments/docker-compose.yml -f ./deployments/docker-compose.kafka.yml logs --timestamps --tail=all
 
 docker-compose-down:
 	docker-compose -f ./deployments/docker-compose.yml -f ./deployments/docker-compose.kafka.yml down
