@@ -1,4 +1,7 @@
-# BLACKROCK CLAN
+# blackrock
+
+[![travis](https://img.shields.io/travis/rekki/blackrock?style=flat-square&logo=travis)](https://travis-ci.org/rekki/blackrock)
+[![github](https://img.shields.io/github/issues/rekki/blackrock?style=flat-square&logo=github)](https://github.com/rekki/blackrock/issues)
 
 ![blackrock](assets/blackrock.jpg)
 
