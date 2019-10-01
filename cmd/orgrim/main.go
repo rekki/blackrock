@@ -15,8 +15,8 @@ import (
 	"github.com/gogo/protobuf/proto"
 	ginprometheus "github.com/mcuadros/go-gin-prometheus"
 	"github.com/oschwald/geoip2-golang"
-	"github.com/rekki/blackrock/pkg/depths"
 	"github.com/rekki/blackrock/cmd/orgrim/spec"
+	"github.com/rekki/blackrock/pkg/depths"
 	"github.com/segmentio/kafka-go"
 	"github.com/segmentio/kafka-go/snappy"
 	log "github.com/sirupsen/logrus"
@@ -28,7 +28,7 @@ import (
 func main() {
 	var dataTopic = flag.String("topic-data", "blackrock-data", "topic for the data")
 	var contextTopic = flag.String("topic-context", "blackrock-context", "topic for the context")
-	var kafkaServers = flag.String("kafka", "localhost:9092", "kafka addr")
+	var kafkaServers = flag.String("kafka", "localhost:9092", "comma separated list of kafka servers")
 	var createConfig = flag.String("create-if-not-exist", "", "create topics if they dont exist, format: partitions:replication factor")
 	var verbose = flag.Bool("verbose", false, "print info level logs to stdout")
 	var allowOnlyIdentified = flag.Bool("allow-only-identified", false, "allow only requests with valid token")
