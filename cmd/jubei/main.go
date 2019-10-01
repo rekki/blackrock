@@ -17,10 +17,10 @@ import (
 	"strings"
 
 	"github.com/gogo/protobuf/proto"
-	"github.com/rekki/blackrock/pkg/depths"
 	"github.com/rekki/blackrock/cmd/jubei/consume"
 	"github.com/rekki/blackrock/cmd/jubei/disk"
 	"github.com/rekki/blackrock/cmd/orgrim/spec"
+	"github.com/rekki/blackrock/pkg/depths"
 	"github.com/segmentio/kafka-go"
 	_ "github.com/segmentio/kafka-go/snappy"
 	log "github.com/sirupsen/logrus"
@@ -152,7 +152,7 @@ func main() {
 	var contextTopic = flag.String("topic-context", "blackrock-context", "topic for the context")
 	var proot = flag.String("root", "/blackrock", "root directory for the files")
 	var pqueuelen = flag.Int("kafka-queue-capacity", 1000, "internal queue capacity")
-	var kafkaServers = flag.String("kafka", "localhost:9092,localhost:9092", "kafka addrs")
+	var kafkaServers = flag.String("kafka", "localhost:9092", "comma separated list of kafka servers")
 	var verbose = flag.Bool("verbose", false, "print info level logs to stdout")
 	var maxDescriptors = flag.Int("max-descriptors", 1000, "max open descriptors")
 	var compact = flag.Bool("compact", false, "compact everything until today and exit")
@@ -197,7 +197,6 @@ func main() {
 		if err == nil {
 			consumerId = fmt.Sprintf("%s_%d", depths.Cleanup(hostname), suffix)
 		} else {
-
 			consumerId = fmt.Sprintf("__nohost__%d", suffix)
 		}
 		err = ioutil.WriteFile(path.Join(root, "consumer_id"), []byte(consumerId), 0600)
