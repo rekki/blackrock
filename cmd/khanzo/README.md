@@ -204,8 +204,7 @@ to find accessible context for them, so it will lookup for `author:
 # scan
 
 http://khanzo/scan/html/ (or /scan/text/ for text), example output of
-/scan/text/ (see full output on
-[baxx.dev](https://baxx.dev/s/72eb433e-4bae-4533-a0f3-86dcbca835aa))
+/scan/text/ (see [full output](https://baxx.dev/s/72eb433e-4bae-4533-a0f3-86dcbca835aa))
 
 
 ```
