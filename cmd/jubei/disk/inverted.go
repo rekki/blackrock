@@ -50,7 +50,12 @@ func InvertedReadRaw(root string, maxDocuments int32, tagKey, tagValue string) [
 	if os.IsNotExist(err) {
 		log.Infof("missing file %s, returning empty", fn)
 		return []uint64{}
+	} else if err != nil {
+		log.Warnf("failed to open file %s, error: %s", fn, err.Error())
+		return []uint64{}
 	}
+	defer file.Close()
+
 	fi, err := file.Stat()
 	if err != nil {
 		log.Warnf("failed to read file stats: %s, error: %s", fn, err.Error())
@@ -63,7 +68,11 @@ func InvertedReadRaw(root string, maxDocuments int32, tagKey, tagValue string) [
 	if maxDocuments > 0 && total > maxDocuments {
 		seek = (total - maxDocuments) * 8
 	}
-	file.Seek(int64(seek), 0)
+	_, err = file.Seek(int64(seek), 0)
+	if err != nil {
+		log.Warnf("failed to seek in %s, error: %s", fn, err.Error())
+		return []uint64{}
+	}
 	log.Infof("seek %d, total %d max requested: %d", seek, total, maxDocuments)
 
 	postings, err := ioutil.ReadAll(file)

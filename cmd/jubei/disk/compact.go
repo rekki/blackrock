@@ -67,6 +67,10 @@ func ReadAllTermsInSegment(root string) (map[string][]uint64, error) {
 						}
 
 						postings, err := ioutil.ReadAll(file)
+						if err != nil {
+							file.Close()
+							return nil, err
+						}
 						n := len(postings) / 8
 						longed := make([]uint64, n)
 						j := 0

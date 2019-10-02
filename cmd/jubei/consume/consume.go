@@ -116,7 +116,7 @@ func ConsumeEvents(segmentId string, envelope *spec.Envelope, forward *disk.Forw
 	for _, kv := range meta.Search {
 		inverted.Append(segmentId, int32(docId), second, kv.Key, kv.Value)
 	}
-	for ex, _ := range meta.Track {
+	for ex := range meta.Track {
 		inverted.Append(segmentId, int32(docId), second, "__experiment", ex)
 	}
 
