@@ -46,7 +46,7 @@ func (c *Chart) String(n int) string {
 	}
 
 	topKeys := []string{}
-	for k, _ := range top {
+	for k := range top {
 		topKeys = append(topKeys, k)
 	}
 

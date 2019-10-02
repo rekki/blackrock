@@ -42,7 +42,7 @@ func eq(t *testing.T, a []int32, b []int32) {
 		t.FailNow()
 	}
 
-	for i, _ := range a {
+	for i := range a {
 		if a[i] != b[i] {
 			t.Log("a[i] != b[i]")
 			t.FailNow()

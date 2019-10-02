@@ -5,19 +5,9 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"github.com/rekki/blackrock/pkg/depths"
 	"github.com/rekki/blackrock/cmd/jubei/disk"
+	"github.com/rekki/blackrock/pkg/depths"
 )
-
-type ExpQueryRequest struct {
-	Exp           string         `json:"exp"`
-	Cohort        map[string]int `json:"cohort"`
-	Query         interface{}    `json:"query"`
-	Variants      int            `json:"variants"`
-	ExperimentKey string         `json:"key"`
-	From          string         `json:"from"`
-	To            string         `json:"to"`
-}
 
 type QueryRequest struct {
 	Query interface{} `json:"query"`

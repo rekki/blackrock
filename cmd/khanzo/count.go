@@ -45,7 +45,7 @@ func (x *ConvertedCache) Confidence(pv []ConvertedPerVariant) ConfidenceSignific
 func (x *ConvertedCache) TotalConvertingUsers() []ConvertedPerVariant {
 	c := *x
 	maxVariant := uint32(0)
-	for variant, _ := range c {
+	for variant := range c {
 		if variant > maxVariant {
 			maxVariant = variant
 		}
@@ -97,9 +97,7 @@ func (c *CountPerValue) Add(variant uint32, converted bool) {
 	if converted {
 		if variant >= uint32(len(c.CountEventsFromConverterVariant)) {
 			x := make([]uint32, variant+1)
-			for i, v := range c.CountEventsFromConverterVariant {
-				x[i] = v
-			}
+			copy(x, c.CountEventsFromConverterVariant)
 			c.CountEventsFromConverterVariant = x
 		}
 		c.CountEventsFromConverterVariant[variant]++
@@ -213,7 +211,7 @@ func (c *Counter) SortedKeys(what map[string]*CountPerKey) []*CountPerKey {
 		if out[j].Count == out[i].Count {
 			return out[i].Key < out[j].Key
 		}
-		return out[j].Count < out[j].Count
+		return out[j].Count < out[i].Count
 	})
 	return out
 }

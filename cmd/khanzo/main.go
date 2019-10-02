@@ -28,11 +28,11 @@ import (
 	"github.com/gogo/protobuf/proto"
 	lru "github.com/hashicorp/golang-lru"
 	auth "github.com/jackdoe/gin-basic-auth-dynamic"
-	"github.com/rekki/blackrock/pkg/depths"
 	"github.com/rekki/blackrock/cmd/jubei/consume"
 	"github.com/rekki/blackrock/cmd/jubei/disk"
 	"github.com/rekki/blackrock/cmd/khanzo/chart"
 	"github.com/rekki/blackrock/cmd/orgrim/spec"
+	"github.com/rekki/blackrock/pkg/depths"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -154,7 +154,10 @@ func main() {
 
 	go func() {
 		for {
-			contextCache.Scan()
+			err := contextCache.Scan()
+			if err != nil {
+				log.Warnf("error scanning context, err: %v", err)
+			}
 
 			runtime.GC()
 			log.Warnf("lru cache size: %d", cache.Len())
@@ -346,8 +349,17 @@ func main() {
 					c.JSON(400, gin.H{"error": err.Error()})
 					return
 				}
-				w.Write(b)
-				w.Write(nl)
+				_, err = w.Write(b)
+				if err != nil {
+					c.JSON(400, gin.H{"error": err.Error()})
+					return
+				}
+
+				_, err = w.Write(nl)
+				if err != nil {
+					c.JSON(400, gin.H{"error": err.Error()})
+					return
+				}
 
 				if qr.Size > 0 {
 					left--
@@ -522,7 +534,7 @@ func main() {
 
 		// all users that are tracked
 		err := foreach(fmt.Sprintf("%s/__experiment:%s/", c.Param("query"), experiment), dates, func(did int32, cx *spec.Metadata) {
-			variant, ok := cx.Track[experiment]
+			variant := cx.Track[experiment]
 
 			pid, ok := tracked[cx.ForeignType]
 			if !ok {
@@ -718,6 +730,10 @@ func setupSimpleEventAccept(root string, geoipPath string, r *gin.Engine) {
 			return
 		}
 		err = consumeLocally(converted)
+		if err != nil {
+			c.JSON(500, gin.H{"error": err.Error()})
+			return
+		}
 
 		c.JSON(200, gin.H{"success": true})
 	})
