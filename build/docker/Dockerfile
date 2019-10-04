@@ -7,10 +7,10 @@ ARG CMD
 
 WORKDIR /
 
-RUN apk add --no-cache --update ca-certificates curl git make
+RUN apk add --no-cache --update ca-certificates make
 
 RUN mkdir /geoip /tmp/geoip \
-  && curl https://geolite.maxmind.com/download/geoip/database/GeoLite2-City.tar.gz | tar -C /tmp/geoip -zxvf - \
+  && wget -O - https://geolite.maxmind.com/download/geoip/database/GeoLite2-City.tar.gz | tar -C /tmp/geoip -zxvf - \
   && mv /tmp/geoip/GeoLite2-City_*/* /geoip
 
 COPY go.mod go.sum /
@@ -27,7 +27,7 @@ FROM scratch
 ARG CMD
 
 COPY --from=builder /${CMD} /entrypoint
-COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=builder /geoip /
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 
 ENTRYPOINT ["/entrypoint"]

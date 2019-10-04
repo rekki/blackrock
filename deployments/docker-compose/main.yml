@@ -1,34 +1,34 @@
-version: '3.7'
+version: "3.7"
 services:
-
+  #
   jubei:
     build:
-      context: ..
+      context: ../..
       dockerfile: ./build/docker/Dockerfile
       args:
         CMD: jubei
-    image: 'rekki/jubei:docker-compose'
+    image: rekki/jubei:docker-compose
     command: -kafka=kafka_1:19091,kafka_2:19092,kafka_3:19093
     restart: always
-
+  #
   khanzo:
     build:
-      context: ..
+      context: ../..
       dockerfile: ./build/docker/Dockerfile
       args:
         CMD: khanzo
-    image: 'rekki/khanzo:docker-compose'
+    image: rekki/khanzo:docker-compose
     ports:
       - "127.0.0.1:9002:9002"
     restart: always
-
+  #
   orgrim:
     build:
-      context: ..
+      context: ../..
       dockerfile: ./build/docker/Dockerfile
       args:
         CMD: orgrim
-    image: 'rekki/orgrim:docker-compose'
+    image: rekki/orgrim:docker-compose
     command: -kafka=kafka_1:19091,kafka_2:19092,kafka_3:19093
     ports:
       - "127.0.0.1:9001:9001"

@@ -1,8 +1,9 @@
 VERSION ?= 0.100
+DOCKER_REGISTRY ?= rekki
 
-GO_MOD ?= github.com/rekki/blackrock
-CMDS ?= $(patsubst cmd/%,%,$(wildcard cmd/*))
-EXAMPLES ?= $(patsubst examples/%,example-%,$(wildcard examples/*))
+GO_MOD := $(shell head -1 < go.mod | cut -d' ' -f2)
+CMDS := $(patsubst cmd/%,%,$(wildcard cmd/*))
+EXAMPLES := $(patsubst examples/%,example-%,$(wildcard examples/*))
 
 all: build test
 
@@ -31,7 +32,8 @@ $(patsubst %,docker-build-%,$(CMDS)):
 docker-push: $(patsubst %,docker-push-%,$(CMDS))
 
 $(patsubst %,docker-push-%,$(CMDS)):
-	docker push rekki/$(patsubst docker-push-%,%,$@):$(VERSION)
+	docker tag rekki/$(patsubst docker-push-%,%,$@):$(VERSION) $(DOCKER_REGISTRY)/$(patsubst docker-push-%,%,$@):$(VERSION)
+	docker push $(DOCKER_REGISTRY)/$(patsubst docker-push-%,%,$@):$(VERSION)
 
 docker-clean: $(patsubst %,docker-clean-%,$(CMDS))
 
@@ -39,19 +41,22 @@ $(patsubst %,docker-clean-%,$(CMDS)):
 	docker rmi --force $(shell docker images --format '{{.Repository}}:{{.Tag}}' | grep '^rekki/$(patsubst docker-clean-%,%,$@):') || true
 
 docker-compose-up:
-	docker-compose -f ./deployments/docker-compose.yml -f ./deployments/docker-compose.kafka.yml up -d
+	docker-compose -f ./deployments/docker-compose/main.yml -f ./deployments/docker-compose/dependencies.yml up -d
 
-docker-compose-up-kafka:
-	docker-compose -f ./deployments/docker-compose.kafka.yml up -d
+docker-compose-up-main:
+	docker-compose -f ./deployments/docker-compose/main.yml up -d
+
+docker-compose-up-dependencies:
+	docker-compose -f ./deployments/docker-compose/dependencies.yml up -d
 
 docker-compose-ps:
-	docker-compose -f ./deployments/docker-compose.yml -f ./deployments/docker-compose.kafka.yml ps
+	docker-compose -f ./deployments/docker-compose/main.yml -f ./deployments/docker-compose/dependencies.yml ps
 
 docker-compose-logs:
-	docker-compose -f ./deployments/docker-compose.yml -f ./deployments/docker-compose.kafka.yml logs --timestamps --tail=all
+	docker-compose -f ./deployments/docker-compose/main.yml -f ./deployments/docker-compose/dependencies.yml logs --timestamps
 
 docker-compose-down:
-	docker-compose -f ./deployments/docker-compose.yml -f ./deployments/docker-compose.kafka.yml down
+	docker-compose -f ./deployments/docker-compose/main.yml -f ./deployments/docker-compose/dependencies.yml down
 
 clean-all: clean docker-compose-down docker-clean
 
