@@ -36,7 +36,7 @@ $(patsubst %,docker-push-%,$(CMDS)):
 docker-clean: $(patsubst %,docker-clean-%,$(CMDS))
 
 $(patsubst %,docker-clean-%,$(CMDS)):
-	docker rmi --force $(shell docker images --format '{{.Repository}}:{{.Tag}}' | grep '^rekki/$(patsubst docker-push-%,%,$@):') || true
+	docker rmi --force $(shell docker images --format '{{.Repository}}:{{.Tag}}' | grep '^rekki/$(patsubst docker-clean-%,%,$@):') || true
 
 docker-compose-up:
 	docker-compose -f ./deployments/docker-compose.yml -f ./deployments/docker-compose.kafka.yml up -d
