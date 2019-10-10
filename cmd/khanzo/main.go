@@ -27,7 +27,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/gogo/protobuf/proto"
 	lru "github.com/hashicorp/golang-lru"
-	auth "github.com/jackdoe/gin-basic-auth-dynamic"
 	"github.com/rekki/blackrock/cmd/jubei/consume"
 	"github.com/rekki/blackrock/cmd/jubei/disk"
 	"github.com/rekki/blackrock/cmd/khanzo/chart"
@@ -122,7 +121,6 @@ func getTimeBucketNs(b string) int64 {
 
 func main() {
 	var proot = flag.String("root", "/blackrock/data-topic", "root directory for the files root/topic")
-	var basicAuth = flag.String("basic-auth", "", "basic auth user and password, leave empty for no auth [just for testing, better hide it behind nginx]")
 	var lruSize = flag.Int("lru-size", 100000, "lru cache size for the forward index")
 	var verbose = flag.Bool("verbose", false, "print info level logs to stdout")
 	var accept = flag.Bool("not-production-accept-events", false, "also accept events, super simple, so people can test in their laptops without zookeeper, kafka, orgrim, blackhand and jubei setup..")
@@ -140,7 +138,7 @@ func main() {
 		log.Println(http.ListenAndServe("localhost:6060", nil))
 	}()
 	root := *proot
-	os.MkdirAll(root, 0700)
+	_ = os.MkdirAll(root, 0700)
 
 	forwardContext, err := disk.NewForwardWriter(root, "context")
 	if err != nil {
@@ -210,20 +208,6 @@ func main() {
 		}
 		c.Data(200, "image/png", h)
 	})
-
-	if *basicAuth != "" {
-		splitted := strings.Split(*basicAuth, ":")
-		if len(splitted) != 2 {
-			log.Fatalf("expected -basic-auth user:pass, got %s", *basicAuth)
-		}
-		u := splitted[0]
-		p := splitted[1]
-
-		r.Use(auth.BasicAuth(func(context *gin.Context, realm, user, pass string) auth.AuthResult {
-			ok := user == u && pass == p
-			return auth.AuthResult{Success: ok, Text: "not authorized"}
-		}))
-	}
 
 	search := func(qr QueryRequest) (*QueryResponse, error) {
 		dates := expandYYYYMMDD(qr.From, qr.To)
@@ -633,7 +617,7 @@ func setupSimpleEventAccept(root string, geoipPath string, r *gin.Engine) {
 
 		w, ok := writers[segmentId]
 		if !ok {
-			os.MkdirAll(segmentId, 0700)
+			_ = os.MkdirAll(segmentId, 0700)
 			w, err = disk.NewForwardWriter(segmentId, "main")
 			if err != nil {
 				log.Fatal(err)

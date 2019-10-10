@@ -31,11 +31,8 @@ func main() {
 	var kafkaServers = flag.String("kafka", "localhost:9092", "comma separated list of kafka servers")
 	var createConfig = flag.String("create-if-not-exist", "", "create topics if they dont exist, format: partitions:replication factor")
 	var verbose = flag.Bool("verbose", false, "print info level logs to stdout")
-	var allowOnlyIdentified = flag.Bool("allow-only-identified", false, "allow only requests with valid token")
 	var statSleep = flag.Int("writer-stats", 60, "print writer stats every # seconds")
 	var geoipFile = flag.String("geoip", "", "path to https://dev.maxmind.com/geoip/geoip2/geolite2/ file")
-	var tokentoproductmap = flag.String("token-to-product", "", "csv token to product e.g.: xyz:bookshop,abc:mobile_app if you send token xyz (as auth bearer header) the product will be set to bookshop")
-	var tokentocontext = flag.String("token-to-context", "", "which token is allowed to push which context type")
 	var bind = flag.String("bind", ":9001", "bind to")
 	var prometheusListenAddress = flag.String("prometheus", "false", "true to enable prometheus (you can also specify a listener address")
 	flag.Parse()
@@ -46,8 +43,6 @@ func main() {
 		gin.SetMode(gin.ReleaseMode)
 		log.SetLevel(log.WarnLevel)
 	}
-
-	tp := spec.NewTokenMap(*tokentoproductmap, *tokentocontext)
 
 	var geoip *geoip2.Reader
 	var err error
@@ -176,7 +171,6 @@ func main() {
 
 		extra := c.Param("extra")
 		splitted := strings.Split(extra, "/")
-		token := c.Query("token")
 		for _, s := range splitted {
 			if s == "" {
 				continue
@@ -195,21 +189,15 @@ func main() {
 		if err != nil {
 			log.Warnf("[orgrim] invalid input, err: %s", err.Error())
 		} else {
-			at := tp.ExtractFromToken(token)
-			if !at.AllowEnvelope(envelope) && *allowOnlyIdentified {
-				log.Warnf("[orgrim] invalid token, err: %s", err.Error())
+			encoded, err := proto.Marshal(envelope)
+			if err != nil {
+				log.Warnf("[orgrim] error encoding metadata %v, err: %s", envelope.Metadata, err.Error())
 			} else {
-
-				encoded, err := proto.Marshal(envelope)
+				err = kw.WriteMessages(context.Background(), kafka.Message{
+					Value: encoded,
+				})
 				if err != nil {
-					log.Warnf("[orgrim] error encoding metadata %v, err: %s", envelope.Metadata, err.Error())
-				} else {
-					err = kw.WriteMessages(context.Background(), kafka.Message{
-						Value: encoded,
-					})
-					if err != nil {
-						log.Warnf("[orgrim] error sending message, metadata %v, err: %s", envelope.Metadata, err.Error())
-					}
+					log.Warnf("[orgrim] error sending message, metadata %v, err: %s", envelope.Metadata, err.Error())
 				}
 			}
 		}
@@ -237,13 +225,6 @@ func main() {
 
 		if envelope.Metadata.CreatedAtNs == 0 {
 			envelope.Metadata.CreatedAtNs = time.Now().UnixNano()
-		}
-
-		at := tp.ExtractFromRequest(c.Request)
-		if !at.AllowEnvelope(&envelope) && *allowOnlyIdentified {
-			log.Warnf("[orgrim] product not allowed for this token")
-			c.JSON(http.StatusForbidden, gin.H{"error": "invalid token"})
-			return
 		}
 
 		encoded, err := proto.Marshal(&envelope)
@@ -285,13 +266,6 @@ func main() {
 			ctx.CreatedAtNs = time.Now().UnixNano()
 		}
 
-		at := tp.ExtractFromRequest(c.Request)
-		if !at.AllowContext(&ctx) && *allowOnlyIdentified {
-			log.Warnf("[orgrim] contex type %s not allowed for token", ctx.ForeignType)
-			c.JSON(http.StatusForbidden, gin.H{"error": "invalid token"})
-			return
-		}
-
 		encoded, err := proto.Marshal(&ctx)
 		if err != nil {
 			log.Warnf("[orgrim] error encoding context %v, err: %s", ctx, err.Error())
@@ -325,13 +299,6 @@ func main() {
 		err = spec.Decorate(geoip, c.Request, converted)
 		if err != nil {
 			log.Warnf("[orgrim] failed to decorate, err: %s", err.Error())
-		}
-
-		at := tp.ExtractFromRequest(c.Request)
-		if !at.AllowEnvelope(converted) && *allowOnlyIdentified {
-			log.Warnf("[orgrim] product not allowed for this token")
-			c.JSON(http.StatusForbidden, gin.H{"error": "invalid token"})
-			return
 		}
 
 		encoded, err := proto.Marshal(converted)
