@@ -23,7 +23,7 @@ RUN GOOS=linux GOARCH=amd64 make ${CMD}
 # runtime image
 ###
 
-FROM scratch
+FROM alpine
 ARG CMD
 
 COPY --from=builder /${CMD} /entrypoint
