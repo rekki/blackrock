@@ -163,7 +163,9 @@ func main() {
 
 	root := *proot
 
-	os.MkdirAll(root, 0700)
+	if err := os.MkdirAll(root, 0700); err != nil {
+		log.Fatal(err)
+	}
 	if *verbose {
 		log.SetLevel(log.InfoLevel)
 	} else {
