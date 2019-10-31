@@ -28,11 +28,9 @@ type Hit struct {
 type Client struct {
 	h             *http.Client
 	endpointFetch string
-	user          string
-	pass          string
 }
 
-func NewClient(url, user, pass string, h *http.Client) *Client {
+func NewClient(url string, h *http.Client) *Client {
 	if h == nil {
 		tr := &http.Transport{
 			MaxIdleConns:    10,
@@ -43,7 +41,7 @@ func NewClient(url, user, pass string, h *http.Client) *Client {
 	if !strings.HasSuffix(url, "/") {
 		url = url + "/"
 	}
-	return &Client{endpointFetch: fmt.Sprintf("%sv0/fetch", url), h: h, user: user, pass: pass}
+	return &Client{endpointFetch: fmt.Sprintf("%sv0/fetch", url), h: h}
 }
 
 func (c *Client) Fetch(query *ClientQueryRequest, cb func(*Hit)) error {
@@ -56,7 +54,6 @@ func (c *Client) Fetch(query *ClientQueryRequest, cb func(*Hit)) error {
 	if err != nil {
 		return err
 	}
-	req.SetBasicAuth(c.user, c.pass)
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := c.h.Do(req)
 	if err != nil {
