@@ -213,7 +213,7 @@ func main() {
 		err := depths.UnmarshalAndClose(c, &envelope)
 		if err != nil {
 			log.Warnf("[orgrim] error decoding envelope, err: %s", err.Error())
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
 		err = spec.ValidateEnvelope(&envelope)
@@ -252,7 +252,7 @@ func main() {
 		err := depths.UnmarshalAndClose(c, &ctx)
 		if err != nil {
 			log.Warnf("[orgrim] error decoding ctx, err: %s", err.Error())
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
 		err = spec.ValidateContext(&ctx)
@@ -293,7 +293,7 @@ func main() {
 		converted, err := spec.DecodeAndFlatten(body)
 		if err != nil {
 			log.Warnf("[orgrim] invalid input, err: %s", err.Error())
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
 		err = spec.Decorate(geoip, c.Request, converted)
