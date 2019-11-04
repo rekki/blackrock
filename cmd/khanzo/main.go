@@ -126,6 +126,7 @@ func main() {
 	var accept = flag.Bool("not-production-accept-events", false, "also accept events, super simple, so people can test in their laptops without zookeeper, kafka, orgrim, blackhand and jubei setup..")
 	var geoipFile = flag.String("not-production-geoip", "", "path to https://dev.maxmind.com/geoip/geoip2/geolite2/ file")
 	var bind = flag.String("bind", ":9002", "bind to")
+	var home = flag.String("home", "", "home query")
 	var prometheusListenAddress = flag.String("prometheus", "false", "true to enable prometheus (you can also specify a listener address")
 	flag.Parse()
 	if *verbose {
@@ -356,7 +357,7 @@ func main() {
 	})
 
 	r.GET("/", func(c *gin.Context) {
-		c.Redirect(302, "/scan/html/")
+		c.Redirect(302, "/scan/html/"+*home)
 	})
 
 	foreach := func(queryString string, dates []time.Time, cb func(did int32, x *spec.Metadata)) error {
