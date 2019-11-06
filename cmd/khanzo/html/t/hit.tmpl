@@ -53,24 +53,6 @@
   </td>
 </tr>
 {{ end }}
-
-  {{ range $hit.Context }}
-    <tr class="hit-details hit-{{$hit.ID}}">
-      <td class="left" colspan=2>
-        @{{.ForeignType}}:{{ .ForeignId }}
-      </td>
-    </tr>
-    {{ range .Properties }}
-    <tr class="hit-details hit-{{$hit.ID}}">
-      <td class="left">
-        &nbsp;&nbsp;{{.Key }}
-      </td>
-      <td class="right">
-        {{.Value}}
-      </td>
-    </tr>
-    {{ end }}
-  {{ end }}
 <tr>
 <td colspan=2><hr></td>
 </tr>

@@ -24,14 +24,6 @@ message Metadata {
         fixed64 id = 12;
 }
 
-message Context {
-        repeated KV properties = 2 [(gogoproto.nullable) = false];
-        int64 created_at_ns  = 5;
-
-        string foreign_id = 6;
-        string foreign_type = 7;
-}
-
 message Envelope {
         Metadata metadata = 1;
         bytes payload = 2;

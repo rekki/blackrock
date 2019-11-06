@@ -27,43 +27,6 @@ the beginning (`scan_max_documents: -1` in the query), also things can
 be faster if you decide not to decode the metadata in the hit.
 
 
-# context
-
-event stream
-```
-[
-   {created: "Sun 14 Jul 21:19:58", user: 5, book: 10, event: "click"},
-   {created: "Sun 14 Jul 21:20:55", user: 5, book: 10, event: "click"},
-   {created: "Sun 14 Jul 22:41:02", user: 5, book: 10, event: "book"}
-[
-
-```
-
-context stream
-
-```
-[
-   {created: "Sun 14 Jul 21:28:55", author:60, name: "jrr tolkien",... }
-   {created: "Sun 14 Jul 21:29:55", book:10, name: "lotr", author: 60,... }
-   {created: "Sun 14 Jul 21:30:55", user:5, name: "jack",... }
-]
-```
-
-In this example, the context for `user:5` is created at `"Sun 14 Jul
-21:30:55"`, and will be visible to all events after that (keep in mind
-you can also insert context in the past).
-
-Khanzo will automatically and recursively join the context with the
-event stream. So for the event `{created: "Sun 14 Jul 22:41:02", user:
-5, book: 10, event: "book"}`, we will lookup `book:10` from the
-context and if found it will lookup from the book's properties and try
-to find accessible context for them, so it will lookup for `author:
-60` and join with the author.
-
-![context](../../assets/context_thumb.jpg)
-
-[full size image](../../assets/context_full.jpg)
-
 # searching
 
 ```
@@ -86,46 +49,6 @@ to find accessible context for them, so it will lookup for `author:
 {
   "hits": [
     {
-      "context": [
-        {
-          "created_at_ns": 1563131082772484400,
-          "foreign_id": "3f40a264710d4874aadc2ba88b3ed0d3",
-          "foreign_type": "author_id",
-          "properties": [
-            {
-              "key": "date_of_birth",
-              "value": "1974-11-29"
-            },
-            {
-              "key": "name",
-              "value": "quidem"
-            }
-          ]
-        },
-        {
-          "created_at_ns": 1563131082772820500,
-          "foreign_id": "d2ab0acd480c46b2920fed7f8db9af5f",
-          "foreign_type": "book_id",
-          "properties": [
-            {
-              "key": "author_id",
-              "value": "3f40a264710d4874aadc2ba88b3ed0d3"
-            },
-            {
-              "key": "genre",
-              "value": "ea"
-            },
-            {
-              "key": "name",
-              "value": "velit"
-            },
-            {
-              "key": "published_at",
-              "value": "1970-03-20"
-            }
-          ]
-        }
-      ],
       "foreign_id": "dfe5992d20004791be066b0dc67558a1",
       "foreign_type": "user_id",
       "id": 8394,
@@ -162,22 +85,6 @@ to find accessible context for them, so it will lookup for `author:
       "score": 1
     },
     {
-      "context": [
-        {
-          "created_at_ns": 1563131082772584000,
-          "foreign_id": "772e1c891915440288565a861bd5ce7a",
-          "foreign_type": "author_id",
-          "properties": [
-            {
-              "key": "date_of_birth",
-              "value": "1980-08-20"
-            },
-            {
-              "key": "name",
-              "value": "labore"
-            }
-          ]
-        },
         {
           "created_at_ns": 1563131082772648200,
           "foreign_id": "f1f503b783b345faacdcdb5fdd0e8fee",
@@ -310,26 +217,6 @@ Fri Jul 19 13:58:11 CEST 2019
   timezone                      : asia_katmandu
   random                        : 7316819579397678157
   user_agent                    : facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)
-  @author_id:5fb3319127e54b918dba83fdcd2915f5:
-    date_of_birth               : 1985-02-05
-    name                        : inventore
-  @author_id:680ed8535f33430fad16263f7f18573e:
-    date_of_birth               : 1982-10-14
-    name                        : et
-  @book_id:7b1ab10e58d046b38324d91d9002801b:
-    genre                       : quis
-    name                        : natus
-    published_at                : 1993-08-06
-  @book_id:7cfa0d83c12544be9de0ddfa658a7860:
-    author_id                   : 5fb3319127e54b918dba83fdcd2915f5
-    genre                       : sit
-    name                        : assumenda
-    published_at                : 1977-10-19
-  @book_id:fb2327cdd8f145c392f0c0a93d3d3fcd:
-    author_id                   : 680ed8535f33430fad16263f7f18573e
-    genre                       : at
-    name                        : et
-    published_at                : 1972-04-07
 
 user_id:ffd1094c0dc6492c9f2418bb1b4de8b6
 type:ignore

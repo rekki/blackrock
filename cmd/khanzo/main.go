@@ -13,7 +13,6 @@ import (
 	"os"
 	"path"
 	"reflect"
-	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -139,30 +138,15 @@ func main() {
 		log.Println(http.ListenAndServe("localhost:6060", nil))
 	}()
 	root := *proot
-	_ = os.MkdirAll(root, 0700)
-
-	forwardContext, err := disk.NewForwardWriter(root, "context")
+	err := os.MkdirAll(root, 0700)
 	if err != nil {
 		log.Fatal(err)
 	}
-	contextCache := NewContextCache(forwardContext)
+
 	cache, err := lru.NewARC(*lruSize)
 	if err != nil {
 		log.Fatal(err)
 	}
-
-	go func() {
-		for {
-			err := contextCache.Scan()
-			if err != nil {
-				log.Warnf("error scanning context, err: %v", err)
-			}
-
-			runtime.GC()
-			log.Warnf("lru cache size: %d", cache.Len())
-			time.Sleep(1 * time.Minute)
-		}
-	}()
 
 	r := gin.Default()
 
@@ -182,7 +166,7 @@ func main() {
 	compact := disk.NewCompactIndexCache()
 	r.Use(cors.Default())
 	r.Use(gin.Recovery())
-	t, err := loadTemplate(contextCache)
+	t, err := loadTemplate()
 	if err != nil {
 		log.Panic(err)
 	}
@@ -212,8 +196,6 @@ func main() {
 
 	search := func(qr QueryRequest) (*QueryResponse, error) {
 		dates := expandYYYYMMDD(qr.From, qr.To)
-		contextCache.RLock()
-		defer contextCache.RUnlock()
 		out := &QueryResponse{
 			Hits:  []Hit{},
 			Total: 0,
@@ -243,7 +225,7 @@ func main() {
 				doInsert := false
 				var hit Hit
 				if len(out.Hits) < qr.Size {
-					hit, err = getScoredHit(contextCache, forward, did)
+					hit, err = getScoredHit(forward, did)
 					hit.Score = score
 					if err != nil {
 						// possibly corrupt forward index, igore, error is already printed
@@ -253,7 +235,7 @@ func main() {
 					doInsert = true
 				} else if out.Hits[len(out.Hits)-1].Score < hit.Score {
 					doInsert = true
-					hit, err = getScoredHit(contextCache, forward, did)
+					hit, err = getScoredHit(forward, did)
 					hit.Score = score
 					if err != nil {
 						// possibly corrupt forward index, igore, error is already printed
@@ -292,8 +274,6 @@ func main() {
 
 	r.POST("/v0/fetch/", func(c *gin.Context) {
 		var qr QueryRequest
-		contextCache.RLock()
-		defer contextCache.RUnlock()
 
 		if err := c.ShouldBindJSON(&qr); err != nil {
 			c.JSON(400, gin.H{"error": err.Error()})
@@ -323,7 +303,7 @@ func main() {
 			left := qr.Size
 			for query.Next() != NO_MORE {
 				did := query.GetDocId()
-				hit, err := getScoredHit(contextCache, forward, did)
+				hit, err := getScoredHit(forward, did)
 				hit.Score = query.Score()
 				if err != nil {
 					c.JSON(400, gin.H{"error": err.Error()})
@@ -459,9 +439,6 @@ func main() {
 	})
 
 	r.GET("/scan/:format/*query", func(c *gin.Context) {
-		contextCache.RLock()
-		defer contextCache.RUnlock()
-
 		sampleSize := intOrDefault(c.Query("sample_size"), 100)
 
 		from := c.Query("from")
@@ -482,11 +459,11 @@ func main() {
 		}
 		dates := expandYYYYMMDD(from, to)
 		chart := NewChart(uint32(getTimeBucketNs(c.Query("bucket"))/1000000000), dates)
-		counter := NewCounter(nil, contextCache, getWhitelist(c.QueryArray("whitelist")), chart)
+		counter := NewCounter(nil, getWhitelist(c.QueryArray("whitelist")), chart)
 		err := foreach(c.Param("query"), dates, func(did int32, cx *spec.Metadata) {
 			counter.Add(contextAlias, false, 0, cx)
 			if len(counter.Sample[0]) < sampleSize {
-				counter.Sample[0] = append(counter.Sample[0], toHit(contextCache, did, cx))
+				counter.Sample[0] = append(counter.Sample[0], toHit(did, cx))
 			}
 		})
 
@@ -499,11 +476,8 @@ func main() {
 	})
 
 	r.GET("/exp/:format/:experiment/:metricKey/:metricValue/*query", func(c *gin.Context) {
-		contextCache.RLock()
-		defer contextCache.RUnlock()
-
 		sampleSize := intOrDefault(c.Query("sample_size"), 100)
-		counter := NewCounter(NewConvertedCache(), contextCache, getWhitelist(c.QueryArray("whitelist")), nil)
+		counter := NewCounter(NewConvertedCache(), getWhitelist(c.QueryArray("whitelist")), nil)
 		experiment := c.Param("experiment")
 		metricKey := c.Param("metricKey")
 		metricValue := c.Param("metricValue")
@@ -566,7 +540,7 @@ func main() {
 			}
 
 			if len(counter.Sample[variant]) < sampleSize {
-				counter.Sample[variant] = append(counter.Sample[variant], toHit(contextCache, did, cx))
+				counter.Sample[variant] = append(counter.Sample[variant], toHit(did, cx))
 			}
 			counter.Add(map[string]string{}, converted, variant, cx)
 		})
@@ -594,11 +568,6 @@ func setupSimpleEventAccept(root string, geoipPath string, r *gin.Engine) {
 		if err != nil {
 			log.Fatal(err)
 		}
-	}
-
-	forwardContext, err := disk.NewForwardWriter(root, "context")
-	if err != nil {
-		log.Fatal(err)
 	}
 
 	inverted, err := disk.NewInvertedWriter(512)
@@ -722,38 +691,9 @@ func setupSimpleEventAccept(root string, geoipPath string, r *gin.Engine) {
 
 		c.JSON(200, gin.H{"success": true})
 	})
-
-	r.POST("/push/context", func(c *gin.Context) {
-		var ctx spec.Context
-		err := depths.UnmarshalAndClose(c, &ctx)
-		if err != nil {
-			c.JSON(500, gin.H{"error": err.Error()})
-			return
-		}
-		err = spec.ValidateContext(&ctx)
-		if err != nil {
-			c.JSON(500, gin.H{"error": err.Error()})
-			return
-		}
-
-		if ctx.CreatedAtNs == 0 {
-			ctx.CreatedAtNs = time.Now().UnixNano()
-		}
-
-		giant.Lock()
-		defer giant.Unlock()
-
-		err = consume.ConsumeContext(&ctx, forwardContext)
-		if err != nil {
-			c.JSON(500, gin.H{"error": err.Error()})
-			return
-		}
-
-		c.JSON(200, gin.H{"success": true})
-	})
 }
 
-func loadTemplate(contextCache *ContextCache) (*template.Template, error) {
+func loadTemplate() (*template.Template, error) {
 	t := template.New("").Funcs(template.FuncMap{
 		"banner": func(b string) string {
 			return chart.BannerLeft(b)
@@ -774,8 +714,8 @@ func loadTemplate(contextCache *ContextCache) (*template.Template, error) {
 		"replace": func(a, b, c string) string {
 			return strings.Replace(a, b, c, -1)
 		},
-		"ctx": func(key, value string) []*spec.Context {
-			return LoadContextForStat(contextCache, key, value, time.Now().UnixNano())
+		"prettyName": func(key, value string) string {
+			return "pretty_" + value
 		},
 		"getN": func(qs template.URL, key string, n int) int {
 			v, err := url.ParseQuery(string(qs))
@@ -823,16 +763,6 @@ func loadTemplate(contextCache *ContextCache) (*template.Template, error) {
 				}
 			}
 			return out
-		},
-		"findFirstNameOrDefault": func(ctx []*spec.Context, def string) string {
-			for _, c := range ctx {
-				for _, p := range c.Properties {
-					if p.Key == "name" {
-						return p.Value
-					}
-				}
-			}
-			return def
 		},
 		"minus": func(a, b int) int {
 			return a - b

@@ -247,45 +247,6 @@ func main() {
 		c.JSON(200, gin.H{"success": true})
 	})
 
-	r.POST("/push/context", func(c *gin.Context) {
-		var ctx spec.Context
-		err := depths.UnmarshalAndClose(c, &ctx)
-		if err != nil {
-			log.Warnf("[orgrim] error decoding ctx, err: %s", err.Error())
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			return
-		}
-		err = spec.ValidateContext(&ctx)
-		if err != nil {
-			log.Warnf("[orgrim] invalid context, err: %s", err.Error())
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-
-		if ctx.CreatedAtNs == 0 {
-			ctx.CreatedAtNs = time.Now().UnixNano()
-		}
-
-		encoded, err := proto.Marshal(&ctx)
-		if err != nil {
-			log.Warnf("[orgrim] error encoding context %v, err: %s", ctx, err.Error())
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-
-		err = cw.WriteMessages(context.Background(), kafka.Message{
-			Value: encoded,
-		})
-
-		if err != nil {
-			log.Warnf("[orgrim] error sending message, context %v, err: %s", ctx, err.Error())
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-
-		c.JSON(200, gin.H{"success": true})
-	})
-
 	r.POST("/push/flatten", func(c *gin.Context) {
 		body := c.Request.Body
 		defer body.Close()

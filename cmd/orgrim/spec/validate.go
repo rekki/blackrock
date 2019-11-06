@@ -22,14 +22,3 @@ func ValidateEnvelope(envelope *Envelope) error {
 	}
 	return nil
 }
-
-func ValidateContext(ctx *Context) error {
-	if ctx.ForeignId == "" {
-		return errors.New("need foreign_id")
-	}
-
-	if ctx.ForeignType == "" {
-		return errors.New("need foreign_type")
-	}
-	return nil
-}

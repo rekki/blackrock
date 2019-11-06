@@ -24,25 +24,7 @@
   <td class="left">
     {{ if $link }}
     <div style="padding-left: 1.5em;">
-    {{ $p := ctx $tag $val.Key }}
-    {{ $name := findFirstNameOrDefault $p $val.Key }}
-    {{ if $p }}
-    <label class="trigger">
-      <input type="checkbox"/>
-      <span class="msg">
-        <table>
-          <tr><td colspan=2><b><a href="{{$b}}/{{$tag}}:{{$val.Key}}?{{$qs}}">{{ $name }}</a></b></td></tr>
-          {{ range $p }}
-          <tr><td><b>{{.ForeignType}}</b></td><td>{{.ForeignId}}</td></tr>
-          {{ range .Properties }}
-          <tr><td>{{prettyFlat .Key}}</td><td>{{ .Value}}</td></tr>
-          {{ end }}
-          <tr><td colspan=1><hr /></td></tr>
-          {{ end }}
-        </table>
-      </span>
-    </label>
-    {{ end }}
+    {{ $name := prettyName $tag $val.Key }}
     <a href="{{$b}}/{{$tag}}:{{$val.Key}}?{{$qs}}">{{ $name }}</a>
     </div>
     {{ else }}

@@ -146,7 +146,6 @@ func NewCountPerKey(s string) *CountPerKey {
 
 type Counter struct {
 	Search                        map[string]*CountPerKey `json:"search"`
-	Context                       map[string]*CountPerKey `json:"context"`
 	Count                         map[string]*CountPerKey `json:"count"`
 	Foreign                       map[string]*CountPerKey `json:"foreign"`
 	EventTypes                    *CountPerKey            `json:"event_types"`
@@ -157,14 +156,12 @@ type Counter struct {
 	Chart                         *Chart
 	Whitelist                     map[string]bool
 	Sections                      map[string]uint32 `json:"sections"`
-	contextCache                  *ContextCache
 }
 
-func NewCounter(conv *ConvertedCache, contextCache *ContextCache, Whitelist map[string]bool, chart *Chart) *Counter {
+func NewCounter(conv *ConvertedCache, Whitelist map[string]bool, chart *Chart) *Counter {
 	return &Counter{
 		Search:         map[string]*CountPerKey{},
 		Count:          map[string]*CountPerKey{},
-		Context:        map[string]*CountPerKey{},
 		Foreign:        map[string]*CountPerKey{},
 		EventTypes:     NewCountPerKey("event_type"),
 		Sample:         map[uint32][]Hit{},
@@ -173,7 +170,6 @@ func NewCounter(conv *ConvertedCache, contextCache *ContextCache, Whitelist map[
 		TotalCount:     0,
 		Whitelist:      Whitelist,
 		Sections:       map[string]uint32{},
-		contextCache:   contextCache,
 	}
 }
 func (c *Counter) IsWhitelisted(s string) bool {
@@ -221,11 +217,6 @@ func (c *Counter) Add(contextAlias map[string]string, converted bool, variant ui
 		c.TotalCountEventsFromConverter++
 	}
 	c.TotalCount++
-	seen := map[string]map[string]bool{
-		p.ForeignType: map[string]bool{
-			p.ForeignId: true,
-		},
-	}
 	for _, kv := range p.Search {
 		k := kv.Key
 		v := kv.Value
@@ -235,25 +226,6 @@ func (c *Counter) Add(contextAlias map[string]string, converted bool, variant ui
 		c.Sections[k]++
 		if !c.IsWhitelisted(k) {
 			continue
-		}
-		if strings.HasSuffix(k, "_id") {
-			lookupKey, ok := contextAlias[k]
-			if !ok {
-				lookupKey = k
-			}
-			if px, ok := c.contextCache.Lookup(lookupKey, v, p.CreatedAtNs); ok {
-				for i, ctx := range toContextDeep(seen, c.contextCache, px) {
-					if i == 0 {
-						continue // already shown in Search section, so just ignore it
-					}
-					xm, ok := c.Context[ctx.ForeignType]
-					if !ok {
-						xm = NewCountPerKey(ctx.ForeignType)
-						c.Context[ctx.ForeignType] = xm
-					}
-					xm.Add(ctx.ForeignId, variant, converted)
-				}
-			}
 		}
 		xm, ok := c.Search[k]
 		if !ok {
@@ -299,7 +271,6 @@ func (c *Counter) String(context *gin.Context) {
 	types := prettyStats("EVENT_TYPES", []*CountPerKey{c.EventTypes})
 	properties := prettyStats("COUNT", c.SortedKeys(c.Count))
 	tags := prettyStats("SEARCH", c.SortedKeys(c.Search))
-	sc := prettyStats("CONTEXT", c.SortedKeys(c.Context))
 	graph := ""
 	if c.Chart != nil {
 		graph = c.Chart.String(3)

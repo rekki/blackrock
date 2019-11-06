@@ -123,23 +123,6 @@ func ConsumeEvents(segmentId string, envelope *spec.Envelope, forward *disk.Forw
 	return nil
 }
 
-func ConsumeContext(envelope *spec.Context, forward *disk.ForwardWriter) error {
-	if envelope.CreatedAtNs == 0 {
-		envelope.CreatedAtNs = time.Now().UnixNano()
-	}
-
-	encoded, err := proto.Marshal(envelope)
-	if err != nil {
-		return err
-	}
-
-	_, err = forward.Append(encoded)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
 func ExpDice(ftype, id, exp string, variants uint32) uint32 {
 	h := murmur3.Sum32WithSeed([]byte(ftype), 0) + murmur3.Sum32WithSeed([]byte(id), 0) + murmur3.Sum32WithSeed([]byte(exp), 0)
 	return h % variants
