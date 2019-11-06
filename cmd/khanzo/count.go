@@ -275,7 +275,7 @@ func (c *Counter) String(context *gin.Context) {
 	if c.Chart != nil {
 		graph = c.Chart.String(3)
 	}
-	out := fmt.Sprintf("%s%s%s%s%s%s\n", makers, graph, types, tags, sc, properties)
+	out := fmt.Sprintf("%s%s%s%s%s\n", makers, graph, types, tags, properties)
 	out += chart.Banner("SAMPLE")
 	for _, samples := range c.Sample {
 		for _, h := range samples {
