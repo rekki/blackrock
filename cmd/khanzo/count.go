@@ -9,107 +9,22 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/rekki/blackrock/cmd/khanzo/chart"
-	"github.com/rekki/blackrock/cmd/khanzo/stat"
 	"github.com/rekki/blackrock/cmd/orgrim/spec"
 )
 
-type ConvertedCache map[uint32]map[string]map[string]uint32
-
-func NewConvertedCache() *ConvertedCache {
-	return &ConvertedCache{}
-}
-
-type ConvertedPerVariant struct {
-	ConvertingUsers    uint32
-	NotConvertingUsers uint32
-	Users              uint32
-	Convertions        uint32
-}
-type ConfidenceSignificant struct {
-	Confidence  float64
-	Significant bool
-}
-
-func (x *ConvertedCache) Confidence(pv []ConvertedPerVariant) ConfidenceSignificant {
-	sv := []stat.Variant{}
-	for _, v := range pv {
-		sv = append(sv, stat.Variant{
-			Visits:      v.ConvertingUsers + v.NotConvertingUsers,
-			Convertions: v.ConvertingUsers,
-		})
-	}
-
-	_, confidence, significant := stat.P(sv)
-	return ConfidenceSignificant{Confidence: confidence, Significant: significant}
-}
-func (x *ConvertedCache) TotalConvertingUsers() []ConvertedPerVariant {
-	c := *x
-	maxVariant := uint32(0)
-	for variant := range c {
-		if variant > maxVariant {
-			maxVariant = variant
-		}
-	}
-	out := make([]ConvertedPerVariant, maxVariant+1)
-
-	for vid, variant := range c {
-		sum := uint32(0)
-		usersC := uint32(0)
-		usersNC := uint32(0)
-		for _, pid := range variant {
-			for _, u := range pid {
-				if u == 0 {
-					usersNC++
-				} else {
-					usersC++
-				}
-				sum += u
-			}
-		}
-		out[vid] = ConvertedPerVariant{ConvertingUsers: usersC, NotConvertingUsers: usersNC, Convertions: sum, Users: usersC + usersNC}
-	}
-
-	return out
-}
-
-func (c ConvertedCache) SetConverted(n uint32, variant uint32, ftype, fid string) {
-	pv, ok := c[variant]
-	if !ok {
-		pv = map[string]map[string]uint32{}
-		c[variant] = pv
-	}
-
-	v, ok := pv[ftype]
-	if !ok {
-		v = map[string]uint32{}
-		pv[ftype] = v
-	}
-	v[fid] += n
-}
-
 type CountPerValue struct {
-	CountEventsFromConverterVariant []uint32
-	Count                           uint32
-	Key                             string
+	Count uint32
+	Key   string
 }
 
-func (c *CountPerValue) Add(variant uint32, converted bool) {
-	if converted {
-		if variant >= uint32(len(c.CountEventsFromConverterVariant)) {
-			x := make([]uint32, variant+1)
-			copy(x, c.CountEventsFromConverterVariant)
-			c.CountEventsFromConverterVariant = x
-		}
-		c.CountEventsFromConverterVariant[variant]++
-	}
+func (c *CountPerValue) Add() {
 	c.Count++
 }
 
 type CountPerKey struct {
-	PerValue                 map[string]*CountPerValue
-	Count                    uint32
-	CountEventsFromConverter uint32
-	Key                      string
+	PerValue map[string]*CountPerValue
+	Count    uint32
+	Key      string
 }
 
 func (c *CountPerKey) Sorted() []*CountPerValue {
@@ -127,17 +42,14 @@ func (c *CountPerKey) Sorted() []*CountPerValue {
 	return out
 }
 
-func (c *CountPerKey) Add(value string, variant uint32, converted bool) {
+func (c *CountPerKey) Add(value string) {
 	c.Count++
-	if converted {
-		c.CountEventsFromConverter++
-	}
 	pv, ok := c.PerValue[value]
 	if !ok {
 		pv = &CountPerValue{Key: value}
 		c.PerValue[value] = pv
 	}
-	pv.Add(variant, converted)
+	pv.Add()
 }
 
 func NewCountPerKey(s string) *CountPerKey {
@@ -145,31 +57,28 @@ func NewCountPerKey(s string) *CountPerKey {
 }
 
 type Counter struct {
-	Search                        map[string]*CountPerKey `json:"search"`
-	Count                         map[string]*CountPerKey `json:"count"`
-	Foreign                       map[string]*CountPerKey `json:"foreign"`
-	EventTypes                    *CountPerKey            `json:"event_types"`
-	Sample                        map[uint32][]Hit        `json:"sample"`
-	TotalCount                    uint32                  `json:"total"`
-	TotalCountEventsFromConverter uint32                  `json:"total_events_from_converter"`
-	ConvertedCache                *ConvertedCache         `json:"convertions"`
-	Chart                         *Chart
-	Whitelist                     map[string]bool
-	Sections                      map[string]uint32 `json:"sections"`
+	Search     map[string]*CountPerKey `json:"search"`
+	Count      map[string]*CountPerKey `json:"count"`
+	Foreign    map[string]*CountPerKey `json:"foreign"`
+	EventTypes *CountPerKey            `json:"event_types"`
+	Sample     map[uint32][]Hit        `json:"sample"`
+	TotalCount uint32                  `json:"total"`
+	Chart      *Chart
+	Whitelist  map[string]bool
+	Sections   map[string]uint32 `json:"sections"`
 }
 
-func NewCounter(conv *ConvertedCache, Whitelist map[string]bool, chart *Chart) *Counter {
+func NewCounter(Whitelist map[string]bool, chart *Chart) *Counter {
 	return &Counter{
-		Search:         map[string]*CountPerKey{},
-		Count:          map[string]*CountPerKey{},
-		Foreign:        map[string]*CountPerKey{},
-		EventTypes:     NewCountPerKey("event_type"),
-		Sample:         map[uint32][]Hit{},
-		ConvertedCache: conv,
-		Chart:          chart,
-		TotalCount:     0,
-		Whitelist:      Whitelist,
-		Sections:       map[string]uint32{},
+		Search:     map[string]*CountPerKey{},
+		Count:      map[string]*CountPerKey{},
+		Foreign:    map[string]*CountPerKey{},
+		EventTypes: NewCountPerKey("event_type"),
+		Sample:     map[uint32][]Hit{},
+		Chart:      chart,
+		TotalCount: 0,
+		Whitelist:  Whitelist,
+		Sections:   map[string]uint32{},
 	}
 }
 func (c *Counter) IsWhitelisted(s string) bool {
@@ -212,10 +121,7 @@ func (c *Counter) SortedKeys(what map[string]*CountPerKey) []*CountPerKey {
 	return out
 }
 
-func (c *Counter) Add(contextAlias map[string]string, converted bool, variant uint32, p *spec.Metadata) {
-	if c.ConvertedCache != nil {
-		c.TotalCountEventsFromConverter++
-	}
+func (c *Counter) Add(p *spec.Metadata) {
 	c.TotalCount++
 	for _, kv := range p.Search {
 		k := kv.Key
@@ -232,7 +138,7 @@ func (c *Counter) Add(contextAlias map[string]string, converted bool, variant ui
 			xm = NewCountPerKey(k)
 			c.Search[k] = xm
 		}
-		xm.Add(v, variant, converted)
+		xm.Add(v)
 	}
 
 	for _, kv := range p.Count {
@@ -248,7 +154,7 @@ func (c *Counter) Add(contextAlias map[string]string, converted bool, variant ui
 			xm = NewCountPerKey(k)
 			c.Count[k] = xm
 		}
-		xm.Add(v, 0, false)
+		xm.Add(v)
 	}
 	{
 		xm, ok := c.Foreign[p.ForeignType]
@@ -256,10 +162,10 @@ func (c *Counter) Add(contextAlias map[string]string, converted bool, variant ui
 			xm = NewCountPerKey(p.ForeignType)
 			c.Foreign[p.ForeignType] = xm
 		}
-		xm.Add(p.ForeignId, 0, false)
+		xm.Add(p.ForeignId)
 	}
 
-	c.EventTypes.Add(p.EventType, 0, false)
+	c.EventTypes.Add(p.EventType)
 	if c.Chart != nil {
 		c.Chart.Add(p)
 	}

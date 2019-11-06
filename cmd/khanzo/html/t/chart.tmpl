@@ -10,7 +10,6 @@
 </tr>
 
 {{ $total := .Data.Count }}
-{{ $totalConvertions := .Data.CountEventsFromConverter }}
 {{ $b := .BaseUrl }}
 
 {{ $tag := .Data.Key }}
@@ -37,17 +36,6 @@
      <div style="display: inline-block; z-index: 1">{{ format $val.Count }} ({{$p}}%)</div>
      <div style="position: absolute; left: 0; bottom: 0;  display: inline-block; width: {{$p}}%; background-color: rgba(200,200,200,0.5);">&nbsp;</div>
     </div>
-    {{ range $variant, $count := $val.CountEventsFromConverterVariant }}
-
-    {{ if gt $count 0 }}
-    {{ $p := percent $totalConvertions $count}}
-    <div style="position: relative">
-     <div style="display: inline-block; z-index: 1">v{{ $variant }} {{ format $count }} ({{$p}}%)</div>
-     {{ $color := variantColor $variant }}
-     <div style="position: absolute; left: 0; bottom: 0;  display: inline-block; width: {{$p}}%; background-color: {{$color}};">&nbsp;</div>
-    </div>
-    {{ end }}
-    {{ end }}
   </td>
 </tr>
 

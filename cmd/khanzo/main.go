@@ -459,9 +459,9 @@ func main() {
 		}
 		dates := expandYYYYMMDD(from, to)
 		chart := NewChart(uint32(getTimeBucketNs(c.Query("bucket"))/1000000000), dates)
-		counter := NewCounter(nil, getWhitelist(c.QueryArray("whitelist")), chart)
+		counter := NewCounter(getWhitelist(c.QueryArray("whitelist")), chart)
 		err := foreach(c.Param("query"), dates, func(did int32, cx *spec.Metadata) {
-			counter.Add(contextAlias, false, 0, cx)
+			counter.Add(cx)
 			if len(counter.Sample[0]) < sampleSize {
 				counter.Sample[0] = append(counter.Sample[0], toHit(did, cx))
 			}
@@ -472,82 +472,6 @@ func main() {
 			return
 		}
 
-		Render(c, counter)
-	})
-
-	r.GET("/exp/:format/:experiment/:metricKey/:metricValue/*query", func(c *gin.Context) {
-		sampleSize := intOrDefault(c.Query("sample_size"), 100)
-		counter := NewCounter(NewConvertedCache(), getWhitelist(c.QueryArray("whitelist")), nil)
-		experiment := c.Param("experiment")
-		metricKey := c.Param("metricKey")
-		metricValue := c.Param("metricValue")
-		from := c.Query("from")
-		to := c.Query("to")
-		if (from == "" || to == "") && c.Param("format") == "html" {
-			c.Redirect(302, fmt.Sprintf("%s?from=%s&to=%s", c.Request.URL.Path, yyyymmdd(time.Now().UTC().AddDate(0, 0, -1)), yyyymmdd(time.Now().UTC())))
-			return
-		}
-
-		dates := expandYYYYMMDD(from, to)
-		tracked := map[string]map[string]uint32{}
-
-		// all users that are tracked
-		err := foreach(fmt.Sprintf("%s/__experiment:%s/", c.Param("query"), experiment), dates, func(did int32, cx *spec.Metadata) {
-			variant := cx.Track[experiment]
-
-			pid, ok := tracked[cx.ForeignType]
-			if !ok {
-				pid = map[string]uint32{}
-				tracked[cx.ForeignType] = pid
-			}
-			pid[cx.ForeignId] = uint32(variant)
-		})
-		if err != nil {
-			c.JSON(400, gin.H{"error": err.Error()})
-			return
-		}
-
-		isEventType := metricKey == "event_type"
-		err = foreach(c.Param("query"), dates, func(did int32, cx *spec.Metadata) {
-			pid, ok := tracked[cx.ForeignType]
-			if !ok {
-				return
-			}
-			variant, ok := pid[cx.ForeignId]
-
-			if !ok {
-				return
-			}
-			converted := false
-			if isEventType {
-				if cx.EventType == metricValue {
-					converted = true
-				}
-			} else {
-				for _, kv := range cx.Search {
-					if kv.Key == metricKey {
-						if kv.Value == metricValue {
-							converted = true
-						}
-						break
-					}
-				}
-			}
-			if converted {
-				counter.ConvertedCache.SetConverted(1, variant, cx.ForeignType, cx.ForeignId)
-			} else {
-				counter.ConvertedCache.SetConverted(0, variant, cx.ForeignType, cx.ForeignId)
-			}
-
-			if len(counter.Sample[variant]) < sampleSize {
-				counter.Sample[variant] = append(counter.Sample[variant], toHit(did, cx))
-			}
-			counter.Add(map[string]string{}, converted, variant, cx)
-		})
-		if err != nil {
-			c.JSON(400, gin.H{"error": err.Error()})
-			return
-		}
 		Render(c, counter)
 	})
 

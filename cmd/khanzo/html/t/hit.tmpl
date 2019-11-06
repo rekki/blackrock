@@ -1,7 +1,6 @@
 {{ $hit := .Data }}
 {{ $qs := .QueryString }}
 {{ $base := .BaseUrl }}
-{{ $variant := .Variant }}
 {{ $m := $hit.Metadata }}
 {{ $foreignId := $m.ForeignId }}
 {{ $foreignType := $m.ForeignType }}
@@ -9,7 +8,7 @@
   <td>
     <a style="font-size: 18px" href="/scan/html/event_type:{{ $m.EventType }}?{{$qs}}">{{$m.EventType }}</a><br>
     <a href="/scan/html/{{$m.ForeignType}}:{{ $m.ForeignId }}?{{$qs}}">{{$m.ForeignType}}:{{$m.ForeignId}}</a><br>
-    {{ time $m.CreatedAtNs }}, v{{$variant}}
+    {{ time $m.CreatedAtNs }}
     <br>
   </td>
   <td align="right">
