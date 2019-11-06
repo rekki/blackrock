@@ -715,7 +715,7 @@ func loadTemplate() (*template.Template, error) {
 			return strings.Replace(a, b, c, -1)
 		},
 		"prettyName": func(key, value string) string {
-			return "pretty_" + value
+			return value
 		},
 		"getN": func(qs template.URL, key string, n int) int {
 			v, err := url.ParseQuery(string(qs))
