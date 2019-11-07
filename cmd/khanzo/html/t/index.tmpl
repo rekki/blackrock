@@ -140,11 +140,6 @@
       {{ template "/html/t/chart.tmpl" dict "Data" . "GlobalTotal" $total  "BaseUrl" $base "Link" true "QueryString" $query}}
       {{ end }}
 
-      <tr><td colspan=2><pre class="banner">{{ banner "context"}}</pre></td></tr>
-      {{ range (.Stats.SortedKeys .Stats.Context) }}
-      {{ template "/html/t/chart.tmpl" dict "Data" . "GlobalTotal" $total  "BaseUrl" $base "Link" true "QueryString" $query}}
-      {{ end }}
-
       <tr><td colspan=2><pre class="banner">{{ banner "count"}}</pre></td></tr>
       {{ range (.Stats.SortedKeys .Stats.Count) }}
       {{ template "/html/t/chart.tmpl" dict "Data" . "GlobalTotal" $total  "BaseUrl" $base "Link" false "QueryString" $query}}

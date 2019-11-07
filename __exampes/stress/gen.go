@@ -147,13 +147,13 @@ type Book struct {
 	PublishDate string `faker:"date"`
 }
 
-func genUser(times []time.Time) *spec.Context {
+func genUser(times []time.Time) *spec.Metadata {
 	var s User
 	err := faker.FakeData(&s)
 	if err != nil {
 		panic(err)
 	}
-	c := &spec.Context{
+	c := &spec.Metadata{
 		CreatedAtNs: 1,
 		ForeignType: "user_id",
 		ForeignId:   s.UUID,
@@ -167,13 +167,13 @@ func genUser(times []time.Time) *spec.Context {
 	return c
 }
 
-func genCountry(times []time.Time) *spec.Context {
+func genCountry(times []time.Time) *spec.Metadata {
 	var s Country
 	err := faker.FakeData(&s)
 	if err != nil {
 		panic(err)
 	}
-	c := &spec.Context{
+	c := &spec.Metadata{
 		CreatedAtNs: 1,
 		ForeignType: "country_id",
 		ForeignId:   s.UUID,
@@ -182,14 +182,14 @@ func genCountry(times []time.Time) *spec.Context {
 	return c
 }
 
-func genAuthor(times []time.Time, countries []*spec.Context) *spec.Context {
+func genAuthor(times []time.Time, countries []*spec.Metadata) *spec.Metadata {
 	var s Author
 	err := faker.FakeData(&s)
 	if err != nil {
 		panic(err)
 	}
 
-	c := &spec.Context{
+	c := &spec.Metadata{
 		CreatedAtNs: 1,
 		ForeignType: "author_id",
 		ForeignId:   s.UUID,
@@ -200,14 +200,14 @@ func genAuthor(times []time.Time, countries []*spec.Context) *spec.Context {
 	return c
 }
 
-func genBook(times []time.Time, author ...*spec.Context) *spec.Context {
+func genBook(times []time.Time, author ...*spec.Metadata) *spec.Metadata {
 	var s Book
 	err := faker.FakeData(&s)
 	if err != nil {
 		panic(err)
 	}
 
-	c := &spec.Context{
+	c := &spec.Metadata{
 		CreatedAtNs: 1,
 		ForeignType: "book_id",
 		ForeignId:   s.UUID,
@@ -224,8 +224,8 @@ func genBook(times []time.Time, author ...*spec.Context) *spec.Context {
 	return c
 }
 
-func pickAuthors(authors []*spec.Context) []*spec.Context {
-	out := []*spec.Context{}
+func pickAuthors(authors []*spec.Metadata) []*spec.Metadata {
+	out := []*spec.Metadata{}
 	seen := map[string]bool{}
 	for i := 1; i < 2+rand.Intn(5); i++ {
 		a := authors[rand.Intn(len(authors))]
@@ -239,7 +239,7 @@ func pickAuthors(authors []*spec.Context) []*spec.Context {
 
 var actions = []string{"buy", "click", "skip", "ignore", "click", "click", "ignore", "ignore", "skip"}
 
-func genEvent(days []time.Time, users []*spec.Context, books []*spec.Context) *spec.Envelope {
+func genEvent(days []time.Time, users []*spec.Metadata, books []*spec.Metadata) *spec.Envelope {
 	userIdx := rand.Intn(len(users))
 	user := users[userIdx]
 	var s SomeAction
@@ -274,15 +274,6 @@ func genEvent(days []time.Time, users []*spec.Context, books []*spec.Context) *s
 	}
 
 	return &spec.Envelope{Metadata: m}
-}
-
-func pushMany(orgrim *client.Client, x []*spec.Context) {
-	for _, v := range x {
-		err := orgrim.PushContext(v)
-		if err != nil {
-			log.Fatalf("%v %s", v, err)
-		}
-	}
 }
 
 func pushManyEvents(orgrim *client.Client, x ...*spec.Envelope) {
@@ -336,10 +327,10 @@ func main() {
 	nEvents := flag.Int("n-events", 100, "number of events")
 	flag.Parse()
 	times := expandYYYYMMDD(*from, *to)
-	users := []*spec.Context{}
-	authors := []*spec.Context{}
-	books := []*spec.Context{}
-	countries := []*spec.Context{}
+	users := []*spec.Metadata{}
+	authors := []*spec.Metadata{}
+	books := []*spec.Metadata{}
+	countries := []*spec.Metadata{}
 
 	for i := 0; i < *nUsers; i++ {
 		users = append(users, genUser(times))
@@ -358,10 +349,6 @@ func main() {
 	}
 
 	orgrim := client.NewClient("http://localhost:9001/", "", nil)
-	pushMany(orgrim, users)
-	pushMany(orgrim, countries)
-	pushMany(orgrim, authors)
-	pushMany(orgrim, books)
 
 	for i := 0; i < *nEvents/4; i++ {
 		pushManyEvents(
