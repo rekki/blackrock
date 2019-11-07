@@ -18,7 +18,5 @@ require (
 	github.com/prometheus/client_golang v1.2.1 // indirect
 	github.com/segmentio/kafka-go v0.3.4
 	github.com/sirupsen/logrus v1.4.2
-	github.com/spaolacci/murmur3 v1.1.0
 	github.com/tomasen/realip v0.0.0-20180522021738-f0c99a92ddce
-	gonum.org/v1/gonum v0.6.0
 )

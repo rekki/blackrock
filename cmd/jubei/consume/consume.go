@@ -10,7 +10,6 @@ import (
 	"github.com/rekki/blackrock/cmd/jubei/disk"
 	"github.com/rekki/blackrock/cmd/orgrim/spec"
 	"github.com/rekki/blackrock/pkg/depths"
-	"github.com/spaolacci/murmur3"
 )
 
 // hack to backfix some wrongly flattened keys
@@ -121,9 +120,4 @@ func ConsumeEvents(segmentId string, envelope *spec.Envelope, forward *disk.Forw
 	}
 
 	return nil
-}
-
-func ExpDice(ftype, id, exp string, variants uint32) uint32 {
-	h := murmur3.Sum32WithSeed([]byte(ftype), 0) + murmur3.Sum32WithSeed([]byte(id), 0) + murmur3.Sum32WithSeed([]byte(exp), 0)
-	return h % variants
 }
