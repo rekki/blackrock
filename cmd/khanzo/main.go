@@ -405,39 +405,6 @@ func main() {
 		return nil
 	}
 
-	r.GET("/count/:what/*query", func(c *gin.Context) {
-		from := c.Query("from")
-		to := c.Query("to")
-		dates := expandYYYYMMDD(from, to)
-		possible := map[string]uint32{}
-		query := []string{}
-		what := c.Param("what")
-		crumbs := NewBreadcrumb(c.Request.URL.Path)
-
-		for _, v := range crumbs {
-			if !strings.HasPrefix(v.Exact, what+":") {
-				query = append(query, v.Exact)
-			}
-		}
-
-		err := foreach(strings.Join(query, "/"), dates, func(did int32, cx *spec.Metadata) {
-			if what == "event_type" {
-				possible[cx.EventType]++
-			} else {
-				for _, v := range cx.Search {
-					if v.Key == what {
-						possible[v.Value]++
-					}
-				}
-			}
-		})
-		if err != nil {
-			c.JSON(400, gin.H{"error": err.Error()})
-			return
-		}
-		c.JSON(400, gin.H{"count": possible, "query": query})
-	})
-
 	r.GET("/scan/:format/*query", func(c *gin.Context) {
 		sampleSize := intOrDefault(c.Query("sample_size"), 100)
 
@@ -449,14 +416,6 @@ func main() {
 			return
 		}
 
-		// hack, will delete later
-		contextAlias := map[string]string{}
-		for _, v := range c.QueryArray("alias") {
-			splitted := strings.Split(v, ":")
-			if len(splitted) == 2 {
-				contextAlias[splitted[0]] = splitted[1]
-			}
-		}
 		dates := expandYYYYMMDD(from, to)
 		chart := NewChart(uint32(getTimeBucketNs(c.Query("bucket"))/1000000000), dates)
 		counter := NewCounter(getWhitelist(c.QueryArray("whitelist")), chart)
