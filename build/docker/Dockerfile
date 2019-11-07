@@ -7,7 +7,7 @@ ARG CMD
 
 WORKDIR /
 
-RUN apk add --no-cache --update ca-certificates make git
+RUN apk add --no-cache --update ca-certificates make git bash less vim
 
 RUN mkdir /geoip /tmp/geoip \
   && wget -O - https://geolite.maxmind.com/download/geoip/database/GeoLite2-City.tar.gz | tar -C /tmp/geoip -zxvf - \
