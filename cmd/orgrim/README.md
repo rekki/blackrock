@@ -20,25 +20,6 @@ and Blackhand.
 
 # consume events and context
 
-
-
-```
-curl -d '{
-  "created_at_ns": 1,
-  "foreign_id": "england",
-  "foreign_type": "region",
-  "properties": [
-    {
-      "key": "hello",
-      "value": "world"
-    },
-    {
-      "key": "brave",
-      "value": "world"
-    }
-  ]
-}' http://orgrim/push/context
-
 ```
 
 all query params are tags in the form of key:value, this creates protobuf message with the following schema:
@@ -57,14 +38,6 @@ message Metadata {
 
         string foreign_id = 9;
         string foreign_type = 10;
-}
-
-message Context {
-        repeated KV properties = 2;
-        int64 created_at_ns  = 5;
-
-        string foreign_id = 6;
-        string foreign_type = 7;
 }
 
 message Envelope {

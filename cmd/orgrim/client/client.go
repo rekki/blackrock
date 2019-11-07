@@ -81,9 +81,6 @@ func (c *Client) Push(envelope *spec.Envelope) error {
 	return c.push(c.endpointEnvelope, envelope)
 }
 
-func (c *Client) PushContext(message *spec.Context) error {
-	return c.push(c.endpointContext, message)
-}
 func ToString(v interface{}) string {
 	var value string
 	switch v.(type) {

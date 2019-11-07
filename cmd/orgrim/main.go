@@ -27,7 +27,6 @@ import (
 
 func main() {
 	var dataTopic = flag.String("topic-data", "blackrock-data", "topic for the data")
-	var contextTopic = flag.String("topic-context", "blackrock-context", "topic for the context")
 	var kafkaServers = flag.String("kafka", "localhost:9092", "comma separated list of kafka servers")
 	var createConfig = flag.String("create-if-not-exist", "", "create topics if they dont exist, format: partitions:replication factor")
 	var verbose = flag.Bool("verbose", false, "print info level logs to stdout")
@@ -72,19 +71,9 @@ func main() {
 		if err != nil {
 			log.Fatalf("error creating %s, err: %s", *dataTopic, err.Error())
 		}
-		err = depths.CreateTopic(*kafkaServers, *contextTopic, int(partitions), int(replicas))
-		if err != nil {
-			log.Fatalf("error creating %s, err: %s", *contextTopic, err.Error())
-		}
-
 	}
 
 	err = depths.HealthCheckKafka(*kafkaServers, *dataTopic)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	err = depths.HealthCheckKafka(*kafkaServers, *contextTopic)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -100,32 +89,18 @@ func main() {
 	})
 	defer kw.Close()
 
-	cw := kafka.NewWriter(kafka.WriterConfig{
-		Brokers:          brokers,
-		Topic:            *contextTopic,
-		Balancer:         &kafka.LeastBytes{},
-		BatchTimeout:     1 * time.Second,
-		CompressionCodec: snappy.NewCompressionCodec(),
-		Async:            true,
-	})
-	defer cw.Close()
-
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
 		<-sigs
 		log.Warnf("closing the writer...")
 		kw.Close()
-		cw.Close()
 		os.Exit(0)
 	}()
 
 	go func() {
 		for {
 			s := kw.Stats()
-			fmt.Printf("%s\n", depths.DumpObj(s))
-
-			s = cw.Stats()
 			fmt.Printf("%s\n", depths.DumpObj(s))
 
 			time.Sleep(time.Duration(*statSleep) * time.Second)

@@ -67,26 +67,6 @@ func doio(t *testing.T, c *Client, size int) {
 		t.Fatal("expected error")
 	}
 
-	dataContext := &spec.Context{
-		Properties:  []spec.KV{spec.KV{Key: "hello", Value: "world"}},
-		ForeignId:   RandStringBytesMaskImprSrcUnsafe(5),
-		ForeignType: "test_ctx",
-	}
-	err = c.PushContext(dataContext)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	dataContext = &spec.Context{
-		Properties:  []spec.KV{spec.KV{Key: "hello", Value: "world"}},
-		ForeignId:   RandStringBytesMaskImprSrcUnsafe(5),
-		ForeignType: "test_ctx_wrong",
-	}
-	err = c.PushContext(dataContext)
-	if err == nil {
-		t.Fatal("expected error")
-	}
-
 }
 
 // TODO(aymeric): launch an orgrim instance
