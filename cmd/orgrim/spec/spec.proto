@@ -24,6 +24,16 @@ message Metadata {
         fixed64 id = 12;
 }
 
+message Context {
+        string name = 1;
+        map<string,uint32> data = 2;
+        int64 created_at_ns  = 3;
+
+        string foreign_id = 9;
+        string foreign_type = 10;
+}
+
+
 message Envelope {
         Metadata metadata = 1;
         bytes payload = 2;

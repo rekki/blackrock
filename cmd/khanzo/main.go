@@ -166,7 +166,8 @@ func main() {
 	compact := disk.NewCompactIndexCache()
 	r.Use(cors.Default())
 	r.Use(gin.Recovery())
-	t, err := loadTemplate()
+	state := NewState()
+	t, err := loadTemplate(state)
 	if err != nil {
 		log.Panic(err)
 	}
@@ -270,6 +271,17 @@ func main() {
 			return
 		}
 		Render(c, out)
+	})
+
+	r.POST("/state/set", func(c *gin.Context) {
+		var qr []*spec.Context
+
+		if err := c.ShouldBindJSON(&qr); err != nil {
+			c.JSON(400, gin.H{"error": err.Error()})
+			return
+		}
+		state.SetMany(qr)
+		c.JSON(200, gin.H{"success": true})
 	})
 
 	r.POST("/v0/fetch/", func(c *gin.Context) {
@@ -576,7 +588,7 @@ func setupSimpleEventAccept(root string, geoipPath string, r *gin.Engine) {
 	})
 }
 
-func loadTemplate() (*template.Template, error) {
+func loadTemplate(state *State) (*template.Template, error) {
 	t := template.New("").Funcs(template.FuncMap{
 		"banner": func(b string) string {
 			return chart.BannerLeft(b)
@@ -598,6 +610,10 @@ func loadTemplate() (*template.Template, error) {
 			return strings.Replace(a, b, c, -1)
 		},
 		"prettyName": func(key, value string) string {
+			s := state.Get(key, value)
+			if s != nil {
+				return s.Name
+			}
 			return value
 		},
 		"getN": func(qs template.URL, key string, n int) int {

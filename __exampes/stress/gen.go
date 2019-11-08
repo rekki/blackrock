@@ -9,8 +9,9 @@ import (
 
 	"github.com/bxcodec/faker"
 
-	"github.com/rekki/blackrock/cmd/orgrim/client"
-	"github.com/rekki/blackrock/cmd/orgrim/spec"
+	kh "github.com/rekki/blackrock/cmd/khanzo/client"
+	og "github.com/rekki/blackrock/cmd/orgrim/client"
+	spec "github.com/rekki/blackrock/cmd/orgrim/spec"
 )
 
 var UA = []string{
@@ -276,7 +277,7 @@ func genEvent(days []time.Time, users []*spec.Metadata, books []*spec.Metadata) 
 	return &spec.Envelope{Metadata: m}
 }
 
-func pushManyEvents(orgrim *client.Client, x ...*spec.Envelope) {
+func pushManyEvents(orgrim *og.Client, x ...*spec.Envelope) {
 	for _, v := range x {
 		err := orgrim.Push(v)
 		if err != nil {
@@ -348,7 +349,25 @@ func main() {
 		books = append(books, genBook(times, pickAuthors(authors)...))
 	}
 
-	orgrim := client.NewClient("http://localhost:9001/", "", nil)
+	orgrim := og.NewClient("http://localhost:9001/", "", nil)
+	khanzo := kh.NewClient("http://localhost:9001/", nil)
+	state := []*spec.Context{}
+	for _, col := range [][]*spec.Metadata{books, users} {
+		for _, b := range col {
+			name := ""
+			for _, kv := range b.Properties {
+				if kv.Key == "name" {
+					name = kv.Value
+				}
+			}
+			state = append(state, &spec.Context{ForeignId: b.ForeignId, ForeignType: b.ForeignType, Name: name})
+		}
+	}
+
+	err := khanzo.PushState(state)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	for i := 0; i < *nEvents/4; i++ {
 		pushManyEvents(
@@ -359,4 +378,5 @@ func main() {
 			genEvent(times, users[:*nUsers/10], books[:*nBooks/5]),
 		)
 	}
+
 }

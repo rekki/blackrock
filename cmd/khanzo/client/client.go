@@ -26,8 +26,9 @@ type Hit struct {
 }
 
 type Client struct {
-	h             *http.Client
-	endpointFetch string
+	h                  *http.Client
+	endpointFetch      string
+	endpointSetContext string
 }
 
 func NewClient(url string, h *http.Client) *Client {
@@ -41,7 +42,29 @@ func NewClient(url string, h *http.Client) *Client {
 	if !strings.HasSuffix(url, "/") {
 		url = url + "/"
 	}
-	return &Client{endpointFetch: fmt.Sprintf("%sv0/fetch", url), h: h}
+	return &Client{endpointFetch: fmt.Sprintf("%sv0/fetch", url), endpointSetContext: fmt.Sprintf("%sstate/set", url), h: h}
+}
+
+func (c *Client) PushState(ctx []*spec.Context) error {
+	data, err := json.Marshal(ctx)
+	if err != nil {
+		return err
+	}
+
+	req, err := http.NewRequest("POST", c.endpointSetContext, bytes.NewReader(data))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := c.h.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		return fmt.Errorf("got status %d, expected 200", resp.StatusCode)
+	}
+	return nil
 }
 
 func (c *Client) Fetch(query *ClientQueryRequest, cb func(*Hit)) error {
