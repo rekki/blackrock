@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"encoding/binary"
+	"errors"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -10,12 +12,14 @@ import (
 	"os/signal"
 	"path"
 	"strconv"
+	"sync"
 	"syscall"
 	"time"
 
 	_ "net/http/pprof"
 	"strings"
 
+	"github.com/gofrs/flock"
 	"github.com/gogo/protobuf/proto"
 	"github.com/rekki/blackrock/cmd/jubei/consume"
 	"github.com/rekki/blackrock/cmd/jubei/disk"
@@ -26,17 +30,81 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-func consumeEvents(root string, r *kafka.Reader, maxDescriptors int) error {
+type DiskWriter struct {
+	inverted *disk.InvertedWriter
+	writers  map[string]*disk.ForwardWriter
+	root     string
+	sync.Mutex
+}
+
+func consumeEventsFromAllPartitions(root string, pr []*PartitionReader, maxDescriptors int) error {
 	log.Warnf("waiting... ")
-	ctx := context.Background()
+
 	inverted, err := disk.NewInvertedWriter(maxDescriptors)
 	if err != nil {
 		log.Fatal(err)
 	}
 	writers := map[string]*disk.ForwardWriter{}
 
+	dw := &DiskWriter{inverted: inverted, writers: writers, root: root}
+	errChan := make(chan error)
+
+	for _, p := range pr {
+		go func(p *PartitionReader) {
+			errChan <- consumeEvents(dw, p)
+		}(p)
+	}
+
+	for range pr {
+		err := <-errChan
+		log.Printf("received error: %s", err)
+		for _, p := range pr {
+			p.Reader.Close()
+		}
+	}
+
+	return nil
+}
+
+func consumeEvents(dw *DiskWriter, pr *PartitionReader) error {
+	// XXX(jackdoe): there is no fsync at the moment, use at your own risk
+
+	fileLock := flock.New(path.Join(dw.root, fmt.Sprintf("partition_%d.lock", pr.Partition.ID)))
+	err := fileLock.Lock()
+	if err != nil {
+		return err
+	}
+	defer fileLock.Close() // also unlocks
+
+	state, err := os.OpenFile(path.Join(dw.root, fmt.Sprintf("partition_%d.offset", pr.Partition.ID)), os.O_CREATE|os.O_RDWR, 0600)
+	if err != nil {
+		return err
+	}
+	defer state.Close() // close also syncs
+
+	storedOffset := make([]byte, 16)
+	var offset int64
+	_, err = state.ReadAt(storedOffset, 0)
+	if err != nil {
+		log.Warnf("failed to read bytes, setting offset to First, err: %s", err)
+		offset = kafka.FirstOffset
+	} else {
+		offset = int64(binary.LittleEndian.Uint64(storedOffset)) + 1
+		sum := binary.LittleEndian.Uint64(storedOffset[8:])
+		expected := depths.Hash(storedOffset[:8])
+		if expected != sum {
+			return fmt.Errorf("bad checksum partition: %d, expected: %d, got %d, bytes: %v", pr.Partition.ID, expected, sum, storedOffset)
+		}
+	}
+
+	err = pr.Reader.SetOffset(offset)
+	if err != nil {
+		return err
+	}
+	log.Warnf("starting partition: %d at offset: %d", pr.Partition.ID, offset)
+	ctx := context.Background()
 	for {
-		m, err := r.ReadMessage(ctx)
+		m, err := pr.Reader.FetchMessage(ctx)
 		if err != nil {
 			return err
 		}
@@ -52,24 +120,40 @@ func consumeEvents(root string, r *kafka.Reader, maxDescriptors int) error {
 			envelope.Metadata.Id = uint64(m.Partition)<<56 | uint64(m.Offset)
 		}
 
-		segmentId := path.Join(root, depths.SegmentFromNs(envelope.Metadata.CreatedAtNs))
-		forward, ok := writers[segmentId]
+		segmentId := path.Join(dw.root, depths.SegmentFromNs(envelope.Metadata.CreatedAtNs))
+
+		dw.Lock()
+		forward, ok := dw.writers[segmentId]
 		if !ok {
 			log.Warnf("openning new segment: %s", segmentId)
 			forward, err = disk.NewForwardWriter(segmentId, "main")
 			if err != nil {
+				dw.Unlock()
 				return err
 			}
 
-			writers[segmentId] = forward
+			dw.writers[segmentId] = forward
 		}
 
-		err = consume.ConsumeEvents(segmentId, &envelope, forward, inverted)
+		err = consume.ConsumeEvents(segmentId, &envelope, forward, dw.inverted)
 		if err != nil {
+			dw.Unlock()
 			return err
 		}
+		dw.Unlock()
 
 		log.Infof("message at topic/partition/offset %v/%v/%v: %v\n", m.Topic, m.Partition, m.Offset, envelope.Metadata)
+		binary.LittleEndian.PutUint64(storedOffset[0:], uint64(m.Offset))
+		offsetBytes := make([]byte, 8)
+		binary.LittleEndian.PutUint64(offsetBytes, uint64(m.Offset))
+		binary.LittleEndian.PutUint64(storedOffset[8:], depths.Hash(offsetBytes))
+		_, err = state.WriteAt(storedOffset, 0)
+		if err != nil {
+			// XXX(jackdoe): now we are fucked, the index is already written, and we could not write the offset
+			// which means we will double write events
+			// panic panic
+			return err
+		}
 	}
 }
 
@@ -123,10 +207,28 @@ func compactEverything(root string) error {
 	return nil
 }
 
+func ReadPartitions(brokers string, topic string) ([]kafka.Partition, error) {
+	for _, b := range depths.ShuffledStrings(strings.Split(brokers, ",")) {
+		conn, err := kafka.Dial("tcp", b)
+		if err == nil {
+			p, err := conn.ReadPartitions(topic)
+			conn.Close()
+			if err == nil {
+				return p, nil
+			}
+		}
+	}
+	return nil, errors.New("failed to get partitions, assuming we cant reach kafka")
+}
+
+type PartitionReader struct {
+	Reader    *kafka.Reader
+	Partition kafka.Partition
+}
+
 func main() {
 	var dataTopic = flag.String("topic-data", "blackrock-data", "topic for the data")
 	var proot = flag.String("root", "/blackrock", "root directory for the files")
-	var pqueuelen = flag.Int("kafka-queue-capacity", 1000, "internal queue capacity")
 	var kafkaServers = flag.String("kafka", "localhost:9092", "comma separated list of kafka servers")
 	var verbose = flag.Bool("verbose", false, "print info level logs to stdout")
 	var maxDescriptors = flag.Int("max-descriptors", 1000, "max open descriptors")
@@ -157,46 +259,31 @@ func main() {
 		os.Exit(0)
 	}
 
-	err := depths.HealthCheckKafka(*kafkaServers, *dataTopic)
+	partitions, err := ReadPartitions(*kafkaServers, *dataTopic)
 	if err != nil {
 		log.Fatal(err)
 	}
-	cidb, err := ioutil.ReadFile(path.Join(root, "consumer_id"))
-	var consumerId string
-	if err != nil {
-		log.Warnf("error reading consumer id, generating new one, error: %s", err)
-		hostname, err := os.Hostname()
-		suffix := time.Now().UnixNano()
-		if err == nil {
-			consumerId = fmt.Sprintf("%s_%d", depths.Cleanup(hostname), suffix)
-		} else {
-			consumerId = fmt.Sprintf("__nohost__%d", suffix)
-		}
-		err = ioutil.WriteFile(path.Join(root, "consumer_id"), []byte(consumerId), 0600)
-		if err != nil {
-			log.Fatal(err)
-		}
-	} else {
-		consumerId = string(cidb)
-	}
-	log.Warnf("connecting as consumer '%s'", consumerId)
+
 	brokers := strings.Split(*kafkaServers, ",")
-	rd := kafka.NewReader(kafka.ReaderConfig{
-		Brokers:        brokers,
-		Topic:          *dataTopic,
-		GroupID:        consumerId,
-		CommitInterval: 1 * time.Second,
-		MaxWait:        1 * time.Second,
-		QueueCapacity:  *pqueuelen,
-	})
-	defer rd.Close()
+	readers := []*PartitionReader{}
+	for _, p := range partitions {
+		rd := kafka.NewReader(kafka.ReaderConfig{
+			Brokers:   brokers,
+			Topic:     *dataTopic,
+			MaxWait:   1 * time.Second,
+			Partition: p.ID,
+		})
+		readers = append(readers, &PartitionReader{rd, p})
+	}
 
 	sigs := make(chan os.Signal, 100)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 	cleanup := func() {
 		// no need to close the files, as they are closed on exit
 		log.Warnf("closing the readers...")
-		rd.Close()
+		for _, r := range readers {
+			r.Reader.Close()
+		}
 		os.Exit(0)
 	}
 
@@ -207,14 +294,16 @@ func main() {
 	}()
 
 	go func() {
-		err := consumeEvents(root, rd, *maxDescriptors)
+		err := consumeEventsFromAllPartitions(root, readers, *maxDescriptors)
 		log.Warnf("error consuming events: %s", err.Error())
 		sigs <- syscall.SIGTERM
 	}()
 
 	for {
-		s := rd.Stats()
-		fmt.Printf("%s\n", depths.DumpObj(s))
+		for _, rd := range readers {
+			s := rd.Reader.Stats()
+			log.Warnf("STATS: partition: %d, lag: %d, messages: %d\n", rd.Partition.ID, s.Lag, s.Messages)
+		}
 
 		time.Sleep(1 * time.Minute)
 	}

@@ -363,12 +363,6 @@ func main() {
 			state = append(state, &spec.Context{ForeignId: b.ForeignId, ForeignType: b.ForeignType, Name: name})
 		}
 	}
-
-	err := khanzo.PushState(state)
-	if err != nil {
-		log.Fatal(err)
-	}
-
 	for i := 0; i < *nEvents/4; i++ {
 		pushManyEvents(
 			orgrim,
@@ -377,6 +371,11 @@ func main() {
 			genEvent(times, users[:*nUsers/20], books[:*nBooks/10]),
 			genEvent(times, users[:*nUsers/10], books[:*nBooks/5]),
 		)
+	}
+
+	err := khanzo.PushState(state)
+	if err != nil {
+		log.Fatal(err)
 	}
 
 }
