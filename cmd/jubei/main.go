@@ -66,6 +66,8 @@ func consumeEventsFromAllPartitions(root string, pr []*PartitionReader, maxDescr
 	return nil
 }
 
+const MAX_OPEN_WRITERS = 128
+
 func consumeEvents(dw *DiskWriter, pr *PartitionReader) error {
 	// XXX(jackdoe): there is no fsync at the moment, use at your own risk
 
@@ -125,6 +127,13 @@ func consumeEvents(dw *DiskWriter, pr *PartitionReader) error {
 		dw.Lock()
 		forward, ok := dw.writers[segmentId]
 		if !ok {
+			if len(dw.writers) > MAX_OPEN_WRITERS {
+				for k, v := range dw.writers {
+					v.Close()
+					delete(dw.writers, k)
+				}
+			}
+
 			log.Warnf("openning new segment: %s", segmentId)
 			forward, err = disk.NewForwardWriter(segmentId, "main")
 			if err != nil {
