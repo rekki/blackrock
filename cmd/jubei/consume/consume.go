@@ -109,14 +109,29 @@ func ConsumeEvents(segmentId string, envelope *spec.Envelope, forward *disk.Forw
 		return err
 	}
 
-	inverted.Append(segmentId, int32(docId), second, foreignType, foreignId)
-	inverted.Append(segmentId, int32(docId), second, "event_type", eventType)
+	// XXX(jackdoe): errors after this point are corrupting, since we have the forward index already written
+	err = inverted.Append(segmentId, int32(docId), second, foreignType, foreignId)
+	if err != nil {
+		return err
+	}
+
+	err = inverted.Append(segmentId, int32(docId), second, "event_type", eventType)
+	if err != nil {
+		return err
+	}
 
 	for _, kv := range meta.Search {
-		inverted.Append(segmentId, int32(docId), second, kv.Key, kv.Value)
+		err = inverted.Append(segmentId, int32(docId), second, kv.Key, kv.Value)
+		if err != nil {
+			return err
+		}
+
 	}
 	for ex := range meta.Track {
-		inverted.Append(segmentId, int32(docId), second, "__experiment", ex)
+		err = inverted.Append(segmentId, int32(docId), second, "__experiment", ex)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
