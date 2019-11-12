@@ -50,6 +50,9 @@ func expandYYYYMMDD(from string, to string) []time.Time {
 }
 
 func fromQuery(input *spec.Query, makeTermQuery func(string, string) Query) (Query, error) {
+	if input == nil {
+		return nil, fmt.Errorf("nil input")
+	}
 	if input.Type == spec.Query_TERM {
 		if input.Not != nil || input.Delta != 0 || len(input.Sub) != 0 {
 			return nil, fmt.Errorf("term queries can have only tag and value, %v", input)

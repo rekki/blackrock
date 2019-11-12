@@ -176,6 +176,7 @@ func main() {
 	})
 
 	foreach := func(qr *spec.SearchQueryRequest, cb func(int32, *spec.Metadata, float32) bool) error {
+		l := log.WithField("query", qr)
 		dates := expandYYYYMMDD(qr.From, qr.To)
 		lock := sync.Mutex{}
 		doneChan := make(chan error)
@@ -184,7 +185,8 @@ func main() {
 				segment := path.Join(root, depths.SegmentFromNs(date.UnixNano()))
 				forward, err := disk.NewForwardWriter(segment, "main")
 				if err != nil {
-					doneChan <- err
+					l.Warnf("failed to open forward index: %s, skipping", segment)
+					doneChan <- nil
 					return
 				}
 
@@ -195,13 +197,13 @@ func main() {
 					doneChan <- err
 					return
 				}
-				log.Warnf("running query {%v} in segment: %s", query.String(), segment)
+				l.Warnf("running query {%v} in segment: %s", query.String(), segment)
 
 				for query.Next() != NO_MORE {
 					did := query.GetDocId()
 					m, err := fetchFromForwardIndex(forward, did)
 					if err != nil {
-						log.Warnf("failed to decode offset %d, err: %s", did, err)
+						l.Warnf("failed to decode offset %d, err: %s", did, err)
 						continue
 					}
 					score := query.Score()
@@ -221,7 +223,7 @@ func main() {
 		var err error
 		for range dates {
 			chanErr := <-doneChan
-			if chanErr != nil {
+			if chanErr != nil && err == nil {
 				err = chanErr
 			}
 		}
@@ -356,7 +358,7 @@ func main() {
 		out.Possible[eventTypeKey] = out.Total
 
 		if err != nil {
-			c.JSON(400, gin.H{"error": err.Error()})
+			c.JSON(500, gin.H{"error": err.Error()})
 			return
 		}
 		sendResponse(c, out)
