@@ -37,13 +37,14 @@ type DiskWriter struct {
 	sync.Mutex
 }
 
-func consumeEventsFromAllPartitions(root string, pr []*PartitionReader, maxDescriptors int) error {
+func consumeEventsFromAllPartitions(root string, pr []*PartitionReader) error {
 	log.Warnf("waiting... ")
 
-	inverted, err := disk.NewInvertedWriter(maxDescriptors)
+	inverted, err := disk.NewInvertedWriter()
 	if err != nil {
 		log.Fatal(err)
 	}
+
 	writers := map[string]*disk.ForwardWriter{}
 
 	dw := &DiskWriter{inverted: inverted, writers: writers, root: root}
@@ -55,7 +56,19 @@ func consumeEventsFromAllPartitions(root string, pr []*PartitionReader, maxDescr
 		}(p)
 	}
 
-	for range pr {
+	go func() {
+		for {
+			<-time.After(1 * time.Second)
+			dw.Lock()
+			err := inverted.Flush()
+			dw.Unlock()
+			if err != nil {
+				panic(err)
+			}
+		}
+	}()
+
+	for i := 0; i < len(pr); i++ {
 		err := <-errChan
 		log.Printf("received error: %s", err)
 		for _, p := range pr {
@@ -240,7 +253,6 @@ func main() {
 	var proot = flag.String("root", "/blackrock", "root directory for the files")
 	var kafkaServers = flag.String("kafka", "localhost:9092", "comma separated list of kafka servers")
 	var verbose = flag.Bool("verbose", false, "print info level logs to stdout")
-	var maxDescriptors = flag.Int("max-descriptors", 1000, "max open descriptors")
 	var compact = flag.Bool("compact", false, "compact everything until today and exit")
 	flag.Parse()
 	go func() {
@@ -303,8 +315,10 @@ func main() {
 	}()
 
 	go func() {
-		err := consumeEventsFromAllPartitions(root, readers, *maxDescriptors)
-		log.Warnf("error consuming events: %s", err.Error())
+		err := consumeEventsFromAllPartitions(root, readers)
+		if err != nil {
+			log.Warnf("error consuming events: %s", err.Error())
+		}
 		sigs <- syscall.SIGTERM
 	}()
 

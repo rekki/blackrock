@@ -42,7 +42,7 @@ func TestInverted(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(dir)
-	inv, err := NewInvertedWriter(10)
+	inv, err := NewInvertedWriter()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -78,6 +78,7 @@ func TestInverted(t *testing.T) {
 		}
 	}
 
+	inv.Flush()
 	for _, v := range cases {
 		data := InvertedReadRaw(segmentId, -1, fmt.Sprintf("%d", v.key), fmt.Sprintf("%d", v.value))
 
