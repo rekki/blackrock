@@ -283,23 +283,6 @@ func main() {
 			return
 		}
 
-		if len(qr.Fields) == 0 {
-			qr.Fields = map[string]bool{
-				"event_type":      true,
-				"foreign_id":      true,
-				"year-month-day":  true,
-				"env":             true,
-				"product":         true,
-				"experiment":      true,
-				"sizeWH":          true,
-				"geoip_city":      true,
-				"geoip_country":   true,
-				"ua_is_mobile":    true,
-				"ua_is_bot":       true,
-				"ua_browser_name": true,
-			}
-		}
-
 		out := &spec.Aggregate{
 			Search:    map[string]*spec.CountPerKV{},
 			Count:     map[string]*spec.CountPerKV{},
