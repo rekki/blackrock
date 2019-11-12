@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"path"
 	"strings"
 	"time"
 
@@ -101,7 +102,7 @@ func NewTermQuery(root string, tagKey string, tagValue string, c *disk.CompactIn
 	tagKey = depths.Cleanup(strings.ToLower(tagKey))
 	tagValue = depths.Cleanup(strings.ToLower(tagValue))
 	s := fmt.Sprintf("%s:%s", tagKey, tagValue)
-	return NewTerm(s, c.FindPostingsList(root, tagKey, tagValue))
+	return NewTerm(s, c.FindPostingsList(path.Join(root, "index"), tagKey, tagValue))
 }
 
 func fetchFromForwardIndex(forward *disk.ForwardWriter, did int32) (*spec.Metadata, error) {
@@ -109,12 +110,13 @@ func fetchFromForwardIndex(forward *disk.ForwardWriter, did int32) (*spec.Metada
 	if err != nil {
 		return nil, err
 	}
-	p := spec.Metadata{}
+	p := spec.Envelope{}
 	err = proto.Unmarshal(data, &p)
 	if err != nil {
 		return nil, err
 	}
-	return &p, nil
+
+	return p.Metadata, nil
 }
 
 func toHit(did int32, p *spec.Metadata) *spec.Hit {

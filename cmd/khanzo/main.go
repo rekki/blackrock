@@ -170,6 +170,7 @@ func main() {
 	compact := disk.NewCompactIndexCache()
 	r.Use(cors.Default())
 	r.Use(gin.Recovery())
+
 	r.GET("/health", func(c *gin.Context) {
 		c.String(200, "OK")
 	})
@@ -374,18 +375,15 @@ func main() {
 			left := qr.Limit
 			b, err := json.Marshal(hit)
 			if err != nil {
-				c.JSON(400, gin.H{"error": err.Error()})
 				return false
 			}
 			_, err = w.Write(b)
 			if err != nil {
-				c.JSON(400, gin.H{"error": err.Error()})
 				return false
 			}
 
 			_, err = w.Write(nl)
 			if err != nil {
-				c.JSON(400, gin.H{"error": err.Error()})
 				return false
 			}
 

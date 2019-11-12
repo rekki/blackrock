@@ -102,7 +102,6 @@ func buildSegment(root string) (int, error) {
 		if err != nil {
 			return err
 		}
-
 		did = offset
 		count++
 		return nil
@@ -140,8 +139,10 @@ func buildEverything(root string) error {
 			log.Warnf("skipping %s", day.Name())
 			continue
 		}
+
 		t0 := time.Now()
 		p := path.Join(root, day.Name())
+
 		cnt, err := buildSegment(p)
 		if err != nil {
 			return err
