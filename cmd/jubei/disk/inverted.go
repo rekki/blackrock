@@ -11,16 +11,23 @@ import (
 )
 
 type InvertedWriter struct {
-	todo map[string][]byte
-	made map[string]bool
+	descriptors        map[string]*os.File // FIXME(jackdoe): use lru
+	maxOpenDescriptors int
 }
 
-func NewInvertedWriter() (*InvertedWriter, error) {
+func NewInvertedWriter(maxOpenDescriptors int) (*InvertedWriter, error) {
 	return &InvertedWriter{
-		todo: map[string][]byte{},
-		made: map[string]bool{},
+		maxOpenDescriptors: maxOpenDescriptors,
+		descriptors:        map[string]*os.File{},
 	}, nil
 }
+func (fw *InvertedWriter) Close() {
+	for k, v := range fw.descriptors {
+		v.Close()
+		delete(fw.descriptors, k)
+	}
+}
+
 func (fw *InvertedWriter) Size(root, tagKey, tagValue string) int32 {
 	dir, filename := depths.PathForTag(root, tagKey, tagValue)
 	fn := path.Join(dir, filename)
@@ -79,38 +86,32 @@ func InvertedReadRaw(root string, maxDocuments int32, tagKey, tagValue string) [
 func (fw *InvertedWriter) Append(root string, docId int32, t int32, tagKey, tagValue string) error {
 	dir, fn := depths.PathForTag(root, tagKey, tagValue)
 	filename := path.Join(dir, fn)
-	if _, ok := fw.made[dir]; !ok {
-		os.MkdirAll(dir, 0700)
-		fw.made[dir] = true
-	}
+	f, ok := fw.descriptors[filename]
+	if !ok {
+		if len(fw.descriptors) > fw.maxOpenDescriptors {
+			log.Warnf("clearing descriptor cache len: %d", len(fw.descriptors))
+			for dk, fd := range fw.descriptors {
+				fd.Close()
+				delete(fw.descriptors, dk)
+			}
+		}
 
-	data := make([]byte, 8)
-	binary.LittleEndian.PutUint64(data, uint64(docId)<<32|uint64(t))
-	fw.todo[filename] = append(fw.todo[filename], data...)
-	return nil
-}
-
-func (fw *InvertedWriter) Flush() error {
-	max := 0
-	for filename, data := range fw.todo {
 		log.Infof("openning %s", filename)
+		os.MkdirAll(dir, 0700)
 		fd, err := os.OpenFile(filename, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
 		if err != nil {
 			return err
 		}
-		_, err = fd.Write(data)
-		if err != nil {
-			return err
-		}
-
-		fd.Close()
-		n := len(data) / 8
-		if max < n {
-			max = n
-		}
-
-		delete(fw.todo, filename)
+		f = fd
+		fw.descriptors[filename] = fd
 	}
-	log.Warnf("writing %d documents", max)
+	log.Infof("writing document id %d at %s", docId, filename)
+	data := make([]byte, 8)
+
+	binary.LittleEndian.PutUint64(data, uint64(docId)<<32|uint64(t))
+	_, err := f.Write(data)
+	if err != nil {
+		return err
+	}
 	return nil
 }
