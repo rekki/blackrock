@@ -53,8 +53,7 @@ func ExtractLastNumber(s string, sep byte) (string, int, bool) {
 	return s, 0, false
 }
 
-func ConsumeEvent(docId uint32, envelope *spec.Envelope, inverted *disk.InvertedWriter) error {
-	meta := envelope.Metadata
+func ConsumeEvent(docId uint32, meta *spec.Metadata, inverted *disk.InvertedWriter) error {
 	second := int32(meta.CreatedAtNs / 1e9)
 
 	inverted.Append(int32(docId), second, meta.ForeignType, meta.ForeignId)
@@ -70,35 +69,37 @@ func ConsumeEvent(docId uint32, envelope *spec.Envelope, inverted *disk.Inverted
 }
 
 func buildSegment(root string) (int, error) {
-	ow, err := NewOffsetWriter(path.Join(root, "inverted.offset"))
+	l := log.WithField("root", root).WithField("mode", "BUILD")
+	ow, err := NewOffsetWriter(path.Join(root, "inverted.offset"), l)
 	if err != nil {
+
 		return 0, err
 	}
 	defer ow.Close()
 
 	storedOffset, err := ow.ReadOrDefault(0)
 	if err != nil {
+
 		return 0, err
 	}
 
 	fw, err := disk.NewForwardWriter(root, "main")
 	if err != nil {
+
 		return 0, err
 	}
-
-	log.Warnf("START: processing %v from offset: %d", root, storedOffset)
 
 	count := 0
 	inverted := disk.NewInvertedWriter(path.Join(root, "index"))
 	did := uint32(storedOffset)
 	err = fw.Scan(uint32(storedOffset), func(offset uint32, data []byte) error {
-		envelope := &spec.Envelope{}
-		err := proto.Unmarshal(data, envelope)
+		metadata := &spec.Metadata{}
+		err := proto.Unmarshal(data, metadata)
 		if err != nil {
 			return err
 		}
 
-		err = ConsumeEvent(did, envelope, inverted)
+		err = ConsumeEvent(did, metadata, inverted)
 		if err != nil {
 			return err
 		}
@@ -119,11 +120,13 @@ func buildSegment(root string) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	log.Warnf("END: processing %v end offset: %d", root, did)
+	if uint32(storedOffset) != did {
+		l.Warnf("start offset: %d, end offset: %d", storedOffset, did)
+	}
 	return count, nil
 }
 
-func buildEverything(root string) error {
+func buildEverything(root string, l *log.Entry) error {
 	days, err := ioutil.ReadDir(path.Join(root))
 	if err != nil {
 		return err
@@ -136,7 +139,7 @@ func buildEverything(root string) error {
 
 		_, err := strconv.Atoi(day.Name())
 		if err != nil {
-			log.Warnf("skipping %s", day.Name())
+			l.Warnf("skipping %s", day.Name())
 			continue
 		}
 
@@ -147,7 +150,9 @@ func buildEverything(root string) error {
 		if err != nil {
 			return err
 		}
-		log.Warnf("build: %v took %s for %d documents", p, time.Since(t0), cnt)
+		if cnt > 0 {
+			l.Warnf("%s took %s for %d documents", p, time.Since(t0), cnt)
+		}
 	}
 	return nil
 }

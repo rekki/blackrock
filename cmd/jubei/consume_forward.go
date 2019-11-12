@@ -79,12 +79,11 @@ func prepare(envelope *spec.Envelope) {
 
 func consumeEventsFromAllPartitions(root string, pr []*PartitionReader) error {
 	writers := map[string]*disk.ForwardWriter{}
-
+	l := log.WithField("root", root).WithField("mode", "CONSUME")
 	dw := &DiskWriter{writers: writers, root: root}
 	errChan := make(chan error)
 
 	for _, p := range pr {
-
 		go func(p *PartitionReader) {
 			errChan <- consumeEvents(dw, p)
 		}(p)
@@ -93,14 +92,14 @@ func consumeEventsFromAllPartitions(root string, pr []*PartitionReader) error {
 	go func() {
 		for {
 			time.Sleep(1 * time.Second)
-			log.Warnf("%d events last second", dw.counter)
-			atomic.StoreUint64(&dw.counter, 0)
+			counter := atomic.SwapUint64(&dw.counter, 0)
+			l.Warnf("%d events last second", counter)
 		}
 	}()
 
 	for range pr {
 		err := <-errChan
-		log.Printf("received error: %s", err)
+		l.WithError(err).Printf("received error: %s", err)
 		for _, p := range pr {
 			p.Reader.Close()
 		}
@@ -112,6 +111,7 @@ func consumeEventsFromAllPartitions(root string, pr []*PartitionReader) error {
 const MAX_OPEN_WRITERS = 128
 
 func consumeEvents(dw *DiskWriter, pr *PartitionReader) error {
+	l := log.WithField("root", dw.root).WithField("mode", "CONSUME")
 	fileLock := flock.New(path.Join(dw.root, fmt.Sprintf("partition_%d.lock", pr.Partition.ID)))
 	err := fileLock.Lock()
 	if err != nil {
@@ -119,7 +119,7 @@ func consumeEvents(dw *DiskWriter, pr *PartitionReader) error {
 	}
 	defer fileLock.Close() // also unlocks
 
-	ow, err := NewOffsetWriter(path.Join(dw.root, fmt.Sprintf("partition_%d.offset", pr.Partition.ID)))
+	ow, err := NewOffsetWriter(path.Join(dw.root, fmt.Sprintf("partition_%d.offset", pr.Partition.ID)), l)
 	if err != nil {
 		return err
 	}
@@ -138,7 +138,7 @@ func consumeEvents(dw *DiskWriter, pr *PartitionReader) error {
 		return err
 	}
 
-	log.Warnf("starting partition: %d at offset: %d", pr.Partition.ID, offset)
+	l.Warnf("starting partition: %d at offset: %d", pr.Partition.ID, offset)
 	ctx := context.Background()
 	for {
 		m, err := pr.Reader.FetchMessage(ctx)
@@ -149,7 +149,7 @@ func consumeEvents(dw *DiskWriter, pr *PartitionReader) error {
 		envelope := spec.Envelope{}
 		err = proto.Unmarshal(m.Value, &envelope)
 		if err != nil {
-			log.Warnf("failed to unmarshal, data: %s, error: %s", string(m.Value), err.Error())
+			l.WithError(err).Warnf("failed to unmarshal, data: %s, error: %s", string(m.Value), err.Error())
 			continue
 		}
 
@@ -169,7 +169,7 @@ func consumeEvents(dw *DiskWriter, pr *PartitionReader) error {
 				}
 			}
 
-			log.Warnf("openning new segment: %s", segmentId)
+			l.Warnf("openning new segment: %s", segmentId)
 			forward, err = disk.NewForwardWriter(segmentId, "main")
 			if err != nil {
 				dw.Unlock()
@@ -178,10 +178,10 @@ func consumeEvents(dw *DiskWriter, pr *PartitionReader) error {
 
 			dw.writers[segmentId] = forward
 		}
-
 		dw.Unlock()
+
 		atomic.AddUint64(&dw.counter, 1)
-		data, err := proto.Marshal(&envelope)
+		data, err := proto.Marshal(envelope.Metadata)
 		if err != nil {
 			return err
 		}

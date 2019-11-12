@@ -3,7 +3,7 @@ module github.com/rekki/blackrock
 go 1.13
 
 require (
-	github.com/bxcodec/faker v2.0.1+incompatible // indirect
+	github.com/bxcodec/faker v2.0.1+incompatible
 	github.com/dgryski/go-metro v0.0.0-20180109044635-280f6062b5bc
 	github.com/gin-contrib/cors v1.3.0
 	github.com/gin-gonic/gin v1.4.0

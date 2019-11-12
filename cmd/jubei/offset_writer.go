@@ -11,9 +11,10 @@ import (
 
 type OffsetWriter struct {
 	fd *os.File
+	l  *log.Entry
 }
 
-func NewOffsetWriter(fn string) (*OffsetWriter, error) {
+func NewOffsetWriter(fn string, l *log.Entry) (*OffsetWriter, error) {
 	state, err := os.OpenFile(fn, os.O_CREATE|os.O_RDWR, 0600)
 	if err != nil {
 		return nil, err
@@ -21,6 +22,7 @@ func NewOffsetWriter(fn string) (*OffsetWriter, error) {
 
 	return &OffsetWriter{
 		fd: state,
+		l:  l.WithField("OffsetWriter", true),
 	}, nil
 }
 
@@ -33,7 +35,7 @@ func (ow *OffsetWriter) ReadOrDefault(def int64) (int64, error) {
 	var offset int64
 	_, err := ow.fd.ReadAt(storedOffset, 0)
 	if err != nil {
-		log.Warnf("failed to read bytes, setting offset to %d, err: %s", def, err)
+		ow.l.WithError(err).Warnf("failed to read bytes, setting offset to %d, err: %s", def, err)
 		offset = def
 	} else {
 		offset = int64(binary.LittleEndian.Uint64(storedOffset))

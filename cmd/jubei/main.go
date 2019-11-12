@@ -22,7 +22,6 @@ func main() {
 	var kafkaServers = flag.String("kafka", "localhost:9092", "comma separated list of kafka servers")
 	var verbose = flag.Bool("verbose", false, "print info level logs to stdout")
 	var compact = flag.Bool("compact", false, "compact everything until today and exit")
-	var build = flag.Bool("build", false, "build the inverted indexes and exit")
 	flag.Parse()
 
 	go func() {
@@ -34,6 +33,7 @@ func main() {
 	if err := os.MkdirAll(root, 0700); err != nil {
 		log.Fatal(err)
 	}
+
 	if *verbose {
 		log.SetLevel(log.InfoLevel)
 	} else {
@@ -46,17 +46,7 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
-		log.Warnf("successfully compacted everything in %s, took %s", root, time.Since(t0))
-		os.Exit(0)
-	}
-
-	if *build {
-		err := buildEverything(root)
-		t0 := time.Now()
-		if err != nil {
-			log.Fatal(err)
-		}
-		log.Warnf("successfully  built everything in %s, took %s", root, time.Since(t0))
+		log.Warnf("COMPACT: successfully compacted everything in %s, took %s", root, time.Since(t0))
 		os.Exit(0)
 	}
 
@@ -79,6 +69,16 @@ func main() {
 		readers = append(readers, &PartitionReader{rd, p})
 	}
 
+	build := func() {
+		l := log.WithField("root", root).WithField("mode", "BUILD")
+		t0 := time.Now()
+		err := buildEverything(root, l)
+		if err != nil {
+			l.WithError(err).Fatal(err)
+		}
+		l.Warnf("successfully built everything took %s", time.Since(t0))
+	}
+
 	sigs := make(chan os.Signal, 100)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 	cleanup := func() {
@@ -87,6 +87,8 @@ func main() {
 		for _, r := range readers {
 			r.Reader.Close()
 		}
+
+		build()
 		os.Exit(0)
 	}
 
@@ -98,16 +100,22 @@ func main() {
 
 	go func() {
 		err := consumeEventsFromAllPartitions(root, readers)
-		log.Warnf("error consuming events: %s", err.Error())
+		if err != nil {
+			log.Warnf("error consuming events: %s", err.Error())
+		}
 		sigs <- syscall.SIGTERM
 	}()
 
 	for {
+		build()
+
 		for _, rd := range readers {
 			s := rd.Reader.Stats()
-			log.Warnf("STATS: partition: %d, lag: %d, messages: %d\n", rd.Partition.ID, s.Lag, s.Messages)
+			if s.Lag > 0 {
+				log.WithField("mode", "CONSUME").Warnf("partition: %d, lag: %d, messages: %d\n", rd.Partition.ID, s.Lag, s.Messages)
+			}
 		}
 
-		time.Sleep(1 * time.Minute)
+		time.Sleep(1 * time.Second)
 	}
 }

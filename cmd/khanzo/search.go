@@ -110,13 +110,13 @@ func fetchFromForwardIndex(forward *disk.ForwardWriter, did int32) (*spec.Metada
 	if err != nil {
 		return nil, err
 	}
-	p := spec.Envelope{}
+	p := spec.Metadata{}
 	err = proto.Unmarshal(data, &p)
 	if err != nil {
 		return nil, err
 	}
 
-	return p.Metadata, nil
+	return &p, nil
 }
 
 func toHit(did int32, p *spec.Metadata) *spec.Hit {
