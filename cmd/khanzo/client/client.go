@@ -3,32 +3,19 @@ package client
 import (
 	"bufio"
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
 	"time"
 
+	"github.com/gogo/protobuf/jsonpb"
+	"github.com/gogo/protobuf/proto"
 	"github.com/rekki/blackrock/cmd/orgrim/spec"
 )
 
-type ClientQueryRequest struct {
-	Query map[string]interface{} `json:"query"`
-	Size  int                    `json:"size"`
-	From  string                 `json:"from"`
-	To    string                 `json:"to"`
-}
-
-type Hit struct {
-	Score    float32       `json:"score,omitempty"`
-	ID       uint64        `json:"id,omitempty"`
-	Metadata spec.Metadata `json:"metadata,omitempty"`
-}
-
 type Client struct {
-	h                  *http.Client
-	endpointFetch      string
-	endpointSetContext string
+	h             *http.Client
+	endpointFetch string
 }
 
 func NewClient(url string, h *http.Client) *Client {
@@ -42,33 +29,11 @@ func NewClient(url string, h *http.Client) *Client {
 	if !strings.HasSuffix(url, "/") {
 		url = url + "/"
 	}
-	return &Client{endpointFetch: fmt.Sprintf("%sv0/fetch", url), endpointSetContext: fmt.Sprintf("%sstate/set", url), h: h}
+	return &Client{endpointFetch: fmt.Sprintf("%sv0/fetch", url), h: h}
 }
 
-func (c *Client) PushState(ctx []*spec.Context) error {
-	data, err := json.Marshal(ctx)
-	if err != nil {
-		return err
-	}
-
-	req, err := http.NewRequest("POST", c.endpointSetContext, bytes.NewReader(data))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := c.h.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != 200 {
-		return fmt.Errorf("got status %d, expected 200", resp.StatusCode)
-	}
-	return nil
-}
-
-func (c *Client) Fetch(query *ClientQueryRequest, cb func(*Hit)) error {
-	data, err := json.Marshal(query)
+func (c *Client) Fetch(query *spec.SearchQueryRequest, cb func(*spec.Hit)) error {
+	data, err := proto.Marshal(query)
 	if err != nil {
 		return err
 	}
@@ -77,7 +42,7 @@ func (c *Client) Fetch(query *ClientQueryRequest, cb func(*Hit)) error {
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Content-Type", "application/x-protobuf")
 	resp, err := c.h.Do(req)
 	if err != nil {
 		return err
@@ -87,8 +52,8 @@ func (c *Client) Fetch(query *ClientQueryRequest, cb func(*Hit)) error {
 	scanner := bufio.NewScanner(resp.Body)
 	for scanner.Scan() {
 		line := scanner.Text()
-		var decoded Hit
-		err := json.Unmarshal([]byte(line), &decoded)
+		var decoded spec.Hit
+		err := jsonpb.UnmarshalString(line, &decoded)
 		if err != nil {
 			return err
 		}

@@ -24,17 +24,42 @@ message Metadata {
         fixed64 id = 12;
 }
 
-message Context {
-        string name = 1;
-        map<string,uint32> data = 2;
-        int64 created_at_ns  = 3;
-
-        string foreign_id = 9;
-        string foreign_type = 10;
+message Hit {
+        uint64 id = 1;
+        float score = 2;
+        Metadata metadata = 3;
 }
 
+message Query {
+        repeated Query sub = 1;
+        enum Type {
+        TERM = 0;
+        AND = 1;
+        OR = 2;
+        AND_THEN = 3;
+        }
+        Type type = 2;
+        string tag = 3;
+        string value = 4;
+        Query not = 5;
+        int32 delta = 6;
+}
+
+message SearchQueryRequest {
+        string from = 1;
+        string to = 2;
+        Query query = 3;
+        int32 limit = 4;
+}
+
+
+message SearchQueryResponse {
+        repeated Hit hits = 1;
+        uint64 total = 2;
+}
 
 message Envelope {
         Metadata metadata = 1;
         bytes payload = 2;
 }
+

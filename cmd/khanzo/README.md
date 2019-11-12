@@ -32,18 +32,10 @@ be faster if you decide not to decode the metadata in the hit.
 ```
 % curl -d '{
   "size": 1,
-  "scan_max_documents": -1,
   "query": {
-    "or": [
-      {
-        "tag": {
-          "key": "user_id",
-          "value": "717f780d067d4abf95b28e013f4570c1"
-        }
-      }
-    ]
-  },
-  "decode_metadata": true
+    "key": "event_type",
+    "value": "click"
+  }
 }' http://khanzo/search/json
 
 {

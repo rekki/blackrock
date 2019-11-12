@@ -2,18 +2,12 @@ package main
 
 import (
 	"encoding/json"
-	"errors"
 	"flag"
 	"fmt"
-	"html/template"
-	"io/ioutil"
 	"net/http"
 	_ "net/http/pprof"
-	"net/url"
 	"os"
 	"path"
-	"reflect"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -24,11 +18,9 @@ import (
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
-	"github.com/gogo/protobuf/proto"
-	lru "github.com/hashicorp/golang-lru"
+	"github.com/gin-gonic/gin/binding"
 	"github.com/rekki/blackrock/cmd/jubei/consume"
 	"github.com/rekki/blackrock/cmd/jubei/disk"
-	"github.com/rekki/blackrock/cmd/khanzo/chart"
 	"github.com/rekki/blackrock/cmd/orgrim/spec"
 	"github.com/rekki/blackrock/pkg/depths"
 	log "github.com/sirupsen/logrus"
@@ -38,28 +30,6 @@ func CacheKey(t int64, doc int32) int64 {
 	t = depths.SegmentFromNsInt(t)
 	return int64(doc)<<32 | t
 }
-
-type Renderable interface {
-	String(c *gin.Context)
-	HTML(c *gin.Context)
-}
-
-func Render(c *gin.Context, x Renderable) {
-	format := c.Param("format")
-	if format == "" {
-		format = c.Query("format")
-	}
-	if format == "json" {
-		c.JSON(200, x)
-	} else if format == "yaml" {
-		c.YAML(200, x)
-	} else if format == "html" {
-		x.HTML(c)
-	} else {
-		x.String(c)
-	}
-}
-
 func intOrDefault(s string, n int) int {
 	v, err := strconv.ParseInt(s, 10, 32)
 	if err != nil {
@@ -117,33 +87,53 @@ func getTimeBucketNs(b string) int64 {
 
 	return int64(1*time.Hour) * 24
 }
+func sendResponse(c *gin.Context, out interface{}) {
+	switch c.NegotiateFormat(gin.MIMEJSON, binding.MIMEPROTOBUF) {
+	case binding.MIMEPROTOBUF:
+		c.ProtoBuf(200, out)
+	default:
+		c.JSON(200, out)
+	}
+}
+func extractQuery(c *gin.Context) (*spec.SearchQueryRequest, error) {
+	qr := &spec.SearchQueryRequest{}
+	if c.ContentType() == binding.MIMEPROTOBUF {
+		if err := c.ShouldBindBodyWith(qr, binding.ProtoBuf); err != nil {
+			return nil, err
+		}
+
+	} else {
+		if err := c.ShouldBindBodyWith(qr, binding.JSON); err != nil {
+			c.JSON(400, gin.H{"error": err.Error()})
+			return nil, err
+
+		}
+	}
+	return qr, nil
+}
 
 func main() {
 	var proot = flag.String("root", "/blackrock/data-topic", "root directory for the files root/topic")
-	var lruSize = flag.Int("lru-size", 100000, "lru cache size for the forward index")
 	var verbose = flag.Bool("verbose", false, "print info level logs to stdout")
 	var accept = flag.Bool("not-production-accept-events", false, "also accept events, super simple, so people can test in their laptops without zookeeper, kafka, orgrim, blackhand and jubei setup..")
 	var geoipFile = flag.String("not-production-geoip", "", "path to https://dev.maxmind.com/geoip/geoip2/geolite2/ file")
 	var bind = flag.String("bind", ":9002", "bind to")
-	var home = flag.String("home", "", "home query")
 	var prometheusListenAddress = flag.String("prometheus", "false", "true to enable prometheus (you can also specify a listener address")
 	flag.Parse()
+
 	if *verbose {
 		log.SetLevel(log.InfoLevel)
 	} else {
 		gin.SetMode(gin.ReleaseMode)
 		log.SetLevel(log.WarnLevel)
 	}
+
 	go func() {
 		log.Println(http.ListenAndServe("localhost:6060", nil))
 	}()
+
 	root := *proot
 	err := os.MkdirAll(root, 0700)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	cache, err := lru.NewARC(*lruSize)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -166,284 +156,122 @@ func main() {
 	compact := disk.NewCompactIndexCache()
 	r.Use(cors.Default())
 	r.Use(gin.Recovery())
-	state := NewState()
-	t, err := loadTemplate(state)
-	if err != nil {
-		log.Panic(err)
-	}
-	r.SetHTMLTemplate(t)
-	r.StaticFS("/public/", Assets)
-	r.StaticFS("/external/", AssetsVendor)
-
 	r.GET("/health", func(c *gin.Context) {
 		c.String(200, "OK")
 	})
 
-	r.GET("/favicon.ico", func(c *gin.Context) {
-		name := "/vendor/img/favicon.ico"
-		f, ok := AssetsVendor.Files[name]
-		if !ok {
-			c.JSON(400, gin.H{"error": "not found"})
-			return
-		}
-		h, err := ioutil.ReadAll(f)
-
-		if err != nil {
-			c.JSON(400, gin.H{"error": err.Error()})
-			return
-		}
-		c.Data(200, "image/png", h)
-	})
-
-	search := func(qr QueryRequest) (*QueryResponse, error) {
+	foreach := func(qr *spec.SearchQueryRequest, cb func(int32, *spec.Metadata, float32) bool) error {
 		dates := expandYYYYMMDD(qr.From, qr.To)
-		out := &QueryResponse{
-			Hits:  []Hit{},
-			Total: 0,
-		}
 		for _, date := range dates {
 			segment := path.Join(root, depths.SegmentFromNs(date.UnixNano()))
 			forward, err := disk.NewForwardWriter(segment, "main")
 			if err != nil {
-				return nil, err
+				return err
 			}
 
-			query, _, err := fromJson(qr.Query, func(k, v string) Query {
+			query, err := fromQuery(qr.Query, func(k, v string) Query {
 				return NewTermQuery(segment, k, v, compact)
 			})
 			if err != nil {
-				return nil, err
+				return err
 			}
-
 			for query.Next() != NO_MORE {
 				did := query.GetDocId()
-				out.Total++
-				if qr.Size == 0 {
+				m, err := fetchFromForwardIndex(forward, did)
+				if err != nil {
+					log.Warnf("failed to decode offset %d, err: %s", did, err)
 					continue
 				}
-
-				score := query.Score()
-				doInsert := false
-				var hit Hit
-				if len(out.Hits) < qr.Size {
-					hit, err = getScoredHit(forward, did)
-					hit.Score = score
-					if err != nil {
-						// possibly corrupt forward index, igore, error is already printed
-						continue
-					}
-					out.Hits = append(out.Hits, hit)
-					doInsert = true
-				} else if out.Hits[len(out.Hits)-1].Score < hit.Score {
-					doInsert = true
-					hit, err = getScoredHit(forward, did)
-					hit.Score = score
-					if err != nil {
-						// possibly corrupt forward index, igore, error is already printed
-						continue
-					}
+				stop := cb(did, m, query.Score())
+				if stop {
+					return nil
 				}
-				if doInsert {
-					for i := 0; i < len(out.Hits); i++ {
-						if out.Hits[i].Score < hit.Score {
-							copy(out.Hits[i+1:], out.Hits[i:])
-							out.Hits[i] = hit
-							break
-						}
-					}
-				}
-			}
-		}
-		return out, nil
-	}
-
-	r.POST("/search/:format", func(c *gin.Context) {
-		var qr QueryRequest
-
-		if err := c.ShouldBindJSON(&qr); err != nil {
-			c.JSON(400, gin.H{"error": err.Error()})
-			return
-		}
-
-		out, err := search(qr)
-		if err != nil {
-			c.JSON(400, gin.H{"error": err.Error()})
-			return
-		}
-		Render(c, out)
-	})
-
-	r.POST("/state/set", func(c *gin.Context) {
-		var qr []*spec.Context
-
-		if err := c.ShouldBindJSON(&qr); err != nil {
-			c.JSON(400, gin.H{"error": err.Error()})
-			return
-		}
-		state.SetMany(qr)
-		c.JSON(200, gin.H{"success": true})
-	})
-
-	r.POST("/v0/fetch/", func(c *gin.Context) {
-		var qr QueryRequest
-
-		if err := c.ShouldBindJSON(&qr); err != nil {
-			c.JSON(400, gin.H{"error": err.Error()})
-			return
-		}
-
-		dates := expandYYYYMMDD(qr.From, qr.To)
-		for _, date := range dates {
-			segment := path.Join(root, depths.SegmentFromNs(date.UnixNano()))
-			forward, err := disk.NewForwardWriter(segment, "main")
-			if err != nil {
-				c.JSON(400, gin.H{"error": err.Error()})
-				return
-			}
-
-			query, _, err := fromJson(qr.Query, func(k, v string) Query {
-				return NewTermQuery(segment, k, v, compact)
-			})
-
-			if err != nil {
-				c.JSON(400, gin.H{"error": err.Error()})
-				return
-			}
-
-			w := c.Writer
-			nl := []byte{'\n'}
-			left := qr.Size
-			for query.Next() != NO_MORE {
-				did := query.GetDocId()
-				hit, err := getScoredHit(forward, did)
-				hit.Score = query.Score()
-				if err != nil {
-					c.JSON(400, gin.H{"error": err.Error()})
-					return
-				}
-				b, err := json.Marshal(&hit)
-				if err != nil {
-					c.JSON(400, gin.H{"error": err.Error()})
-					return
-				}
-				_, err = w.Write(b)
-				if err != nil {
-					c.JSON(400, gin.H{"error": err.Error()})
-					return
-				}
-
-				_, err = w.Write(nl)
-				if err != nil {
-					c.JSON(400, gin.H{"error": err.Error()})
-					return
-				}
-
-				if qr.Size > 0 {
-					left--
-					if left == 0 {
-						return
-					}
-				}
-			}
-		}
-	})
-
-	r.GET("/", func(c *gin.Context) {
-		c.Redirect(302, "/scan/html/"+*home)
-	})
-
-	foreach := func(queryString string, dates []time.Time, cb func(did int32, x *spec.Metadata)) error {
-		for _, date := range dates {
-			ns := date.UnixNano()
-
-			segment := path.Join(root, depths.SegmentFromNs(date.UnixNano()))
-			forward, err := disk.NewForwardWriter(segment, "main")
-			if err != nil {
-				return err
-			}
-
-			// FIXME: this needs major cleanup
-			queryPath := strings.Trim(queryString, "/")
-			and := strings.Replace(queryPath, "/", " AND ", -1)
-			andor := strings.Replace(and, "|", " OR ", -1)
-			make := func(k, v string) Query {
-				return NewTermQuery(segment, k, v, compact)
-			}
-
-			query, nQueries, err := fromString(andor, make)
-			if err != nil {
-				return err
-			}
-
-			if nQueries == 0 {
-				query = expandTimeToQuery([]time.Time{date}, make)
-			}
-			for query.Next() != NO_MORE {
-				did := query.GetDocId()
-				cacheKey := CacheKey(ns, did)
-				cached, ok := cache.Get(cacheKey)
-
-				if !ok {
-					data, _, err := forward.Read(uint32(did))
-					if err != nil {
-						return err
-					}
-					var p spec.Metadata
-					err = proto.Unmarshal(data, &p)
-					if err != nil {
-						return err
-					}
-
-					sort.Slice(p.Search, func(i, j int) bool {
-						return p.Search[i].Key < p.Search[j].Key
-					})
-
-					sort.Slice(p.Count, func(i, j int) bool {
-						return p.Count[i].Key < p.Count[j].Key
-					})
-
-					sort.Slice(p.Properties, func(i, j int) bool {
-						return p.Properties[i].Key < p.Properties[j].Key
-					})
-
-					cache.Add(cacheKey, &p)
-					cached = &p
-				}
-
-				cx := cached.(*spec.Metadata)
-				cb(did, cx)
 			}
 		}
 		return nil
 	}
 
-	r.GET("/scan/:format/*query", func(c *gin.Context) {
-		sampleSize := intOrDefault(c.Query("sample_size"), 100)
-
-		from := c.Query("from")
-		to := c.Query("to")
-
-		if (from == "" || to == "" || c.Query("bucket") == "") && c.Param("format") == "html" {
-			c.Redirect(302, fmt.Sprintf("%s?from=%s&to=%s&bucket=hour", c.Request.URL.Path, yyyymmdd(time.Now().UTC().AddDate(0, 0, -1)), yyyymmdd(time.Now().UTC())))
-			return
-		}
-
-		dates := expandYYYYMMDD(from, to)
-		chart := NewChart(uint32(getTimeBucketNs(c.Query("bucket"))/1000000000), dates)
-		counter := NewCounter(getWhitelist(c.QueryArray("whitelist")), chart)
-		err := foreach(c.Param("query"), dates, func(did int32, cx *spec.Metadata) {
-			counter.Add(cx)
-			if len(counter.Sample[0]) < sampleSize {
-				counter.Sample[0] = append(counter.Sample[0], toHit(did, cx))
-			}
-		})
-
+	r.POST("/api/v0/search", func(c *gin.Context) {
+		qr, err := extractQuery(c)
 		if err != nil {
 			c.JSON(400, gin.H{"error": err.Error()})
 			return
 		}
 
-		Render(c, counter)
+		out := &spec.SearchQueryResponse{
+			Hits:  []*spec.Hit{},
+			Total: 0,
+		}
+		err = foreach(qr, func(did int32, metadata *spec.Metadata, score float32) bool {
+			out.Total++
+			if qr.Limit == 0 {
+				return true
+			}
+
+			doInsert := false
+			hit := toHit(did, metadata)
+			if len(out.Hits) < int(qr.Limit) {
+				hit.Score = score
+				out.Hits = append(out.Hits, hit)
+				doInsert = true
+			} else if out.Hits[len(out.Hits)-1].Score < score {
+				doInsert = true
+				hit.Score = score
+			}
+			if doInsert {
+				for i := 0; i < len(out.Hits); i++ {
+					if out.Hits[i].Score < hit.Score {
+						copy(out.Hits[i+1:], out.Hits[i:])
+						out.Hits[i] = hit
+						break
+					}
+				}
+			}
+			return true
+		})
+		if err != nil {
+			c.JSON(400, gin.H{"error": err.Error()})
+			return
+		}
+		sendResponse(c, out)
+	})
+
+	r.POST("/api/v0/fetch", func(c *gin.Context) {
+		qr, err := extractQuery(c)
+		if err != nil {
+			c.JSON(400, gin.H{"error": err.Error()})
+			return
+		}
+		w := c.Writer
+		nl := []byte{'\n'}
+		err = foreach(qr, func(did int32, metadata *spec.Metadata, score float32) bool {
+			hit := toHit(did, metadata)
+			left := qr.Limit
+			b, err := json.Marshal(hit)
+			if err != nil {
+				c.JSON(400, gin.H{"error": err.Error()})
+				return false
+			}
+			_, err = w.Write(b)
+			if err != nil {
+				c.JSON(400, gin.H{"error": err.Error()})
+				return false
+			}
+
+			_, err = w.Write(nl)
+			if err != nil {
+				c.JSON(400, gin.H{"error": err.Error()})
+				return false
+			}
+
+			if qr.Limit > 0 {
+				left--
+				if left == 0 {
+					return false
+				}
+			}
+			return true
+		})
 	})
 
 	if *accept {
@@ -586,156 +414,4 @@ func setupSimpleEventAccept(root string, geoipPath string, r *gin.Engine) {
 
 		c.JSON(200, gin.H{"success": true})
 	})
-}
-
-func loadTemplate(state *State) (*template.Template, error) {
-	t := template.New("").Funcs(template.FuncMap{
-		"banner": func(b string) string {
-			return chart.BannerLeft(b)
-		},
-		"time": func(b int64) string {
-			t := time.Unix(int64(b)/1000000000, 0)
-			return t.Format(time.UnixDate)
-		},
-		"pretty": func(b interface{}) string {
-			return depths.DumpObjNoIndent(b)
-		},
-		"json": func(b interface{}) template.JS {
-			return template.JS(depths.DumpObj(b))
-		},
-		"format": func(value uint32) string {
-			return fmt.Sprintf("%8s", chart.Fit(float64(value)))
-		},
-		"replace": func(a, b, c string) string {
-			return strings.Replace(a, b, c, -1)
-		},
-		"prettyName": func(key, value string) string {
-			s := state.Get(key, value)
-			if s != nil {
-				return s.Name
-			}
-			return value
-		},
-		"getN": func(qs template.URL, key string, n int) int {
-			v, err := url.ParseQuery(string(qs))
-			if err != nil {
-				return n
-			}
-
-			off := intOrDefault(v.Get(key), n)
-			return off
-		},
-		"getS": func(qs template.URL, key string) string {
-			v, err := url.ParseQuery(string(qs))
-			if err != nil {
-				return ""
-			}
-			return v.Get(key)
-		},
-		"addN": func(qs template.URL, key string, n int) template.URL {
-			v, err := url.ParseQuery(string(qs))
-			if err != nil {
-				return template.URL("")
-			}
-
-			off := intOrDefault(v.Get(key), 0)
-			off += n
-			v.Set(key, fmt.Sprintf("%d", off))
-			return template.URL(v.Encode())
-		},
-
-		"remS": func(qs template.URL, key string) template.URL {
-			v, err := url.ParseQuery(string(qs))
-			if err != nil {
-				return template.URL("")
-			}
-			v.Del(key)
-			return template.URL(v.Encode())
-		},
-
-		"pick": func(from map[string]*CountPerKey, which ...string) []*CountPerKey {
-			out := []*CountPerKey{}
-			for _, w := range which {
-				v, ok := from[w]
-				if ok {
-					out = append(out, v)
-				}
-			}
-			return out
-		},
-		"minus": func(a, b int) int {
-			return a - b
-		},
-		"variantColor": func(v int) template.CSS {
-			r := 200 / (v + 1)
-			g := 100
-			b := 100
-			if v > 0 {
-				g = 255 / (v + 1)
-				b = 255 / (v + 1)
-			}
-			out := fmt.Sprintf("rgba(%d,%d,%d,0.7)", r, g, b)
-			return template.CSS(out)
-		},
-
-		"prettyFlat": func(v string) string {
-			return strings.Replace(v, ".", " ", -1)
-		},
-
-		"percent": func(value ...interface{}) string {
-			a := float64(value[0].(uint32))
-			b := float64(value[1].(uint32))
-
-			return fmt.Sprintf("%.2f", (100 * (b / a)))
-		},
-		"formatFloat": func(value float64) string {
-			return fmt.Sprintf("%.2f", value)
-		},
-
-		"dict": func(values ...interface{}) (map[string]interface{}, error) {
-			if len(values) == 0 {
-				return nil, errors.New("invalid dict call")
-			}
-
-			dict := make(map[string]interface{})
-
-			for i := 0; i < len(values); i++ {
-				key, isset := values[i].(string)
-				if !isset {
-					if reflect.TypeOf(values[i]).Kind() == reflect.Map {
-						m := values[i].(map[string]interface{})
-						for i, v := range m {
-							dict[i] = v
-						}
-					} else {
-						return nil, errors.New("dict values must be maps")
-					}
-				} else {
-					i++
-					if i == len(values) {
-						return nil, errors.New("specify the key for non array values")
-					}
-					dict[key] = values[i]
-				}
-
-			}
-			return dict, nil
-		},
-		"safeHTML": func(b string) template.HTML {
-			return template.HTML(b)
-		}})
-	for name, file := range Assets.Files {
-		if file.IsDir() || !strings.HasSuffix(name, ".tmpl") {
-			continue
-		}
-		h, err := ioutil.ReadAll(file)
-		if err != nil {
-			return nil, err
-		}
-		t, err = t.New(name).Parse(string(h))
-		if err != nil {
-			return nil, err
-		}
-	}
-	return t, nil
 }
