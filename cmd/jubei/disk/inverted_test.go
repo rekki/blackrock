@@ -42,10 +42,8 @@ func TestInverted(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(dir)
-	inv, err := NewInvertedWriter(10)
-	if err != nil {
-		t.Fatal(err)
-	}
+	segmentId := path.Join(dir, depths.SegmentFromNs(time.Now().UnixNano()))
+	inv := NewInvertedWriter(segmentId)
 	cases := []InvertedCase{InvertedCase{
 		key:   0,
 		value: 0,
@@ -68,16 +66,15 @@ func TestInverted(t *testing.T) {
 		},
 	}
 
-	segmentId := path.Join(dir, depths.SegmentFromNs(time.Now().UnixNano()))
 	for _, v := range cases {
 		for _, id := range v.data {
-			err := inv.Append(segmentId, int32(id>>32), 1, fmt.Sprintf("%d", v.key), fmt.Sprintf("%d", v.value))
-			if err != nil {
-				t.Fatal(err)
-			}
+			inv.Append(int32(id>>32), 1, fmt.Sprintf("%d", v.key), fmt.Sprintf("%d", v.value))
 		}
 	}
-
+	err = inv.Flush()
+	if err != nil {
+		t.Fatal(err)
+	}
 	for _, v := range cases {
 		data := InvertedReadRaw(segmentId, -1, fmt.Sprintf("%d", v.key), fmt.Sprintf("%d", v.value))
 

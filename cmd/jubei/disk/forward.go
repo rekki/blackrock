@@ -9,7 +9,6 @@ import (
 	"path"
 	"sync/atomic"
 
-	"github.com/golang/snappy"
 	"github.com/rekki/blackrock/pkg/depths"
 	log "github.com/sirupsen/logrus"
 )
@@ -18,6 +17,7 @@ const PAD = 64
 
 type ForwardWriter struct {
 	forward *os.File
+	buffer  []byte
 	offset  uint32
 }
 
@@ -87,12 +87,7 @@ func (fw *ForwardWriter) Read(offset uint32) ([]byte, uint32, error) {
 	if checksumHeader != computedChecksumData {
 		return nil, 0, EBADSLT
 	}
-	decompressed, err := snappy.Decode(nil, readInto)
-	if err != nil {
-		return nil, 0, err
-	}
-
-	return decompressed, nextOffset, nil
+	return readInto, nextOffset, nil
 }
 
 func (fw *ForwardWriter) Close() error {
@@ -116,12 +111,11 @@ func (fw *ForwardWriter) Offset() uint32 {
 }
 
 func (fw *ForwardWriter) Append(encoded []byte) (uint32, error) {
-	compressed := snappy.Encode(nil, encoded)
-	blobSize := 8 + len(compressed)
+	blobSize := 8 + len(encoded)
 	blob := make([]byte, blobSize)
-	copy(blob[8:], compressed)
-	binary.LittleEndian.PutUint32(blob[0:], uint32(len(compressed)))
-	binary.LittleEndian.PutUint32(blob[4:], uint32(depths.Hash(compressed)))
+	copy(blob[8:], encoded)
+	binary.LittleEndian.PutUint32(blob[0:], uint32(len(encoded)))
+	binary.LittleEndian.PutUint32(blob[4:], uint32(depths.Hash(encoded)))
 
 	padded := ((uint32(blobSize) + PAD - 1) / PAD)
 

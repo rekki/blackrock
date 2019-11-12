@@ -92,8 +92,8 @@ func SegmentFromNsInt(ns int64) int64 {
 }
 
 func PathForTag(root, tagKey, tagValue string) (string, string) {
-	dir := path.Join(root, tagKey, fmt.Sprintf("shard_%d", Hashs(tagValue)%255))
-	return dir, fmt.Sprintf("%s.p", tagValue)
+	dir := path.Join(root, tagKey, fmt.Sprintf("shard_%d", Hashs(tagValue)%16))
+	return dir, tagValue + ".p"
 }
 
 func Cleanup(s string) string {

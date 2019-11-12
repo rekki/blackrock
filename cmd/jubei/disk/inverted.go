@@ -11,20 +11,14 @@ import (
 )
 
 type InvertedWriter struct {
-	descriptors        map[string]*os.File // FIXME(jackdoe): use lru
-	maxOpenDescriptors int
+	todo map[string]map[string][]byte
+	root string
 }
 
-func NewInvertedWriter(maxOpenDescriptors int) (*InvertedWriter, error) {
+func NewInvertedWriter(root string) *InvertedWriter {
 	return &InvertedWriter{
-		maxOpenDescriptors: maxOpenDescriptors,
-		descriptors:        map[string]*os.File{},
-	}, nil
-}
-func (fw *InvertedWriter) Close() {
-	for k, v := range fw.descriptors {
-		v.Close()
-		delete(fw.descriptors, k)
+		root: root,
+		todo: map[string]map[string][]byte{},
 	}
 }
 
@@ -46,6 +40,7 @@ func (fw *InvertedWriter) Size(root, tagKey, tagValue string) int32 {
 func InvertedReadRaw(root string, maxDocuments int32, tagKey, tagValue string) []uint64 {
 	dir, filename := depths.PathForTag(root, tagKey, tagValue)
 	fn := path.Join(dir, filename)
+	log.Printf("reading %v", fn)
 	file, err := os.OpenFile(fn, os.O_RDONLY, 0600)
 	if os.IsNotExist(err) {
 		log.Infof("missing file %s, returning empty", fn)
@@ -83,35 +78,40 @@ func InvertedReadRaw(root string, maxDocuments int32, tagKey, tagValue string) [
 	return depths.BytesToUints64(postings)
 }
 
-func (fw *InvertedWriter) Append(root string, docId int32, t int32, tagKey, tagValue string) error {
-	dir, fn := depths.PathForTag(root, tagKey, tagValue)
-	filename := path.Join(dir, fn)
-	f, ok := fw.descriptors[filename]
+func (fw *InvertedWriter) Append(docId int32, t int32, tagKey, tagValue string) {
+	data := make([]byte, 8)
+	binary.LittleEndian.PutUint64(data, uint64(docId)<<32|uint64(t))
+
+	pv, ok := fw.todo[tagKey]
 	if !ok {
-		if len(fw.descriptors) > fw.maxOpenDescriptors {
-			log.Warnf("clearing descriptor cache len: %d", len(fw.descriptors))
-			for dk, fd := range fw.descriptors {
-				fd.Close()
-				delete(fw.descriptors, dk)
+		pv = map[string][]byte{}
+		fw.todo[tagKey] = pv
+	}
+
+	pv[tagValue] = append(pv[tagValue], data...)
+}
+
+func (fw *InvertedWriter) Flush() error {
+	made := map[string]bool{}
+
+	for tk, pv := range fw.todo {
+		for tv, data := range pv {
+			dir, fn := depths.PathForTag(fw.root, tk, tv)
+			if _, ok := made[dir]; !ok {
+				os.MkdirAll(dir, 0700)
+				made[dir] = true
+			}
+			fd, err := os.OpenFile(path.Join(dir, fn), os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
+			if err != nil {
+				return err
+			}
+			_, err = fd.Write(data)
+			if err != nil {
+				return err
 			}
 		}
-
-		log.Infof("openning %s", filename)
-		os.MkdirAll(dir, 0700)
-		fd, err := os.OpenFile(filename, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
-		if err != nil {
-			return err
-		}
-		f = fd
-		fw.descriptors[filename] = fd
 	}
-	log.Infof("writing document id %d at %s", docId, filename)
-	data := make([]byte, 8)
 
-	binary.LittleEndian.PutUint64(data, uint64(docId)<<32|uint64(t))
-	_, err := f.Write(data)
-	if err != nil {
-		return err
-	}
+	fw.todo = map[string]map[string][]byte{}
 	return nil
 }
