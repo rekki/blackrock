@@ -63,10 +63,12 @@ message CountPerKV {
 }
 
 message Aggregate {
+
         map<string, CountPerKV> search = 1;
         map<string, CountPerKV> count = 2;
         map<string, CountPerKV> foreign_id = 3;
         map<string, CountPerKV> event_type = 4;
+        map<string, uint32> possible = 6;
         uint32 total = 5;
 }
 
