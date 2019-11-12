@@ -95,8 +95,26 @@ func sendResponse(c *gin.Context, out interface{}) {
 		c.JSON(200, out)
 	}
 }
+
 func extractQuery(c *gin.Context) (*spec.SearchQueryRequest, error) {
 	qr := &spec.SearchQueryRequest{}
+	if c.ContentType() == binding.MIMEPROTOBUF {
+		if err := c.ShouldBindBodyWith(qr, binding.ProtoBuf); err != nil {
+			return nil, err
+		}
+
+	} else {
+		if err := c.ShouldBindBodyWith(qr, binding.JSON); err != nil {
+			c.JSON(400, gin.H{"error": err.Error()})
+			return nil, err
+
+		}
+	}
+	return qr, nil
+}
+
+func extractAggregateQuery(c *gin.Context) (*spec.AggregateRequest, error) {
+	qr := &spec.AggregateRequest{}
 	if c.ContentType() == binding.MIMEPROTOBUF {
 		if err := c.ShouldBindBodyWith(qr, binding.ProtoBuf); err != nil {
 			return nil, err
@@ -162,33 +180,55 @@ func main() {
 
 	foreach := func(qr *spec.SearchQueryRequest, cb func(int32, *spec.Metadata, float32) bool) error {
 		dates := expandYYYYMMDD(qr.From, qr.To)
+		lock := sync.Mutex{}
+		doneChan := make(chan error)
 		for _, date := range dates {
-			segment := path.Join(root, depths.SegmentFromNs(date.UnixNano()))
-			forward, err := disk.NewForwardWriter(segment, "main")
-			if err != nil {
-				return err
-			}
-
-			query, err := fromQuery(qr.Query, func(k, v string) Query {
-				return NewTermQuery(segment, k, v, compact)
-			})
-			if err != nil {
-				return err
-			}
-			for query.Next() != NO_MORE {
-				did := query.GetDocId()
-				m, err := fetchFromForwardIndex(forward, did)
+			go func(date time.Time) {
+				segment := path.Join(root, depths.SegmentFromNs(date.UnixNano()))
+				forward, err := disk.NewForwardWriter(segment, "main")
 				if err != nil {
-					log.Warnf("failed to decode offset %d, err: %s", did, err)
-					continue
+					doneChan <- err
+					return
 				}
-				stop := cb(did, m, query.Score())
-				if stop {
-					return nil
+
+				query, err := fromQuery(qr.Query, func(k, v string) Query {
+					return NewTermQuery(segment, k, v, compact)
+				})
+				if err != nil {
+					doneChan <- err
+					return
 				}
+				log.Warnf("running query {%v} in segment: %s", query.String(), segment)
+
+				for query.Next() != NO_MORE {
+					did := query.GetDocId()
+					m, err := fetchFromForwardIndex(forward, did)
+					if err != nil {
+						log.Warnf("failed to decode offset %d, err: %s", did, err)
+						continue
+					}
+
+					lock.Lock()
+					stop := cb(did, m, query.Score())
+					lock.Unlock()
+
+					if stop {
+						break
+					}
+				}
+				doneChan <- nil
+			}(date)
+		}
+
+		var err error
+		for range dates {
+			chanErr := <-doneChan
+			if chanErr != nil {
+				err = chanErr
 			}
 		}
-		return nil
+
+		return err
 	}
 
 	r.POST("/api/v0/search", func(c *gin.Context) {
@@ -227,7 +267,88 @@ func main() {
 					}
 				}
 			}
-			return true
+			return false
+		})
+		if err != nil {
+			c.JSON(400, gin.H{"error": err.Error()})
+			return
+		}
+		sendResponse(c, out)
+	})
+
+	r.POST("/api/v0/aggregate", func(c *gin.Context) {
+		qr, err := extractAggregateQuery(c)
+		if err != nil {
+			c.JSON(400, gin.H{"error": err.Error()})
+			return
+		}
+
+		if len(qr.Fields) == 0 {
+			qr.Fields = map[string]bool{
+				"event_type":      true,
+				"foreign_id":      true,
+				"year-month-day":  true,
+				"env":             true,
+				"product":         true,
+				"experiment":      true,
+				"sizeWH":          true,
+				"geoip_city":      true,
+				"geoip_country":   true,
+				"ua_is_mobile":    true,
+				"ua_is_bot":       true,
+				"ua_browser_name": true,
+			}
+		}
+
+		out := &spec.Aggregate{
+			Search:    map[string]*spec.CountPerKV{},
+			Count:     map[string]*spec.CountPerKV{},
+			EventType: map[string]*spec.CountPerKV{},
+			ForeignId: map[string]*spec.CountPerKV{},
+			Total:     0,
+		}
+
+		eventTypeKey := "event_type"
+		etype := &spec.CountPerKV{Count: map[string]uint32{}}
+		out.EventType[eventTypeKey] = etype
+		wantEventType := qr.Fields[eventTypeKey]
+		wantForeignId := qr.Fields["foreign_id"]
+		add := func(x []spec.KV, into map[string]*spec.CountPerKV) {
+			for _, kv := range x {
+				if _, ok := qr.Fields[kv.Key]; !ok {
+					continue
+				}
+				m, ok := into[kv.Key]
+				if !ok {
+					m = &spec.CountPerKV{Count: map[string]uint32{}}
+					into[kv.Key] = m
+				}
+				m.Count[kv.Value]++
+				m.Total++
+			}
+		}
+		err = foreach(qr.Query, func(did int32, metadata *spec.Metadata, score float32) bool {
+			out.Total++
+
+			add(metadata.Search, out.Search)
+			add(metadata.Count, out.Count)
+
+			if wantEventType {
+				etype.Count[metadata.EventType]++
+				etype.Total++
+			}
+
+			if wantForeignId {
+				m, ok := out.ForeignId[metadata.ForeignType]
+				if !ok {
+					m = &spec.CountPerKV{Count: map[string]uint32{}}
+					out.ForeignId[metadata.ForeignType] = m
+				}
+				m.Count[metadata.ForeignId]++
+				m.Total++
+			}
+
+			return false
 		})
 		if err != nil {
 			c.JSON(400, gin.H{"error": err.Error()})
@@ -270,7 +391,7 @@ func main() {
 					return false
 				}
 			}
-			return true
+			return false
 		})
 	})
 

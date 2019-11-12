@@ -9,7 +9,6 @@ import (
 
 	"github.com/bxcodec/faker"
 
-	kh "github.com/rekki/blackrock/cmd/khanzo/client"
 	og "github.com/rekki/blackrock/cmd/orgrim/client"
 	spec "github.com/rekki/blackrock/cmd/orgrim/spec"
 )
@@ -350,19 +349,6 @@ func main() {
 	}
 
 	orgrim := og.NewClient("http://localhost:9001/", "", nil)
-	khanzo := kh.NewClient("http://localhost:9001/", nil)
-	state := []*spec.Context{}
-	for _, col := range [][]*spec.Metadata{books, users} {
-		for _, b := range col {
-			name := ""
-			for _, kv := range b.Properties {
-				if kv.Key == "name" {
-					name = kv.Value
-				}
-			}
-			state = append(state, &spec.Context{ForeignId: b.ForeignId, ForeignType: b.ForeignType, Name: name})
-		}
-	}
 	for i := 0; i < *nEvents/4; i++ {
 		pushManyEvents(
 			orgrim,
@@ -372,10 +358,4 @@ func main() {
 			genEvent(times, users[:*nUsers/10], books[:*nBooks/5]),
 		)
 	}
-
-	err := khanzo.PushState(state)
-	if err != nil {
-		log.Fatal(err)
-	}
-
 }

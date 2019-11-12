@@ -52,6 +52,23 @@ message SearchQueryRequest {
         int32 limit = 4;
 }
 
+message AggregateRequest {
+        SearchQueryRequest query = 1;
+        map<string,bool> fields = 2;
+}
+
+message CountPerKV {
+        map<string, uint32> count = 1;
+        uint32 total = 2;
+}
+
+message Aggregate {
+        map<string, CountPerKV> search = 1;
+        map<string, CountPerKV> count = 2;
+        map<string, CountPerKV> foreign_id = 3;
+        map<string, CountPerKV> event_type = 4;
+        uint32 total = 5;
+}
 
 message SearchQueryResponse {
         repeated Hit hits = 1;
