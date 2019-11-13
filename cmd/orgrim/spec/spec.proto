@@ -55,21 +55,23 @@ message SearchQueryRequest {
 message AggregateRequest {
         SearchQueryRequest query = 1;
         map<string,bool> fields = 2;
+        int32 sampleLimit = 3;
 }
 
 message CountPerKV {
         map<string, uint32> count = 1;
         uint32 total = 2;
+        string key = 3;
 }
 
 message Aggregate {
-
         map<string, CountPerKV> search = 1;
         map<string, CountPerKV> count = 2;
         map<string, CountPerKV> foreign_id = 3;
         map<string, CountPerKV> event_type = 4;
-        map<string, uint32> possible = 6;
-        uint32 total = 5;
+        map<string, uint32> possible = 5;
+        uint32 total = 6;
+        repeated Hit sample = 7;
 }
 
 message SearchQueryResponse {

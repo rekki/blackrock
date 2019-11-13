@@ -8,26 +8,22 @@ import (
 	_ "net/http/pprof"
 	"os"
 	"path"
+	"sort"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
-
-	ginprometheus "github.com/mcuadros/go-gin-prometheus"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
+	"github.com/gogo/protobuf/proto"
+	"github.com/patrickmn/go-cache"
 	"github.com/rekki/blackrock/cmd/jubei/disk"
 	"github.com/rekki/blackrock/cmd/orgrim/spec"
 	"github.com/rekki/blackrock/pkg/depths"
 	log "github.com/sirupsen/logrus"
 )
 
-func CacheKey(t int64, doc int32) int64 {
-	t = depths.SegmentFromNsInt(t)
-	return int64(doc)<<32 | t
-}
 func intOrDefault(s string, n int) int {
 	v, err := strconv.ParseInt(s, 10, 32)
 	if err != nil {
@@ -42,49 +38,6 @@ func yyyymmdd(t time.Time) string {
 	return fmt.Sprintf("%d-%02d-%02d", year, month, day)
 }
 
-func getWhitelist(query []string) map[string]bool {
-	out := map[string]bool{
-		"year-month-day":  true,
-		"env":             true,
-		"product":         true,
-		"experiment":      true,
-		"sizeWH":          true,
-		"geoip_city":      true,
-		"geoip_country":   true,
-		"ua_is_mobile":    true,
-		"ua_is_bot":       true,
-		"ua_browser_name": true,
-	}
-
-	for _, v := range query {
-		out[v] = true
-	}
-	return out
-}
-
-func getTimeBucketNs(b string) int64 {
-	if b == "hour" {
-		return int64(1 * time.Hour)
-	}
-
-	if b == "minute" {
-		return int64(1 * time.Minute)
-	}
-
-	if b == "second" {
-		return int64(1 * time.Second)
-	}
-
-	if b == "day" {
-		return int64(1*time.Hour) * 24
-	}
-
-	if b == "week" {
-		return int64(1*time.Hour) * 24 * 7
-	}
-
-	return int64(1*time.Hour) * 24
-}
 func sendResponse(c *gin.Context, out interface{}) {
 	switch c.NegotiateFormat(gin.MIMEJSON, binding.MIMEPROTOBUF) {
 	case binding.MIMEPROTOBUF:
@@ -92,6 +45,63 @@ func sendResponse(c *gin.Context, out interface{}) {
 	default:
 		c.JSON(200, out)
 	}
+}
+
+func mergeMapCountKV(into map[string]*spec.CountPerKV, from map[string]*spec.CountPerKV) map[string]*spec.CountPerKV {
+	if into == nil {
+		return from
+	}
+	for k, fk := range from {
+		in, ok := into[k]
+		if !ok {
+			into[k] = fk
+			continue
+		}
+		in.Total += fk.Total
+		if in.Count == nil {
+			in.Count = fk.Count
+		} else {
+			for kk, vv := range fk.Count {
+				in.Count[kk] += vv
+			}
+		}
+	}
+	return into
+}
+func merge(into *spec.Aggregate, from *spec.Aggregate) *spec.Aggregate {
+	if into == nil {
+		return from
+	}
+
+	/*
+		message CountPerKV {
+		        map<string, uint32> count = 1;
+		        uint32 total = 2;
+		        string key = 3;
+		}
+
+		message Aggregate {
+		        map<string, CountPerKV> search = 1;
+		        map<string, CountPerKV> count = 2;
+		        map<string, CountPerKV> foreign_id = 3;
+		        map<string, CountPerKV> event_type = 4;
+		        map<string, uint32> possible = 6;
+		        uint32 total = 5;
+		}
+	*/
+
+	into.Total += from.Total
+
+	for k, v := range from.Possible {
+		into.Possible[k] += v
+	}
+
+	into.Search = mergeMapCountKV(into.Search, from.Search)
+	into.Count = mergeMapCountKV(into.Count, from.Count)
+	into.ForeignId = mergeMapCountKV(into.ForeignId, from.ForeignId)
+	into.EventType = mergeMapCountKV(into.EventType, from.EventType)
+	into.Sample = append(into.Sample, from.Sample...)
+	return into
 }
 
 func extractQuery(c *gin.Context) (*spec.SearchQueryRequest, error) {
@@ -132,7 +142,6 @@ func main() {
 	var proot = flag.String("root", "/blackrock/data-topic", "root directory for the files root/topic")
 	var verbose = flag.Bool("verbose", false, "print info level logs to stdout")
 	var bind = flag.String("bind", ":9002", "bind to")
-	var prometheusListenAddress = flag.String("prometheus", "false", "true to enable prometheus (you can also specify a listener address")
 	flag.Parse()
 
 	if *verbose {
@@ -153,19 +162,6 @@ func main() {
 	}
 
 	r := gin.Default()
-
-	if listenerAddress := *prometheusListenAddress; len(listenerAddress) > 0 && listenerAddress != "false" {
-		prometheus := ginprometheus.NewPrometheus("blackrock_khanzo")
-		prometheus.ReqCntURLLabelMappingFn = func(c *gin.Context) string {
-			url := c.Request.URL.Path
-			url = strings.Replace(url, "//", "/", -1)
-			return url
-		}
-		if listenerAddress != "true" {
-			prometheus.SetListenAddress(listenerAddress)
-		}
-		prometheus.Use(r)
-	}
 
 	compact := disk.NewCompactIndexCache()
 	r.Use(cors.Default())
@@ -276,6 +272,7 @@ func main() {
 		sendResponse(c, out)
 	})
 
+	memcache := cache.New(48*time.Hour, 10*time.Minute)
 	r.POST("/api/v0/aggregate", func(c *gin.Context) {
 		qr, err := extractAggregateQuery(c)
 		if err != nil {
@@ -283,68 +280,122 @@ func main() {
 			return
 		}
 
-		out := &spec.Aggregate{
-			Search:    map[string]*spec.CountPerKV{},
-			Count:     map[string]*spec.CountPerKV{},
-			EventType: map[string]*spec.CountPerKV{},
-			ForeignId: map[string]*spec.CountPerKV{},
-			Possible:  map[string]uint32{},
-			Total:     0,
+		l := log.WithField("query", depths.DumpObjNoIndent(qr.Query.Query))
+		dates := expandYYYYMMDD(qr.Query.From, qr.Query.To)
+
+		done := make(chan *spec.Aggregate)
+		for _, date := range dates {
+			// XXX: parallelize this by querying multiple khanzo instances, not only multiple cpus
+			go func(date time.Time) {
+				segment := path.Join(root, depths.SegmentFromNs(date.UnixNano()))
+				cacheKey := fmt.Sprintf("%s:%s", segment, depths.DumpObjNoIndent(qr.Query.Query))
+				cached, found := memcache.Get(cacheKey)
+				if found {
+					l.WithField("segment", segment).Warnf("using cache for %s", date)
+					done <- deepCopy(cached.(*spec.Aggregate))
+					return
+				}
+
+				out := &spec.Aggregate{
+					Search:    map[string]*spec.CountPerKV{},
+					Count:     map[string]*spec.CountPerKV{},
+					EventType: map[string]*spec.CountPerKV{},
+					ForeignId: map[string]*spec.CountPerKV{},
+					Possible:  map[string]uint32{},
+					Total:     0,
+				}
+
+				eventTypeKey := "event_type"
+				foreignIdKey := "foreign_id"
+				etype := &spec.CountPerKV{Count: map[string]uint32{}, Key: eventTypeKey}
+				out.EventType[eventTypeKey] = etype
+				wantEventType := qr.Fields[eventTypeKey]
+				wantForeignId := qr.Fields[foreignIdKey]
+
+				add := func(x []spec.KV, into map[string]*spec.CountPerKV) {
+					for _, kv := range x {
+						out.Possible[kv.Key]++
+						if _, ok := qr.Fields[kv.Key]; !ok {
+							continue
+						}
+						m, ok := into[kv.Key]
+						if !ok {
+							m = &spec.CountPerKV{Count: map[string]uint32{}, Key: kv.Key}
+							into[kv.Key] = m
+						}
+						m.Count[kv.Value]++
+						m.Total++
+					}
+				}
+
+				forward, err := disk.NewForwardWriter(segment, "main")
+				if err != nil {
+					l.Warnf("failed to open forward index: %s, skipping", segment)
+					return
+				}
+				query, err := fromQuery(qr.Query.Query, func(k, v string) Query {
+					return NewTermQuery(segment, k, v, compact)
+				})
+				if err != nil {
+					l.Warnf("failed to make query index: %s, skipping", segment)
+					return
+				}
+				l.Warnf("running query {%v} in segment: %s", query.String(), segment)
+
+				for query.Next() != NO_MORE {
+					did := query.GetDocId()
+					metadata, err := fetchFromForwardIndex(forward, did)
+					if err != nil {
+						l.Warnf("failed to decode offset %d, err: %s", did, err)
+						continue
+					}
+					out.Total++
+
+					add(metadata.Search, out.Search)
+					add(metadata.Count, out.Count)
+
+					if wantEventType {
+						etype.Count[metadata.EventType]++
+						etype.Total++
+					}
+
+					if wantForeignId {
+						m, ok := out.ForeignId[metadata.ForeignType]
+						if !ok {
+							m = &spec.CountPerKV{Count: map[string]uint32{}, Key: metadata.ForeignType}
+							out.ForeignId[metadata.ForeignType] = m
+						}
+						m.Count[metadata.ForeignId]++
+						m.Total++
+					}
+
+					if len(out.Sample) < int(qr.SampleLimit) {
+						hit := toHit(did, metadata)
+						out.Sample = append(out.Sample, hit)
+					}
+				}
+				out.Possible[foreignIdKey] = out.Total
+				out.Possible[eventTypeKey] = out.Total
+				if time.Since(date) > 24*time.Hour {
+					memcache.Set(cacheKey, deepCopy(out), cache.DefaultExpiration)
+				}
+				done <- out
+
+			}(date)
 		}
-
-		eventTypeKey := "event_type"
-		foreignIdKey := "foreign_id"
-		etype := &spec.CountPerKV{Count: map[string]uint32{}}
-		out.EventType[eventTypeKey] = etype
-		wantEventType := qr.Fields[eventTypeKey]
-		wantForeignId := qr.Fields[foreignIdKey]
-		add := func(x []spec.KV, into map[string]*spec.CountPerKV) {
-			for _, kv := range x {
-				out.Possible[kv.Key]++
-				if _, ok := qr.Fields[kv.Key]; !ok {
-					continue
-				}
-				m, ok := into[kv.Key]
-				if !ok {
-					m = &spec.CountPerKV{Count: map[string]uint32{}}
-					into[kv.Key] = m
-				}
-				m.Count[kv.Value]++
-				m.Total++
-			}
+		var merged *spec.Aggregate
+		for range dates {
+			current := <-done
+			merged = merge(merged, current)
 		}
-		err = foreach(qr.Query, func(did int32, metadata *spec.Metadata, score float32) bool {
-			out.Total++
-
-			add(metadata.Search, out.Search)
-			add(metadata.Count, out.Count)
-
-			if wantEventType {
-				etype.Count[metadata.EventType]++
-				etype.Total++
-			}
-
-			if wantForeignId {
-				m, ok := out.ForeignId[metadata.ForeignType]
-				if !ok {
-					m = &spec.CountPerKV{Count: map[string]uint32{}}
-					out.ForeignId[metadata.ForeignType] = m
-				}
-				m.Count[metadata.ForeignId]++
-				m.Total++
-			}
-			return false
+		sort.Slice(merged.Sample, func(i, j int) bool {
+			return merged.Sample[i].Metadata.CreatedAtNs < merged.Sample[j].Metadata.CreatedAtNs
 		})
 
-		// just for consistency
-		out.Possible[foreignIdKey] = out.Total
-		out.Possible[eventTypeKey] = out.Total
-
-		if err != nil {
-			c.JSON(500, gin.H{"error": err.Error()})
-			return
+		if len(merged.Sample) > int(qr.SampleLimit) {
+			merged.Sample = merged.Sample[:qr.SampleLimit]
 		}
-		sendResponse(c, out)
+		sendResponse(c, merged)
 	})
 
 	r.POST("/api/v0/fetch", func(c *gin.Context) {
@@ -383,4 +434,18 @@ func main() {
 	})
 
 	log.Panic(r.Run(*bind))
+}
+
+func deepCopy(x *spec.Aggregate) *spec.Aggregate {
+	b, err := proto.Marshal(x)
+	if err != nil {
+		panic(err)
+	}
+	out := &spec.Aggregate{}
+	err = proto.Unmarshal(b, out)
+	if err != nil {
+		panic(err)
+	}
+
+	return out
 }
