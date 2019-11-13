@@ -1,0 +1,42 @@
+{{ $qs := .QueryString }}
+{{ $sorted := sortedKV .Data }}
+{{ $b := .BaseUrl }}
+
+{{ $link := .Link }}
+
+{{ range $skv := $sorted }}
+
+<tr>
+  <td class="left">
+      {{ $skv.Key }}
+  </td>
+  <td class="right">
+  </td>
+</tr>
+
+{{ range $counted := sortedCount $skv.Count}}
+<tr>
+  <td class="left">
+    {{ if $link }}
+    <div style="padding-left: 1.5em;">
+    {{ $name := prettyName $skv.Key $counted.Key }}
+    <a href="{{$b}}/{{$skv.Key}}:{{$counted.Key}}?{{$qs}}">{{ $name }}</a>
+    </div>
+    {{ else }}
+    <div style="padding-left: 1.5em">{{ $counted.Key }}</div>
+    {{ end }}
+  </td>
+  <td class="right">
+    {{ $p := percent $skv.Total $counted.Count}}
+    <div style="position: relative">
+     <div style="display: inline-block; z-index: 1">{{ format $counted.Count }} ({{$p}}%)</div>
+     <div style="position: absolute; left: 0; bottom: 0;  display: inline-block; width: {{$p}}%; background-color: rgba(200,200,200,0.5);">&nbsp;</div>
+    </div>
+  </td>
+</tr>
+{{ end }}
+
+<tr>
+  <td>&nbsp;</td>
+</tr>
+{{end}}

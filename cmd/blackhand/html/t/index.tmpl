@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>
+      blackrock
+    </title>
+    <style>
+      @font-face {
+      font-family: blackrock;
+      src: url('/external/vendor/font/hack.woff') format('woff'),
+           url('/external/vendor/font/hack.woff2') format('woff2');
+      }
+
+      body {
+      margin: 5px;
+      font-family: "blackrock", monospace;
+      background-color: white;
+      color: #3f3f3f;
+      max-width: 60rem;
+      padding: 1rem;
+      font-size: 14px;
+      margin: auto;
+      }
+      .hit-details {
+      display: none;
+      }
+      .msg {
+      display: block;
+      }
+      pre {
+      font-family: "blackrock", Monaco, monospace;
+      }
+      a {
+      color: #000;
+      text-decoration: none;
+      }
+      .hit-sep {
+        background-color: gray;
+      }
+      .left {
+      width: 30%;
+      word-break: break-word
+      }
+      .right {
+      width: 30%;
+      word-break: break-word
+      }
+      table {
+      width: 100%;
+      }
+      .banner {
+      background-color: gray;
+      color: white;
+      }
+    </style>
+
+    <link rel="stylesheet" href="/external/vendor/chart/Chart.min.css"/>
+    <script src="/external/vendor/chart/Chart.min.js"></script>
+    <script src="/external/vendor/chart/randomColor.js"></script>
+    <script>
+  var toggle = function(id) {
+    var elements = document.getElementsByClassName('hit-' + id)
+    if (elements)
+      for (var i = 0; i < elements.length; i++) 
+        elements[i].style.display = "table-row"
+
+  }
+    </script>
+
+  </head>
+  <body>
+    {{ $base := .BaseUrl }}
+    {{ $query := .QueryString }}
+    {{ $total := .Agg.Total }}
+    {{ $agg := .Agg }}
+    <div style="line-height: 25px;">
+      <a href="/query/?{{$query}}">/query/</a><br>
+      {{ $crumbs := .Crumbs }}
+      {{ range .Crumbs }}
+      <a href="{{ .Base }}/{{.Exact}}?{{$query}}">{{.Exact}}</a> <a href="/query/{{.Exact}}?{{$query}}">=</a> <a href="{{ $crumbs.RemoveQuery .Exact}}?{{$query}}">d</a>{{ if gt (len $crumbs) 1 }} <a href="{{ $crumbs.NegateQuery .Exact}}?{{$query}}">-</a> {{end}}
+      <br>
+      {{end}}
+
+      <form method=get action='?'>
+        <input type=hidden name='query_max_documents' value='{{getS $query "query_max_documents"}}'>
+        <input name="from" type=date value='{{getS $query "from"}}'>
+        <input name="to" type=date value='{{getS $query "to"}}'>
+        <select name="bucket">
+          {{ $selected := getS $query "bucket" }}
+          <option  {{ if eq $selected "minute"}}selected{{end}}>minute</option>
+          <option  {{ if eq $selected "hour"}}selected{{end}}>hour</option>
+          <option  {{ if eq $selected "day"}}selected{{end}}>day</option>
+          <option  {{ if eq $selected "week"}}selected{{end}}>week</option>
+        </select>
+        <input type=submit value=go><br>
+        <select name="whitelist" multiple style="width: 50%" size=10>
+          <option disabled></option>
+          {{ range .SortedSections }}
+          <option value="{{.Key}}" {{ if .Selected }}selected{{end}}>{{.Key}} ({{.Count}})</option>
+          {{ end }}
+        </select>
+      </form>
+      total events: {{ $total }}
+    </div>
+
+    <table border=0>
+      <tr><td colspan=2><pre class="banner">{{ banner "event_type"}}</pre></td></tr>
+      {{ template "/html/t/chart.tmpl" dict "Data" .Agg.EventType "QueryString" $query "BaseUrl" $base "GlobalTotal" $total "Link" true}}
+
+      <tr><td colspan=2><pre class="banner">{{ banner "foreign_id"}}</pre></td></tr>
+      {{ template "/html/t/chart.tmpl" dict "Data" .Agg.ForeignId "QueryString" $query "BaseUrl" $base "GlobalTotal" $total "Link" true}}
+
+      <tr><td colspan=2><pre class="banner">{{ banner "search"}}</pre></td></tr>
+      {{ template "/html/t/chart.tmpl" dict "Data" .Agg.Search "QueryString" $query "BaseUrl" $base "GlobalTotal" $total "Link" true}}
+
+      <tr><td colspan=2><pre class="banner">{{ banner "count"}}</pre></td></tr>
+      {{ template "/html/t/chart.tmpl" dict "Data" .Agg.Count "QueryString" $query "BaseUrl" $base "GlobalTotal" $total "Link" false}}
+
+
+
+      <tr><td colspan=2><pre id="sample" class="banner">{{ banner "sample"}}</pre></td></tr>
+      {{ range .Sample }}
+      {{ template "/html/t/hit.tmpl" dict "Data" . "QueryString" $query "BaseUrl" $base}}
+      {{ end  }}
+    </table>
+  </body>
+</html>

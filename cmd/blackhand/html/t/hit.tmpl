@@ -1,0 +1,57 @@
+{{ $hit := .Data }}
+{{ $qs := .QueryString }}
+{{ $base := .BaseUrl }}
+{{ $m := $hit.Metadata }}
+{{ $foreignId := $m.ForeignId }}
+{{ $foreignType := $m.ForeignType }}
+<tr id="#{{$hit.Id}}" class="hit-header">
+  <td>
+    <a style="font-size: 18px" href="/query/event_type:{{ $m.EventType }}?{{$qs}}">{{$m.EventType }}</a><br>
+    <a href="/query/{{$m.ForeignType}}:{{ $m.ForeignId }}?{{$qs}}">{{$m.ForeignType}}:{{$m.ForeignId}}</a><br>
+    {{ time $m.CreatedAtNs }}
+    <br>
+  </td>
+  <td align="right">
+ <a href="javascript: toggle('{{$hit.Id}}')">show</a>
+  </td>
+</tr>
+{{ range $m.Search }}
+<tr class="hit-details hit-{{$hit.Id}}">
+  <td class="left">
+    {{ .Key }}
+  </td>
+  <td class="right">
+    {{ if eq .Key "ip" }}
+    [ hidden ]
+    {{ else }}
+    <a href="/query/{{ $foreignType }}:{{ $foreignId }}/{{ .Key }}:{{ .Value}}?{{$qs}}">{{.Value}}</a>
+    {{ end }}
+  </td>
+</tr>
+{{ end }}
+
+{{ range $m.Count }}
+<tr class="hit-details hit-{{$hit.Id}}">
+  <td class="left">
+      {{ .Key }}
+  </td>
+  <td class="right">
+      {{.Value}}
+  </td>
+</tr>
+{{ end }}
+
+
+{{ range $m.Properties }}
+<tr class="hit-details hit-{{$hit.Id}}">
+  <td class="left">
+      {{ .Key }}
+  </td>
+  <td class="right">
+      {{.Value}}
+  </td>
+</tr>
+{{ end }}
+<tr>
+<td colspan=2><hr></td>
+</tr>
