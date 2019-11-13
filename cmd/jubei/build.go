@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"path"
@@ -9,6 +10,7 @@ import (
 	"time"
 
 	"github.com/gogo/protobuf/proto"
+	"golang.org/x/sync/semaphore"
 
 	"github.com/rekki/blackrock/cmd/jubei/disk"
 	"github.com/rekki/blackrock/cmd/orgrim/spec"
@@ -132,7 +134,7 @@ func buildEverything(root string, l *log.Entry) error {
 	if err != nil {
 		return err
 	}
-
+	work := []string{}
 	for _, day := range days {
 		if !day.IsDir() || !depths.IsDigit(day.Name()) {
 			continue
@@ -143,17 +145,37 @@ func buildEverything(root string, l *log.Entry) error {
 			l.Warnf("skipping %s", day.Name())
 			continue
 		}
+		work = append(work, path.Join(root, day.Name()))
+	}
 
-		t0 := time.Now()
-		p := path.Join(root, day.Name())
+	done := make(chan error)
+	pool := semaphore.NewWeighted(10)
+	for _, w := range work {
+		go func(w string) {
+			pool.Acquire(context.TODO(), 1)
+			defer func() {
+				pool.Release(1)
+			}()
+			t0 := time.Now()
+			cnt, err := buildSegment(w)
+			if err != nil {
+				done <- err
+				return
+			}
+			if cnt > 0 {
+				l.Warnf("%s took %s for %d documents", w, time.Since(t0), cnt)
+			}
+			done <- nil
+		}(w)
+	}
+	var lastError error
+	for range work {
+		err := <-done
 
-		cnt, err := buildSegment(p)
 		if err != nil {
-			return err
-		}
-		if cnt > 0 {
-			l.Warnf("%s took %s for %d documents", p, time.Since(t0), cnt)
+			l.Warnf("error in one of the segments, err: %s", err)
+			lastError = err
 		}
 	}
-	return nil
+	return lastError
 }

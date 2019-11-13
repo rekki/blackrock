@@ -2,39 +2,26 @@ package disk
 
 import (
 	"bytes"
+	"encoding/hex"
+	"fmt"
 	"io/ioutil"
 	"math/rand"
 	"os"
+	"sync/atomic"
 	"testing"
 	"time"
-	"unsafe"
 )
 
 var src = rand.NewSource(time.Now().UnixNano())
 
-const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
-const (
-	letterIdxBits = 6                    // 6 bits to represent a letter index
-	letterIdxMask = 1<<letterIdxBits - 1 // All 1-bits, as many as letterIdxBits
-	letterIdxMax  = 63 / letterIdxBits   // # of letter indices fitting in 63 bits
-)
+var letterRunes = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
 
-func RandStringBytesMaskImprSrcUnsafe(n int) string {
-	b := make([]byte, n)
-	// A src.Int63() generates 63 random bits, enough for letterIdxMax characters!
-	for i, cache, remain := n-1, src.Int63(), letterIdxMax; i >= 0; {
-		if remain == 0 {
-			cache, remain = src.Int63(), letterIdxMax
-		}
-		if idx := int(cache & letterIdxMask); idx < len(letterBytes) {
-			b[i] = letterBytes[idx]
-			i--
-		}
-		cache >>= letterIdxBits
-		remain--
+func RandStringRunes(n int) string {
+	b := make([]rune, n)
+	for i := range b {
+		b[i] = letterRunes[rand.Intn(len(letterRunes))]
 	}
-
-	return *(*string)(unsafe.Pointer(&b))
+	return string(b)
 }
 
 type Case struct {
@@ -53,10 +40,11 @@ func TestFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	cnt := uint64(0)
 	cases := []Case{}
 	for i := 0; i < 1000; i++ {
-		data := []byte(RandStringBytesMaskImprSrcUnsafe(i))
-
+		data := []byte(RandStringRunes(i))
+		atomic.AddUint64(&cnt, 1)
 		off, err := fw.Append(data)
 		if err != nil {
 			t.Fatal(err)
@@ -85,14 +73,31 @@ func TestFile(t *testing.T) {
 	if s == 0 {
 		t.Fatal("expected size")
 	}
+	done := make(chan []Case)
+	randomized := [][]byte{}
 	for i := 0; i < 1000; i++ {
-		data := []byte(RandStringBytesMaskImprSrcUnsafe(i))
+		data := []byte(fmt.Sprintf("%s-%s", "face", RandStringRunes(i)))
+		randomized = append(randomized, data)
+	}
 
-		off, err := fw.Append(data)
-		if err != nil {
-			t.Fatal(err)
-		}
-		cases = append(cases, Case{id: uint32(i), document: off, data: data})
+	for k := 0; k < 100; k++ {
+		go func() {
+			out := []Case{}
+			for i := 0; i < 1000; i++ {
+				data := randomized[i]
+				atomic.AddUint64(&cnt, 1)
+				off, err := fw.Append(data)
+				if err != nil {
+					t.Fatal(err)
+				}
+				out = append(out, Case{id: uint32(i), document: off, data: data})
+			}
+			done <- out
+		}()
+	}
+	for k := 0; k < 100; k++ {
+		x := <-done
+		cases = append(cases, x...)
 	}
 	for _, v := range cases {
 		data, _, err := fw.Read(v.document)
@@ -101,10 +106,10 @@ func TestFile(t *testing.T) {
 		}
 
 		if !bytes.Equal(v.data, data) {
-			t.Fatalf("data mismatch, expected %v got %v", v.data, data)
+			t.Fatalf("data mismatch, expected %v got %v", hex.EncodeToString(v.data), hex.EncodeToString(data))
 		}
 	}
-	n := 0
+	n := uint64(0)
 	err = fw.Scan(0, func(offset uint32, data []byte) error {
 		n++
 		return nil
@@ -112,7 +117,7 @@ func TestFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	expected := 2000
+	expected := cnt
 	if n != expected {
 		t.Fatalf("expected %d got %d", expected, n)
 	}

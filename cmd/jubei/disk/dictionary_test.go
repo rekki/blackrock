@@ -22,7 +22,7 @@ func TestDictionary(t *testing.T) {
 		}
 
 		for i := 0; i < 1000; i++ {
-			str := strings.Trim(strings.ToLower(RandStringBytesMaskImprSrcUnsafe(i)), " ")
+			str := strings.Trim(strings.ToLower(RandStringRunes(i)), " ")
 			id, err := d.GetUniqueTerm(str)
 			if err != nil {
 				t.Fatal(err)

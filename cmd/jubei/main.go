@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
@@ -21,7 +22,6 @@ func main() {
 	var proot = flag.String("root", "/blackrock", "root directory for the files")
 	var kafkaServers = flag.String("kafka", "localhost:9092", "comma separated list of kafka servers")
 	var verbose = flag.Bool("verbose", false, "print info level logs to stdout")
-	var compact = flag.Bool("compact", false, "compact everything until today and exit")
 	flag.Parse()
 
 	go func() {
@@ -38,16 +38,6 @@ func main() {
 		log.SetLevel(log.InfoLevel)
 	} else {
 		log.SetLevel(log.WarnLevel)
-	}
-
-	if *compact {
-		err := compactEverything(root)
-		t0 := time.Now()
-		if err != nil {
-			log.Fatal(err)
-		}
-		log.Warnf("COMPACT: successfully compacted everything in %s, took %s", root, time.Since(t0))
-		os.Exit(0)
 	}
 
 	partitions, err := ReadPartitions(*kafkaServers, *dataTopic)
@@ -69,7 +59,11 @@ func main() {
 		readers = append(readers, &PartitionReader{rd, p})
 	}
 
+	giant := sync.Mutex{}
 	build := func() {
+		giant.Lock()
+		defer giant.Unlock()
+
 		l := log.WithField("root", root).WithField("mode", "BUILD")
 		t0 := time.Now()
 		err := buildEverything(root, l)
@@ -81,22 +75,6 @@ func main() {
 
 	sigs := make(chan os.Signal, 100)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
-	cleanup := func() {
-		// no need to close the files, as they are closed on exit
-		log.Warnf("closing the readers...")
-		for _, r := range readers {
-			r.Reader.Close()
-		}
-
-		build()
-		os.Exit(0)
-	}
-
-	go func() {
-		<-sigs
-
-		cleanup()
-	}()
 
 	go func() {
 		err := consumeEventsFromAllPartitions(root, readers)
@@ -104,6 +82,18 @@ func main() {
 			log.Warnf("error consuming events: %s", err.Error())
 		}
 		sigs <- syscall.SIGTERM
+	}()
+
+	go func() {
+		<-sigs
+
+		// no need to close the files, as they are closed on exit
+		log.Warnf("closing the readers...")
+		for _, r := range readers {
+			r.Reader.Close()
+		}
+
+		os.Exit(0)
 	}()
 
 	for {

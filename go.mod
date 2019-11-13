@@ -23,4 +23,5 @@ require (
 	github.com/segmentio/kafka-go v0.3.4
 	github.com/sirupsen/logrus v1.4.2
 	github.com/tomasen/realip v0.0.0-20180522021738-f0c99a92ddce
+	golang.org/x/sync v0.0.0-20181221193216-37e7f081c4d4
 )

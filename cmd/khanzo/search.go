@@ -15,38 +15,10 @@ import (
 func expandTimeToQuery(dates []time.Time, makeTermQuery func(string, string) Query) Query {
 	out := []Query{}
 	for _, start := range dates {
-		out = append(out, makeTermQuery("year-month-day", yyyymmdd(start)))
+		out = append(out, makeTermQuery("year-month-day", depths.YYYYMMDD(start)))
 	}
 
 	return NewBoolOrQuery(out...)
-}
-
-func expandYYYYMMDD(from string, to string) []time.Time {
-	fromTime := time.Now().UTC().AddDate(0, 0, -3)
-	toTime := time.Now().UTC()
-
-	if from != "" {
-		d, err := time.Parse("2006-01-02", from)
-		if err == nil {
-			fromTime = d
-		}
-	}
-	if to != "" {
-		d, err := time.Parse("2006-01-02", to)
-		if err == nil {
-			toTime = d
-		}
-	}
-	dateQuery := []time.Time{}
-	start := fromTime.AddDate(0, 0, 0)
-	for {
-		dateQuery = append(dateQuery, start)
-		start = start.AddDate(0, 0, 1)
-		if start.Sub(toTime) > 0 {
-			break
-		}
-	}
-	return dateQuery
 }
 
 func fromQuery(input *spec.Query, makeTermQuery func(string, string) Query) (Query, error) {
@@ -101,11 +73,11 @@ func fromQuery(input *spec.Query, makeTermQuery func(string, string) Query) (Que
 	return nil, fmt.Errorf("unknown type %v", input)
 }
 
-func NewTermQuery(root string, tagKey string, tagValue string, c *disk.CompactIndexCache) Query {
+func NewTermQuery(root string, tagKey string, tagValue string) Query {
 	tagKey = depths.Cleanup(strings.ToLower(tagKey))
 	tagValue = depths.Cleanup(strings.ToLower(tagValue))
 	s := fmt.Sprintf("%s:%s", tagKey, tagValue)
-	return NewTerm(s, c.FindPostingsList(path.Join(root, "index"), tagKey, tagValue))
+	return NewTerm(s, disk.InvertedReadRaw(path.Join(root, "index"), -1, tagKey, tagValue))
 }
 
 func fetchFromForwardIndex(forward *disk.ForwardWriter, did int32) (*spec.Metadata, error) {

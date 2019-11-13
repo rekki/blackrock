@@ -3,21 +3,16 @@ package main
 import (
 	"encoding/json"
 	"flag"
-	"fmt"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
 	"path"
 	"sort"
 	"strconv"
-	"sync"
-	"time"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
-	"github.com/gogo/protobuf/proto"
-	"github.com/patrickmn/go-cache"
 	"github.com/rekki/blackrock/cmd/jubei/disk"
 	"github.com/rekki/blackrock/cmd/orgrim/spec"
 	"github.com/rekki/blackrock/pkg/depths"
@@ -33,11 +28,6 @@ func intOrDefault(s string, n int) int {
 	return int(v)
 }
 
-func yyyymmdd(t time.Time) string {
-	year, month, day := t.Date()
-	return fmt.Sprintf("%d-%02d-%02d", year, month, day)
-}
-
 func sendResponse(c *gin.Context, out interface{}) {
 	switch c.NegotiateFormat(gin.MIMEJSON, binding.MIMEPROTOBUF) {
 	case binding.MIMEPROTOBUF:
@@ -45,63 +35,6 @@ func sendResponse(c *gin.Context, out interface{}) {
 	default:
 		c.JSON(200, out)
 	}
-}
-
-func mergeMapCountKV(into map[string]*spec.CountPerKV, from map[string]*spec.CountPerKV) map[string]*spec.CountPerKV {
-	if into == nil {
-		return from
-	}
-	for k, fk := range from {
-		in, ok := into[k]
-		if !ok {
-			into[k] = fk
-			continue
-		}
-		in.Total += fk.Total
-		if in.Count == nil {
-			in.Count = fk.Count
-		} else {
-			for kk, vv := range fk.Count {
-				in.Count[kk] += vv
-			}
-		}
-	}
-	return into
-}
-func merge(into *spec.Aggregate, from *spec.Aggregate) *spec.Aggregate {
-	if into == nil {
-		return from
-	}
-
-	/*
-		message CountPerKV {
-		        map<string, uint32> count = 1;
-		        uint32 total = 2;
-		        string key = 3;
-		}
-
-		message Aggregate {
-		        map<string, CountPerKV> search = 1;
-		        map<string, CountPerKV> count = 2;
-		        map<string, CountPerKV> foreign_id = 3;
-		        map<string, CountPerKV> event_type = 4;
-		        map<string, uint32> possible = 6;
-		        uint32 total = 5;
-		}
-	*/
-
-	into.Total += from.Total
-
-	for k, v := range from.Possible {
-		into.Possible[k] += v
-	}
-
-	into.Search = mergeMapCountKV(into.Search, from.Search)
-	into.Count = mergeMapCountKV(into.Count, from.Count)
-	into.ForeignId = mergeMapCountKV(into.ForeignId, from.ForeignId)
-	into.EventType = mergeMapCountKV(into.EventType, from.EventType)
-	into.Sample = append(into.Sample, from.Sample...)
-	return into
 }
 
 func extractQuery(c *gin.Context) (*spec.SearchQueryRequest, error) {
@@ -163,7 +96,6 @@ func main() {
 
 	r := gin.Default()
 
-	compact := disk.NewCompactIndexCache()
 	r.Use(cors.Default())
 	r.Use(gin.Recovery())
 
@@ -173,58 +105,41 @@ func main() {
 
 	foreach := func(qr *spec.SearchQueryRequest, cb func(int32, *spec.Metadata, float32) bool) error {
 		l := log.WithField("query", qr)
-		dates := expandYYYYMMDD(qr.From, qr.To)
-		lock := sync.Mutex{}
-		doneChan := make(chan error)
+		dates := depths.ExpandYYYYMMDD(qr.From, qr.To)
 		for _, date := range dates {
-			go func(date time.Time) {
-				segment := path.Join(root, depths.SegmentFromNs(date.UnixNano()))
-				forward, err := disk.NewForwardWriter(segment, "main")
+			segment := path.Join(root, depths.SegmentFromNs(date.UnixNano()))
+			forward, err := disk.NewForwardWriter(segment, "main")
+			if err != nil {
+				l.Warnf("failed to open forward index: %s, skipping", segment)
+				continue
+			}
+
+			query, err := fromQuery(qr.Query, func(k, v string) Query {
+				return NewTermQuery(segment, k, v)
+			})
+			if err != nil {
+				return err
+			}
+			l.Warnf("running query {%v} in segment: %s", query.String(), segment)
+
+			for query.Next() != NO_MORE {
+				did := query.GetDocId()
+				m, err := fetchFromForwardIndex(forward, did)
 				if err != nil {
-					l.Warnf("failed to open forward index: %s, skipping", segment)
-					doneChan <- nil
-					return
+					l.Warnf("failed to decode offset %d, err: %s", did, err)
+					continue
 				}
+				score := query.Score()
 
-				query, err := fromQuery(qr.Query, func(k, v string) Query {
-					return NewTermQuery(segment, k, v, compact)
-				})
-				if err != nil {
-					doneChan <- err
-					return
+				stop := cb(did, m, score)
+
+				if stop {
+					break
 				}
-				l.Warnf("running query {%v} in segment: %s", query.String(), segment)
-
-				for query.Next() != NO_MORE {
-					did := query.GetDocId()
-					m, err := fetchFromForwardIndex(forward, did)
-					if err != nil {
-						l.Warnf("failed to decode offset %d, err: %s", did, err)
-						continue
-					}
-					score := query.Score()
-
-					lock.Lock()
-					stop := cb(did, m, score)
-					lock.Unlock()
-
-					if stop {
-						break
-					}
-				}
-				doneChan <- nil
-			}(date)
-		}
-
-		var err error
-		for range dates {
-			chanErr := <-doneChan
-			if chanErr != nil && err == nil {
-				err = chanErr
 			}
 		}
 
-		return err
+		return nil
 	}
 
 	r.POST("/api/v0/search", func(c *gin.Context) {
@@ -272,7 +187,6 @@ func main() {
 		sendResponse(c, out)
 	})
 
-	memcache := cache.New(48*time.Hour, 10*time.Minute)
 	r.POST("/api/v0/aggregate", func(c *gin.Context) {
 		qr, err := extractAggregateQuery(c)
 		if err != nil {
@@ -280,122 +194,101 @@ func main() {
 			return
 		}
 
-		l := log.WithField("query", depths.DumpObjNoIndent(qr.Query.Query))
-		dates := expandYYYYMMDD(qr.Query.From, qr.Query.To)
+		l := log.WithField("query", qr.Query)
+		dates := depths.ExpandYYYYMMDD(qr.Query.From, qr.Query.To)
 
-		done := make(chan *spec.Aggregate)
+		out := &spec.Aggregate{
+			Search:    map[string]*spec.CountPerKV{},
+			Count:     map[string]*spec.CountPerKV{},
+			EventType: map[string]*spec.CountPerKV{},
+			ForeignId: map[string]*spec.CountPerKV{},
+			Possible:  map[string]uint32{},
+			Total:     0,
+		}
+
+		eventTypeKey := "event_type"
+		foreignIdKey := "foreign_id"
+		etype := &spec.CountPerKV{Count: map[string]uint32{}, Key: eventTypeKey}
+		out.EventType[eventTypeKey] = etype
+		wantEventType := qr.Fields[eventTypeKey]
+		wantForeignId := qr.Fields[foreignIdKey]
+
 		for _, date := range dates {
-			// XXX: parallelize this by querying multiple khanzo instances, not only multiple cpus
-			go func(date time.Time) {
-				segment := path.Join(root, depths.SegmentFromNs(date.UnixNano()))
-				cacheKey := fmt.Sprintf("%s:%s", segment, depths.DumpObjNoIndent(qr.Query.Query))
-				cached, found := memcache.Get(cacheKey)
-				if found {
-					l.WithField("segment", segment).Warnf("using cache for %s", date)
-					done <- deepCopy(cached.(*spec.Aggregate))
-					return
-				}
-
-				out := &spec.Aggregate{
-					Search:    map[string]*spec.CountPerKV{},
-					Count:     map[string]*spec.CountPerKV{},
-					EventType: map[string]*spec.CountPerKV{},
-					ForeignId: map[string]*spec.CountPerKV{},
-					Possible:  map[string]uint32{},
-					Total:     0,
-				}
-
-				eventTypeKey := "event_type"
-				foreignIdKey := "foreign_id"
-				etype := &spec.CountPerKV{Count: map[string]uint32{}, Key: eventTypeKey}
-				out.EventType[eventTypeKey] = etype
-				wantEventType := qr.Fields[eventTypeKey]
-				wantForeignId := qr.Fields[foreignIdKey]
-
-				add := func(x []spec.KV, into map[string]*spec.CountPerKV) {
-					for _, kv := range x {
-						out.Possible[kv.Key]++
-						if _, ok := qr.Fields[kv.Key]; !ok {
-							continue
-						}
-						m, ok := into[kv.Key]
-						if !ok {
-							m = &spec.CountPerKV{Count: map[string]uint32{}, Key: kv.Key}
-							into[kv.Key] = m
-						}
-						m.Count[kv.Value]++
-						m.Total++
-					}
-				}
-
-				forward, err := disk.NewForwardWriter(segment, "main")
-				if err != nil {
-					l.Warnf("failed to open forward index: %s, skipping", segment)
-					return
-				}
-				query, err := fromQuery(qr.Query.Query, func(k, v string) Query {
-					return NewTermQuery(segment, k, v, compact)
-				})
-				if err != nil {
-					l.Warnf("failed to make query index: %s, skipping", segment)
-					return
-				}
-				l.Warnf("running query {%v} in segment: %s", query.String(), segment)
-
-				for query.Next() != NO_MORE {
-					did := query.GetDocId()
-					metadata, err := fetchFromForwardIndex(forward, did)
-					if err != nil {
-						l.Warnf("failed to decode offset %d, err: %s", did, err)
+			segment := path.Join(root, depths.SegmentFromNs(date.UnixNano()))
+			add := func(x []spec.KV, into map[string]*spec.CountPerKV) {
+				for _, kv := range x {
+					out.Possible[kv.Key]++
+					if _, ok := qr.Fields[kv.Key]; !ok {
 						continue
 					}
-					out.Total++
-
-					add(metadata.Search, out.Search)
-					add(metadata.Count, out.Count)
-
-					if wantEventType {
-						etype.Count[metadata.EventType]++
-						etype.Total++
+					m, ok := into[kv.Key]
+					if !ok {
+						m = &spec.CountPerKV{Count: map[string]uint32{}, Key: kv.Key}
+						into[kv.Key] = m
 					}
-
-					if wantForeignId {
-						m, ok := out.ForeignId[metadata.ForeignType]
-						if !ok {
-							m = &spec.CountPerKV{Count: map[string]uint32{}, Key: metadata.ForeignType}
-							out.ForeignId[metadata.ForeignType] = m
-						}
-						m.Count[metadata.ForeignId]++
-						m.Total++
-					}
-
-					if len(out.Sample) < int(qr.SampleLimit) {
-						hit := toHit(did, metadata)
-						out.Sample = append(out.Sample, hit)
-					}
+					m.Count[kv.Value]++
+					m.Total++
 				}
-				out.Possible[foreignIdKey] = out.Total
-				out.Possible[eventTypeKey] = out.Total
-				if time.Since(date) > 24*time.Hour {
-					memcache.Set(cacheKey, deepCopy(out), cache.DefaultExpiration)
-				}
-				done <- out
+			}
 
-			}(date)
+			forward, err := disk.NewForwardWriter(segment, "main")
+			if err != nil {
+				l.Warnf("failed to open forward index: %s, skipping", segment)
+				return
+			}
+			query, err := fromQuery(qr.Query.Query, func(k, v string) Query {
+				return NewTermQuery(segment, k, v)
+			})
+			if err != nil {
+				c.JSON(400, gin.H{"error": err.Error()})
+				return
+			}
+			l.Warnf("running query {%v} in segment: %s", query.String(), segment)
+
+			for query.Next() != NO_MORE {
+				did := query.GetDocId()
+				metadata, err := fetchFromForwardIndex(forward, did)
+				if err != nil {
+					l.Warnf("failed to decode offset %d, err: %s", did, err)
+					continue
+				}
+				out.Total++
+
+				add(metadata.Search, out.Search)
+				add(metadata.Count, out.Count)
+
+				if wantEventType {
+					etype.Count[metadata.EventType]++
+					etype.Total++
+				}
+
+				if wantForeignId {
+					m, ok := out.ForeignId[metadata.ForeignType]
+					if !ok {
+						m = &spec.CountPerKV{Count: map[string]uint32{}, Key: metadata.ForeignType}
+						out.ForeignId[metadata.ForeignType] = m
+					}
+					m.Count[metadata.ForeignId]++
+					m.Total++
+				}
+
+				if len(out.Sample) < int(qr.SampleLimit) {
+					hit := toHit(did, metadata)
+					out.Sample = append(out.Sample, hit)
+				}
+			}
+			out.Possible[foreignIdKey] = out.Total
+			out.Possible[eventTypeKey] = out.Total
 		}
-		var merged *spec.Aggregate
-		for range dates {
-			current := <-done
-			merged = merge(merged, current)
-		}
-		sort.Slice(merged.Sample, func(i, j int) bool {
-			return merged.Sample[i].Metadata.CreatedAtNs < merged.Sample[j].Metadata.CreatedAtNs
+
+		sort.Slice(out.Sample, func(i, j int) bool {
+			return out.Sample[i].Metadata.CreatedAtNs < out.Sample[j].Metadata.CreatedAtNs
 		})
 
-		if len(merged.Sample) > int(qr.SampleLimit) {
-			merged.Sample = merged.Sample[:qr.SampleLimit]
+		if len(out.Sample) > int(qr.SampleLimit) {
+			out.Sample = out.Sample[:qr.SampleLimit]
 		}
-		sendResponse(c, merged)
+		sendResponse(c, out)
 	})
 
 	r.POST("/api/v0/fetch", func(c *gin.Context) {
@@ -434,18 +327,4 @@ func main() {
 	})
 
 	log.Panic(r.Run(*bind))
-}
-
-func deepCopy(x *spec.Aggregate) *spec.Aggregate {
-	b, err := proto.Marshal(x)
-	if err != nil {
-		panic(err)
-	}
-	out := &spec.Aggregate{}
-	err = proto.Unmarshal(b, out)
-	if err != nil {
-		panic(err)
-	}
-
-	return out
 }

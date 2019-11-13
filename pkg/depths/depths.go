@@ -11,6 +11,7 @@ import (
 	"math/rand"
 	"path"
 	"strings"
+	"time"
 	"unicode"
 
 	"github.com/dgryski/go-metro"
@@ -184,6 +185,39 @@ func DumpObj(src interface{}) string {
 		log.Fatalf("failed to dump object: %s", err.Error())
 	}
 	return string(out.Bytes())
+}
+
+func YYYYMMDD(t time.Time) string {
+	year, month, day := t.Date()
+	return fmt.Sprintf("%d-%02d-%02d", year, month, day)
+}
+
+func ExpandYYYYMMDD(from string, to string) []time.Time {
+	fromTime := time.Now().UTC().AddDate(0, 0, -3)
+	toTime := time.Now().UTC()
+
+	if from != "" {
+		d, err := time.Parse("2006-01-02", from)
+		if err == nil {
+			fromTime = d
+		}
+	}
+	if to != "" {
+		d, err := time.Parse("2006-01-02", to)
+		if err == nil {
+			toTime = d
+		}
+	}
+	dateQuery := []time.Time{}
+	start := fromTime.AddDate(0, 0, 0)
+	for {
+		dateQuery = append(dateQuery, start)
+		start = start.AddDate(0, 0, 1)
+		if start.Sub(toTime) > 0 {
+			break
+		}
+	}
+	return dateQuery
 }
 
 func DumpObjNoIndent(src interface{}) string {
