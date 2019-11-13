@@ -83,7 +83,7 @@ func fromQuery(input *spec.Query, makeTermQuery func(string, string) Query) (Que
 		return and, nil
 	}
 
-	if input.Type == spec.Query_AND {
+	if input.Type == spec.Query_OR {
 		if input.Not != nil || input.Delta != 0 {
 			return nil, fmt.Errorf("or queries cant have 'not' or 'delta' value, %v", input)
 		}
