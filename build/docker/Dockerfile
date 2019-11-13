@@ -17,7 +17,10 @@ COPY go.mod go.sum /
 RUN go mod download
 
 COPY . /
-RUN GOOS=linux GOARCH=amd64 make ${CMD}
+
+RUN GOOS=linux GOARCH=amd64 make khanzo
+RUN GOOS=linux GOARCH=amd64 make jubei
+RUN GOOS=linux GOARCH=amd64 make orgrim
 
 ###
 # runtime image
@@ -26,8 +29,8 @@ RUN GOOS=linux GOARCH=amd64 make ${CMD}
 FROM alpine
 ARG CMD
 
-COPY --from=builder /${CMD} /entrypoint
+COPY --from=builder /khanzo /khanzo
+COPY --from=builder /jubei /jubei
+COPY --from=builder /orgrim /orgrim
 COPY --from=builder /geoip /
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
-
-ENTRYPOINT ["/entrypoint"]

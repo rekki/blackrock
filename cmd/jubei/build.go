@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"io/ioutil"
 	"path"
 	"strconv"
@@ -108,12 +109,12 @@ func buildSegment(root string) (int, error) {
 		return nil
 	})
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("error scanning, startOffset: %d, currentOffset: %d, err: %s", storedOffset, did, err)
 	}
 
 	err = inverted.Flush()
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("error flushing, startOffset: %d, currentOffset: %d, err: %s", storedOffset, did, err)
 	}
 
 	err = ow.SetOffset(int64(did))
