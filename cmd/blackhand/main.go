@@ -17,8 +17,8 @@ import (
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	"github.com/rekki/blackrock/cmd/blackhand/chart"
 	"github.com/rekki/blackrock/cmd/khanzo/client"
-	"github.com/rekki/blackrock/cmd/khanzo_master/chart"
 	"github.com/rekki/blackrock/cmd/orgrim/spec"
 	"github.com/rekki/blackrock/pkg/depths"
 	log "github.com/sirupsen/logrus"
