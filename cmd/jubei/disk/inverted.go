@@ -106,6 +106,7 @@ func (fw *InvertedWriter) Flush() error {
 				return err
 			}
 			_, err = fd.Write(data)
+			fd.Close()
 			if err != nil {
 				return err
 			}
