@@ -299,9 +299,10 @@ func main() {
 		}
 		w := c.Writer
 		nl := []byte{'\n'}
+		left := qr.Limit
 		err = foreach(qr, func(did int32, metadata *spec.Metadata, score float32) bool {
 			hit := toHit(did, metadata)
-			left := qr.Limit
+
 			b, err := json.Marshal(hit)
 			if err != nil {
 				return false
@@ -319,7 +320,7 @@ func main() {
 			if qr.Limit > 0 {
 				left--
 				if left == 0 {
-					return false
+					return true
 				}
 			}
 			return false
