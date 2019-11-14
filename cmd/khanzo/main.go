@@ -118,7 +118,7 @@ func main() {
 	})
 
 	foreach := func(qr *spec.SearchQueryRequest, cb func(int32, *spec.Metadata, float32) bool) error {
-		l := log.WithField("query", qr)
+		l := log.WithField("from", qr.From).WithField("to", qr.To)
 		dates := depths.ExpandYYYYMMDD(qr.From, qr.To)
 	PER_DATE:
 		for _, date := range dates {
@@ -139,12 +139,13 @@ func main() {
 
 			for query.Next() != NO_MORE {
 				did := query.GetDocId()
+				score := query.Score()
+
 				m, err := fetchFromForwardIndex(forward, did)
 				if err != nil {
 					l.Warnf("failed to decode offset %d, err: %s", did, err)
 					continue
 				}
-				score := query.Score()
 
 				stop := cb(did, m, score)
 
@@ -315,6 +316,7 @@ func main() {
 		w := c.Writer
 		nl := []byte{'\n'}
 		left := qr.Limit
+		sent := false
 		err = foreach(qr, func(did int32, metadata *spec.Metadata, score float32) bool {
 			hit := toHit(did, metadata)
 
@@ -331,6 +333,7 @@ func main() {
 			if err != nil {
 				return false
 			}
+			sent = true
 
 			if qr.Limit > 0 {
 				left--
@@ -340,6 +343,10 @@ func main() {
 			}
 			return false
 		})
+		if !sent && err != nil {
+			c.JSON(500, gin.H{"error": err.Error()})
+			return
+		}
 	})
 
 	log.Panic(r.Run(*bind))
