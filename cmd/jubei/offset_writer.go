@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/binary"
 	"fmt"
+	"io"
 	"os"
 
 	"github.com/rekki/blackrock/pkg/depths"
@@ -35,7 +36,9 @@ func (ow *OffsetWriter) ReadOrDefault(def int64) (int64, error) {
 	var offset int64
 	_, err := ow.fd.ReadAt(storedOffset, 0)
 	if err != nil {
-		ow.l.WithError(err).Warnf("failed to read bytes, setting offset to %d, err: %s", def, err)
+		if err != io.EOF {
+			ow.l.WithError(err).Warnf("failed to read bytes, setting offset to %d, err: %s", def, err)
+		}
 		offset = def
 	} else {
 		offset = int64(binary.LittleEndian.Uint64(storedOffset))

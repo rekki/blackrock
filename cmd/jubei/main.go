@@ -20,6 +20,8 @@ import (
 func main() {
 	var dataTopic = flag.String("topic-data", "blackrock-data", "topic for the data")
 	var proot = flag.String("root", "/blackrock", "root directory for the files")
+	var pminBytes = flag.Int("min-bytes", 10*1024*1024, "min bytes")
+	var pmaxBytes = flag.Int("max-bytes", 20*1024*1024, "max bytes")
 	var kafkaServers = flag.String("kafka", "localhost:9092", "comma separated list of kafka servers")
 	var verbose = flag.Bool("verbose", false, "print info level logs to stdout")
 	flag.Parse()
@@ -50,8 +52,8 @@ func main() {
 	for _, p := range partitions {
 		rd := kafka.NewReader(kafka.ReaderConfig{
 			Brokers:   brokers,
-			MinBytes:  100 * 1024 * 1024,
-			MaxBytes:  200 * 1024 * 1024,
+			MinBytes:  *pminBytes,
+			MaxBytes:  *pmaxBytes,
 			Topic:     *dataTopic,
 			MaxWait:   1 * time.Second,
 			Partition: p.ID,
@@ -65,15 +67,13 @@ func main() {
 		defer giant.Unlock()
 
 		l := log.WithField("root", root).WithField("mode", "BUILD")
-		t0 := time.Now()
 		err := buildEverything(root, l)
 		if err != nil {
 			l.WithError(err).Fatal(err)
 		}
-		l.Warnf("successfully built everything took %s", time.Since(t0))
 	}
 
-	sigs := make(chan os.Signal, 100)
+	sigs := make(chan os.Signal)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 
 	go func() {

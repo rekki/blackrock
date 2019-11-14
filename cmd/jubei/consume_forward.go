@@ -93,7 +93,7 @@ func consumeEventsFromAllPartitions(root string, pr []*PartitionReader) error {
 		for {
 			time.Sleep(1 * time.Second)
 			counter := atomic.SwapUint64(&dw.counter, 0)
-			l.Warnf("%d events last second", counter)
+			l.Warnf("%d events consumed last second", counter)
 		}
 	}()
 
@@ -138,7 +138,7 @@ func consumeEvents(dw *DiskWriter, pr *PartitionReader) error {
 		return err
 	}
 
-	l.Warnf("starting partition: %d at offset: %d", pr.Partition.ID, offset)
+	l.Infof("starting partition: %d at offset: %d", pr.Partition.ID, offset)
 	ctx := context.Background()
 	for {
 		m, err := pr.Reader.FetchMessage(ctx)
@@ -169,7 +169,7 @@ func consumeEvents(dw *DiskWriter, pr *PartitionReader) error {
 				}
 			}
 
-			l.Warnf("openning new segment: %s", segmentId)
+			l.Infof("openning new segment: %s", segmentId)
 			forward, err = disk.NewForwardWriter(segmentId, "main")
 			if err != nil {
 				dw.Unlock()

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"io/ioutil"
 	"path"
@@ -10,7 +9,6 @@ import (
 	"time"
 
 	"github.com/gogo/protobuf/proto"
-	"golang.org/x/sync/semaphore"
 
 	"github.com/rekki/blackrock/cmd/jubei/disk"
 	"github.com/rekki/blackrock/cmd/orgrim/spec"
@@ -124,12 +122,13 @@ func buildSegment(root string) (int, error) {
 		return 0, err
 	}
 	if uint32(storedOffset) != did {
-		l.Warnf("start offset: %d, end offset: %d", storedOffset, did)
+		l.Infof("start offset: %d, end offset: %d", storedOffset, did)
 	}
 	return count, nil
 }
 
 func buildEverything(root string, l *log.Entry) error {
+	t0 := time.Now()
 	days, err := ioutil.ReadDir(path.Join(root))
 	if err != nil {
 		return err
@@ -147,35 +146,18 @@ func buildEverything(root string, l *log.Entry) error {
 		}
 		work = append(work, path.Join(root, day.Name()))
 	}
-
-	done := make(chan error)
-	pool := semaphore.NewWeighted(10)
+	total := 0
 	for _, w := range work {
-		go func(w string) {
-			pool.Acquire(context.TODO(), 1)
-			defer func() {
-				pool.Release(1)
-			}()
-			t0 := time.Now()
-			cnt, err := buildSegment(w)
-			if err != nil {
-				done <- err
-				return
-			}
-			if cnt > 0 {
-				l.Warnf("%s took %s for %d documents", w, time.Since(t0), cnt)
-			}
-			done <- nil
-		}(w)
-	}
-	var lastError error
-	for range work {
-		err := <-done
-
+		t0 := time.Now()
+		cnt, err := buildSegment(w)
 		if err != nil {
-			l.Warnf("error in one of the segments, err: %s", err)
-			lastError = err
+			return err
 		}
+		if cnt > 0 {
+			l.Infof("%s took %s for %d documents", w, time.Since(t0), cnt)
+		}
+		total += cnt
 	}
-	return lastError
+	l.Warnf("%d events indexed took %s", total, time.Since(t0))
+	return nil
 }
