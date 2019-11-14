@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"flag"
+	"io/ioutil"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
@@ -13,6 +15,8 @@ import (
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
+	"github.com/gogo/protobuf/jsonpb"
+	"github.com/gogo/protobuf/proto"
 	"github.com/rekki/blackrock/cmd/jubei/disk"
 	"github.com/rekki/blackrock/cmd/orgrim/spec"
 	"github.com/rekki/blackrock/pkg/depths"
@@ -38,14 +42,20 @@ func sendResponse(c *gin.Context, out interface{}) {
 }
 
 func extractQuery(c *gin.Context) (*spec.SearchQueryRequest, error) {
+
 	qr := &spec.SearchQueryRequest{}
+
+	body, err := ioutil.ReadAll(c.Request.Body)
+	if err != nil {
+		return nil, err
+	}
+
 	if c.ContentType() == binding.MIMEPROTOBUF {
-		if err := c.ShouldBindBodyWith(qr, binding.ProtoBuf); err != nil {
+		if err := proto.Unmarshal(body, qr); err != nil {
 			return nil, err
 		}
-
 	} else {
-		if err := c.ShouldBindBodyWith(qr, binding.JSON); err != nil {
+		if err := jsonpb.Unmarshal(bytes.NewReader(body), qr); err != nil {
 			c.JSON(400, gin.H{"error": err.Error()})
 			return nil, err
 
@@ -56,13 +66,17 @@ func extractQuery(c *gin.Context) (*spec.SearchQueryRequest, error) {
 
 func extractAggregateQuery(c *gin.Context) (*spec.AggregateRequest, error) {
 	qr := &spec.AggregateRequest{}
+	body, err := ioutil.ReadAll(c.Request.Body)
+	if err != nil {
+		return nil, err
+	}
+
 	if c.ContentType() == binding.MIMEPROTOBUF {
-		if err := c.ShouldBindBodyWith(qr, binding.ProtoBuf); err != nil {
+		if err := proto.Unmarshal(body, qr); err != nil {
 			return nil, err
 		}
-
 	} else {
-		if err := c.ShouldBindBodyWith(qr, binding.JSON); err != nil {
+		if err := jsonpb.Unmarshal(bytes.NewReader(body), qr); err != nil {
 			c.JSON(400, gin.H{"error": err.Error()})
 			return nil, err
 
