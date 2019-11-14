@@ -156,7 +156,7 @@ func main() {
 		err = foreach(qr, func(did int32, metadata *spec.Metadata, score float32) bool {
 			out.Total++
 			if qr.Limit == 0 {
-				return true
+				return false
 			}
 
 			doInsert := false
