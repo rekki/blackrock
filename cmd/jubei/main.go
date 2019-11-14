@@ -80,8 +80,6 @@ func main() {
 		err := consumeEventsFromAllPartitions(root, readers)
 		if err != nil {
 			log.Warnf("error consuming events: %s", err.Error())
-		} else {
-			log.Warnf(": %s", err.Error())
 		}
 		sigs <- syscall.SIGTERM
 	}()
