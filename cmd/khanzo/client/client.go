@@ -62,7 +62,7 @@ func NewClient(url string, h *http.Client) *Client {
 	}
 }
 
-func (c *Client) Fetch(query *spec.SearchQueryRequest, cb func(*spec.Hit)) error {
+func (c *Client) Fetch(query *spec.SearchQueryRequest, cb func(*spec.Hit) bool) error {
 	data, err := proto.Marshal(query)
 	if err != nil {
 		return err
@@ -87,7 +87,9 @@ func (c *Client) Fetch(query *spec.SearchQueryRequest, cb func(*spec.Hit)) error
 		if err != nil {
 			return err
 		}
-		cb(&decoded)
+		if cb(&decoded) {
+			return nil
+		}
 	}
 
 	if err := scanner.Err(); err != nil {
