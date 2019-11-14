@@ -120,6 +120,7 @@ func main() {
 	foreach := func(qr *spec.SearchQueryRequest, cb func(int32, *spec.Metadata, float32) bool) error {
 		l := log.WithField("query", qr)
 		dates := depths.ExpandYYYYMMDD(qr.From, qr.To)
+	PER_DATE:
 		for _, date := range dates {
 			segment := path.Join(root, depths.SegmentFromNs(date.UnixNano()))
 			forward, err := disk.NewForwardWriter(segment, "main")
@@ -148,7 +149,7 @@ func main() {
 				stop := cb(did, m, score)
 
 				if stop {
-					break
+					break PER_DATE
 				}
 			}
 		}
