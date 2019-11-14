@@ -110,8 +110,6 @@ func consumeEventsFromAllPartitions(root string, pr []*PartitionReader) error {
 	return lastError
 }
 
-const MAX_OPEN_WRITERS = 128
-
 func consumeEvents(dw *DiskWriter, pr *PartitionReader) error {
 	l := log.WithField("root", dw.root).WithField("mode", "CONSUME")
 	fileLock := flock.New(path.Join(dw.root, fmt.Sprintf("partition_%d.lock", pr.Partition.ID)))
@@ -164,13 +162,6 @@ func consumeEvents(dw *DiskWriter, pr *PartitionReader) error {
 		dw.Lock()
 		forward, ok := dw.writers[segmentId]
 		if !ok {
-			if len(dw.writers) > MAX_OPEN_WRITERS {
-				for k, v := range dw.writers {
-					v.Close()
-					delete(dw.writers, k)
-				}
-			}
-
 			l.Infof("openning new segment: %s", segmentId)
 			forward, err = disk.NewForwardWriter(segmentId, "main")
 			if err != nil {
