@@ -50,6 +50,7 @@ message SearchQueryRequest {
         string to = 2;
         Query query = 3;
         int32 limit = 4;
+        int32 max_documents_per_field = 5;
 }
 
 message AggregateRequest {

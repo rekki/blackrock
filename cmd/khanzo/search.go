@@ -73,11 +73,14 @@ func fromQuery(input *spec.Query, makeTermQuery func(string, string) Query) (Que
 	return nil, fmt.Errorf("unknown type %v", input)
 }
 
-func NewTermQuery(root string, tagKey string, tagValue string) Query {
+func NewTermQuery(root string, maxDocs int32, tagKey string, tagValue string) Query {
 	tagKey = depths.Cleanup(strings.ToLower(tagKey))
 	tagValue = depths.Cleanup(strings.ToLower(tagValue))
 	s := fmt.Sprintf("%s:%s", tagKey, tagValue)
-	return NewTerm(s, disk.InvertedReadRaw(path.Join(root, "index"), -1, tagKey, tagValue))
+	if maxDocs == 0 {
+		maxDocs = -1
+	}
+	return NewTerm(s, disk.InvertedReadRaw(path.Join(root, "index"), maxDocs, tagKey, tagValue))
 }
 
 func fetchFromForwardIndex(forward *disk.ForwardWriter, did int32) (*spec.Metadata, error) {

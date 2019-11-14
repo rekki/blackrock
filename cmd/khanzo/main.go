@@ -85,10 +85,17 @@ func extractAggregateQuery(c *gin.Context) (*spec.AggregateRequest, error) {
 	return qr, nil
 }
 
+type matching struct {
+	did   int32
+	score float32
+	m     *spec.Metadata
+}
+
 func main() {
 	var proot = flag.String("root", "/blackrock/data-topic", "root directory for the files root/topic")
 	var verbose = flag.Bool("verbose", false, "print info level logs to stdout")
 	var bind = flag.String("bind", ":9002", "bind to")
+	var nworkers = flag.Int("n-workers-per-query", 20, "how many workers to fetch from disk")
 	flag.Parse()
 
 	if *verbose {
@@ -117,10 +124,9 @@ func main() {
 		c.String(200, "OK")
 	})
 
-	foreach := func(qr *spec.SearchQueryRequest, cb func(int32, *spec.Metadata, float32) bool) error {
-		l := log.WithField("from", qr.From).WithField("to", qr.To)
+	foreach := func(qr *spec.SearchQueryRequest, limit int32, cb func(int32, *spec.Metadata, float32)) error {
 		dates := depths.ExpandYYYYMMDD(qr.From, qr.To)
-	PER_DATE:
+		l := log.WithField("limit", limit)
 		for _, date := range dates {
 			segment := path.Join(root, depths.SegmentFromNs(date.UnixNano()))
 			forward, err := disk.NewForwardWriter(segment, "main")
@@ -130,28 +136,71 @@ func main() {
 			}
 
 			query, err := fromQuery(qr.Query, func(k, v string) Query {
-				return NewTermQuery(segment, k, v)
+				return NewTermQuery(segment, qr.MaxDocumentsPerField, k, v)
 			})
 			if err != nil {
 				return err
 			}
-			l.Warnf("running query {%v} in segment: %s", query.String(), segment)
+			parallel := *nworkers
+			l.Warnf("running query {%v} in segment: %s, with %d workers", query.String(), segment, parallel)
 
-			for query.Next() != NO_MORE {
-				did := query.GetDocId()
-				score := query.Score()
+			work := make(chan matching)
+			doneWorker := make(chan bool)
+			doneQuery := make(chan bool)
+			doneConsumer := make(chan bool)
+			completed := make(chan matching)
 
-				m, err := fetchFromForwardIndex(forward, did)
-				if err != nil {
-					l.Warnf("failed to decode offset %d, err: %s", did, err)
-					continue
+			for i := 0; i < parallel; i++ {
+				go func() {
+					for w := range work {
+						m, err := fetchFromForwardIndex(forward, w.did)
+						if err != nil {
+							l.Warnf("failed to decode offset %d, err: %s", w.did, err)
+							continue
+						}
+						w.m = m
+						completed <- w
+					}
+					doneWorker <- true
+				}()
+			}
+
+			stopped := false
+			go func() {
+				for query.Next() != NO_MORE {
+					did := query.GetDocId()
+					score := query.Score()
+					work <- matching{did: did, score: score, m: nil}
+					if limit > 0 {
+						limit--
+						if limit == 0 {
+							stopped = true
+							break
+						}
+					}
 				}
+				doneQuery <- true
+			}()
 
-				stop := cb(did, m, score)
-
-				if stop {
-					break PER_DATE
+			go func() {
+				for matching := range completed {
+					cb(matching.did, matching.m, matching.score)
 				}
+				doneConsumer <- true
+			}()
+
+			<-doneQuery
+			close(work)
+
+			for i := 0; i < parallel; i++ {
+				<-doneWorker
+			}
+
+			close(completed)
+
+			<-doneConsumer
+			if stopped {
+				break
 			}
 		}
 
@@ -169,11 +218,9 @@ func main() {
 			Hits:  []*spec.Hit{},
 			Total: 0,
 		}
-		err = foreach(qr, func(did int32, metadata *spec.Metadata, score float32) bool {
+
+		err = foreach(qr, 0, func(did int32, metadata *spec.Metadata, score float32) {
 			out.Total++
-			if qr.Limit == 0 {
-				return false
-			}
 
 			doInsert := false
 			hit := toHit(did, metadata)
@@ -194,7 +241,6 @@ func main() {
 					}
 				}
 			}
-			return false
 		})
 		if err != nil {
 			c.JSON(400, gin.H{"error": err.Error()})
@@ -209,9 +255,6 @@ func main() {
 			c.JSON(400, gin.H{"error": err.Error()})
 			return
 		}
-
-		l := log.WithField("query", qr.Query)
-		dates := depths.ExpandYYYYMMDD(qr.Query.From, qr.Query.To)
 
 		out := &spec.Aggregate{
 			Search:    map[string]*spec.CountPerKV{},
@@ -228,74 +271,48 @@ func main() {
 		out.EventType[eventTypeKey] = etype
 		wantEventType := qr.Fields[eventTypeKey]
 		wantForeignId := qr.Fields[foreignIdKey]
-
-		for _, date := range dates {
-			segment := path.Join(root, depths.SegmentFromNs(date.UnixNano()))
-			add := func(x []spec.KV, into map[string]*spec.CountPerKV) {
-				for _, kv := range x {
-					out.Possible[kv.Key]++
-					if _, ok := qr.Fields[kv.Key]; !ok {
-						continue
-					}
-					m, ok := into[kv.Key]
-					if !ok {
-						m = &spec.CountPerKV{Count: map[string]uint32{}, Key: kv.Key}
-						into[kv.Key] = m
-					}
-					m.Count[kv.Value]++
-					m.Total++
-				}
-			}
-
-			forward, err := disk.NewForwardWriter(segment, "main")
-			if err != nil {
-				l.Warnf("failed to open forward index: %s, skipping", segment)
-				return
-			}
-			query, err := fromQuery(qr.Query.Query, func(k, v string) Query {
-				return NewTermQuery(segment, k, v)
-			})
-			if err != nil {
-				c.JSON(400, gin.H{"error": err.Error()})
-				return
-			}
-			l.Warnf("running query {%v} in segment: %s", query.String(), segment)
-
-			for query.Next() != NO_MORE {
-				did := query.GetDocId()
-				metadata, err := fetchFromForwardIndex(forward, did)
-				if err != nil {
-					l.Warnf("failed to decode offset %d, err: %s", did, err)
+		add := func(x []spec.KV, into map[string]*spec.CountPerKV) {
+			for _, kv := range x {
+				out.Possible[kv.Key]++
+				if _, ok := qr.Fields[kv.Key]; !ok {
 					continue
 				}
-				out.Total++
-
-				add(metadata.Search, out.Search)
-				add(metadata.Count, out.Count)
-
-				if wantEventType {
-					etype.Count[metadata.EventType]++
-					etype.Total++
+				m, ok := into[kv.Key]
+				if !ok {
+					m = &spec.CountPerKV{Count: map[string]uint32{}, Key: kv.Key}
+					into[kv.Key] = m
 				}
-
-				if wantForeignId {
-					m, ok := out.ForeignId[metadata.ForeignType]
-					if !ok {
-						m = &spec.CountPerKV{Count: map[string]uint32{}, Key: metadata.ForeignType}
-						out.ForeignId[metadata.ForeignType] = m
-					}
-					m.Count[metadata.ForeignId]++
-					m.Total++
-				}
-
-				if len(out.Sample) < int(qr.SampleLimit) {
-					hit := toHit(did, metadata)
-					out.Sample = append(out.Sample, hit)
-				}
+				m.Count[kv.Value]++
+				m.Total++
 			}
-			out.Possible[foreignIdKey] = out.Total
-			out.Possible[eventTypeKey] = out.Total
 		}
+
+		err = foreach(qr.Query, 0, func(did int32, metadata *spec.Metadata, score float32) {
+			add(metadata.Search, out.Search)
+			add(metadata.Count, out.Count)
+
+			if wantEventType {
+				etype.Count[metadata.EventType]++
+				etype.Total++
+			}
+
+			if wantForeignId {
+				m, ok := out.ForeignId[metadata.ForeignType]
+				if !ok {
+					m = &spec.CountPerKV{Count: map[string]uint32{}, Key: metadata.ForeignType}
+					out.ForeignId[metadata.ForeignType] = m
+				}
+				m.Count[metadata.ForeignId]++
+				m.Total++
+			}
+
+			if len(out.Sample) < int(qr.SampleLimit) {
+				hit := toHit(did, metadata)
+				out.Sample = append(out.Sample, hit)
+			}
+		})
+		out.Possible[foreignIdKey] = out.Total
+		out.Possible[eventTypeKey] = out.Total
 
 		sort.Slice(out.Sample, func(i, j int) bool {
 			return out.Sample[i].Metadata.CreatedAtNs < out.Sample[j].Metadata.CreatedAtNs
@@ -315,33 +332,25 @@ func main() {
 		}
 		w := c.Writer
 		nl := []byte{'\n'}
-		left := qr.Limit
 		sent := false
-		err = foreach(qr, func(did int32, metadata *spec.Metadata, score float32) bool {
+		err = foreach(qr, qr.Limit, func(did int32, metadata *spec.Metadata, score float32) {
 			hit := toHit(did, metadata)
 
 			b, err := json.Marshal(hit)
 			if err != nil {
-				return false
+				return
 			}
 			_, err = w.Write(b)
 			if err != nil {
-				return false
+				return
 			}
 
 			_, err = w.Write(nl)
 			if err != nil {
-				return false
+				// cant stop it
+				return
 			}
 			sent = true
-
-			if qr.Limit > 0 {
-				left--
-				if left == 0 {
-					return true
-				}
-			}
-			return false
 		})
 		if !sent && err != nil {
 			c.JSON(500, gin.H{"error": err.Error()})
