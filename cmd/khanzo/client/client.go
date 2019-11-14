@@ -80,6 +80,7 @@ func (c *Client) Fetch(query *spec.SearchQueryRequest, cb func(*spec.Hit) bool) 
 	defer resp.Body.Close()
 
 	scanner := bufio.NewScanner(resp.Body)
+	scanner.Buffer(make([]byte, 10*1024*1024), 10*1024*1024)
 	for scanner.Scan() {
 		line := scanner.Text()
 		var decoded spec.Hit
