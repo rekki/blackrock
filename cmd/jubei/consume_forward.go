@@ -97,15 +97,17 @@ func consumeEventsFromAllPartitions(root string, pr []*PartitionReader) error {
 		}
 	}()
 
+	var lastError error
 	for range pr {
 		err := <-errChan
-		l.WithError(err).Printf("received error: %s", err)
+		lastError = err
+		l.WithError(err).Warnf("received error: %s", err)
 		for _, p := range pr {
 			p.Reader.Close()
 		}
 	}
 
-	return nil
+	return lastError
 }
 
 const MAX_OPEN_WRITERS = 128
