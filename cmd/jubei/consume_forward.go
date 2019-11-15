@@ -27,6 +27,8 @@ type DiskWriter struct {
 	sync.Mutex
 }
 
+var dateCache = NewDateCache()
+
 func prepare(envelope *spec.Envelope) {
 	meta := envelope.Metadata
 	foreignId := depths.Cleanup(strings.ToLower(meta.ForeignId))
@@ -68,12 +70,12 @@ func prepare(envelope *spec.Envelope) {
 	// add some automatic tags
 	{
 		t := time.Unix(int64(second), 0).UTC()
-		year, month, day := t.Date()
-		hour, _, _ := t.Clock()
-		meta.Search = append(meta.Search, spec.KV{Key: "year", Value: fmt.Sprintf("%d", year)})
-		meta.Search = append(meta.Search, spec.KV{Key: "year-month", Value: fmt.Sprintf("%d-%02d", year, month)})
-		meta.Search = append(meta.Search, spec.KV{Key: "year-month-day", Value: fmt.Sprintf("%d-%02d-%02d", year, month, day)})
-		meta.Search = append(meta.Search, spec.KV{Key: "year-month-day-hour", Value: fmt.Sprintf("%d-%02d-%02d-%02d", year, month, day, hour)})
+		year, year_month, year_month_day, year_month_day_hour := dateCache.Expand(t)
+
+		meta.Search = append(meta.Search, spec.KV{Key: "year", Value: year})
+		meta.Search = append(meta.Search, spec.KV{Key: "year-month", Value: year_month})
+		meta.Search = append(meta.Search, spec.KV{Key: "year-month-day", Value: year_month_day})
+		meta.Search = append(meta.Search, spec.KV{Key: "year-month-day-hour", Value: year_month_day_hour})
 	}
 }
 
