@@ -53,16 +53,35 @@ message SearchQueryRequest {
         int32 max_documents_per_field = 5;
 }
 
-message AggregateRequest {
-        SearchQueryRequest query = 1;
-        map<string,bool> fields = 2;
-        int32 sampleLimit = 3;
-}
-
 message CountPerKV {
         map<string, uint32> count = 1;
         uint32 total = 2;
         string key = 3;
+}
+
+message PointPerEventType {
+        uint32 count = 1;
+        uint32 count_unique = 2;
+        uint32 bucket = 3;
+        string event_type = 4;
+}
+
+message ChartBucketPerTime {
+        map<string, PointPerEventType> per_type = 1;
+}
+
+message Chart {
+        map<uint32, ChartBucketPerTime> buckets = 1;
+        uint32 time_start = 2;
+        uint32 time_end = 3;
+        uint32 time_bucket_sec = 4;
+}
+
+message AggregateRequest {
+        SearchQueryRequest query = 1;
+        map<string,bool> fields = 2;
+        int32 sample_limit = 3;
+        uint32 time_bucket_sec = 4;
 }
 
 message Aggregate {
@@ -73,12 +92,15 @@ message Aggregate {
         map<string, uint32> possible = 5;
         uint32 total = 6;
         repeated Hit sample = 7;
+        Chart chart = 8;
 }
 
 message SearchQueryResponse {
         repeated Hit hits = 1;
         uint64 total = 2;
 }
+
+
 
 message Envelope {
         Metadata metadata = 1;

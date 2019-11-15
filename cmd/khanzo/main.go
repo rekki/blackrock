@@ -256,6 +256,7 @@ func main() {
 			return
 		}
 
+		dates := depths.ExpandYYYYMMDD(qr.Query.From, qr.Query.To)
 		out := &spec.Aggregate{
 			Search:    map[string]*spec.CountPerKV{},
 			Count:     map[string]*spec.CountPerKV{},
@@ -264,13 +265,22 @@ func main() {
 			Possible:  map[string]uint32{},
 			Total:     0,
 		}
+		var chart *Chart
+		if qr.TimeBucketSec != 0 {
+			chart = NewChart(qr.TimeBucketSec, dates)
+			out.Chart = chart.out
+		}
 
 		eventTypeKey := "event_type"
 		foreignIdKey := "foreign_id"
 		etype := &spec.CountPerKV{Count: map[string]uint32{}, Key: eventTypeKey}
-		out.EventType[eventTypeKey] = etype
+
 		wantEventType := qr.Fields[eventTypeKey]
 		wantForeignId := qr.Fields[foreignIdKey]
+
+		if wantEventType {
+			out.EventType[eventTypeKey] = etype
+		}
 		add := func(x []spec.KV, into map[string]*spec.CountPerKV) {
 			for _, kv := range x {
 				out.Possible[kv.Key]++
@@ -310,7 +320,11 @@ func main() {
 				hit := toHit(did, metadata)
 				out.Sample = append(out.Sample, hit)
 			}
+			if chart != nil {
+				chart.Add(metadata)
+			}
 		})
+
 		out.Possible[foreignIdKey] = out.Total
 		out.Possible[eventTypeKey] = out.Total
 
@@ -318,9 +332,6 @@ func main() {
 			return out.Sample[i].Metadata.CreatedAtNs < out.Sample[j].Metadata.CreatedAtNs
 		})
 
-		if len(out.Sample) > int(qr.SampleLimit) {
-			out.Sample = out.Sample[:qr.SampleLimit]
-		}
 		sendResponse(c, out)
 	})
 
