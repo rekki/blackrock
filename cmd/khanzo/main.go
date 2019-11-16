@@ -221,6 +221,9 @@ func main() {
 
 		err = foreach(qr, 0, func(did int32, metadata *spec.Metadata, score float32) {
 			out.Total++
+			if qr.Limit == 0 {
+				return
+			}
 
 			doInsert := false
 			hit := toHit(did, metadata)
