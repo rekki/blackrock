@@ -29,7 +29,7 @@ type DiskWriter struct {
 
 var dateCache = NewDateCache()
 
-func prepare(envelope *spec.Envelope) {
+func PrepareEnvelope(envelope *spec.Envelope) {
 	meta := envelope.Metadata
 	foreignId := depths.Cleanup(strings.ToLower(meta.ForeignId))
 	foreignType := depths.Cleanup(strings.ToLower(meta.ForeignType))
@@ -158,7 +158,7 @@ func consumeEvents(dw *DiskWriter, pr *PartitionReader) error {
 		if envelope.Metadata != nil {
 			envelope.Metadata.Id = uint64(m.Partition)<<56 | uint64(m.Offset)
 		}
-		prepare(&envelope)
+		PrepareEnvelope(&envelope)
 		segmentId := path.Join(dw.root, depths.SegmentFromNs(envelope.Metadata.CreatedAtNs))
 
 		dw.Lock()

@@ -92,6 +92,10 @@ func (fw *InvertedWriter) Append(docId int32, t int32, tagKey, tagValue string) 
 }
 
 func (fw *InvertedWriter) Flush() error {
+	// FIXME(jackdoe): here we can simply do LSMT to be safer, for now it is ok
+	// because we can just delete the whole segment and re-start it
+	// more work should be done
+
 	made := map[string]bool{}
 
 	for tk, pv := range fw.todo {
@@ -101,6 +105,7 @@ func (fw *InvertedWriter) Flush() error {
 				os.MkdirAll(dir, 0700)
 				made[dir] = true
 			}
+
 			fd, err := os.OpenFile(path.Join(dir, fn), os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
 			if err != nil {
 				return err

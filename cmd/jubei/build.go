@@ -70,6 +70,8 @@ func ConsumeEvent(docId uint32, meta *spec.Metadata, inverted *disk.InvertedWrit
 }
 
 func buildSegment(root string) (int, error) {
+	// FIXME(jackdoe): create lock file to know when job is incomplete so we can just delete the whole segment
+
 	l := log.WithField("root", root).WithField("mode", "BUILD")
 	ow, err := NewOffsetWriter(path.Join(root, "inverted.offset"), l)
 	if err != nil {
