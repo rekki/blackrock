@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"math/rand"
-	"path"
 	"strings"
 	"time"
 	"unicode"
@@ -84,17 +83,8 @@ func epochDayFromNsInt(ns int64) int64 {
 	return d
 }
 
-func SegmentFromNs(ns int64) string {
-	return epochDayFromNs(ns)
-}
-
-func SegmentFromNsInt(ns int64) int64 {
+func SegmentFromNs(ns int64) int64 {
 	return epochDayFromNsInt(ns)
-}
-
-func PathForTag(root, tagKey, tagValue string) (string, string) {
-	dir := path.Join(root, tagKey, fmt.Sprintf("shard_%d", Hashs(tagValue)%16))
-	return dir, tagValue + ".p"
 }
 
 func Cleanup(s string) string {
@@ -188,7 +178,7 @@ func DumpObj(src interface{}) string {
 }
 
 func YYYYMMDD(t time.Time) string {
-	year, month, day := t.Date()
+	year, month, day := t.UTC().Date()
 	return fmt.Sprintf("%d-%02d-%02d", year, month, day)
 }
 

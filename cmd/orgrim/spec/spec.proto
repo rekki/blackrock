@@ -36,13 +36,11 @@ message Query {
         TERM = 0;
         AND = 1;
         OR = 2;
-        AND_THEN = 3;
         }
         Type type = 2;
         string tag = 3;
         string value = 4;
         Query not = 5;
-        int32 delta = 6;
 }
 
 message SearchQueryRequest {
@@ -50,7 +48,6 @@ message SearchQueryRequest {
         string to = 2;
         Query query = 3;
         int32 limit = 4;
-        int32 max_documents_per_field = 5;
 }
 
 message CountPerKV {
@@ -99,8 +96,6 @@ message SearchQueryResponse {
         repeated Hit hits = 1;
         uint64 total = 2;
 }
-
-
 
 message Envelope {
         Metadata metadata = 1;

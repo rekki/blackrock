@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"path"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -21,13 +22,51 @@ import (
 )
 
 type DiskWriter struct {
-	writers map[string]*disk.ForwardWriter
+	writers map[int64]*disk.ForwardWriter
 	root    string
 	counter uint64
 	sync.Mutex
 }
 
 var dateCache = NewDateCache()
+
+// hack to backfix some wrongly flattened keys
+// this should be some configurable go script
+func Fixme(k, v string) (string, string) {
+	if v == "true" {
+		splitted := strings.Split(k, ".")
+		if len(splitted) > 1 {
+			for i := 0; i < len(splitted)-1; i++ {
+				p := splitted[i]
+				if strings.HasSuffix(p, "_code") {
+					k = strings.Join(splitted[:i+1], ".")
+					v = strings.Join(splitted[i+1:], ".")
+					break
+				}
+			}
+		}
+	}
+	return k, v
+}
+
+func ExtractLastNumber(s string, sep byte) (string, int, bool) {
+	pos := -1
+	for i := len(s) - 1; i >= 0; i-- {
+		if s[i] == sep {
+			pos = i
+			break
+		}
+	}
+
+	if pos > 0 && pos < len(s)-1 {
+		v, err := strconv.ParseInt(s[pos+1:], 10, 32)
+		if err != nil {
+			return s, 0, false
+		}
+		return s[:pos], int(v), true
+	}
+	return s, 0, false
+}
 
 func PrepareEnvelope(envelope *spec.Envelope) {
 	meta := envelope.Metadata
@@ -80,7 +119,7 @@ func PrepareEnvelope(envelope *spec.Envelope) {
 }
 
 func consumeEventsFromAllPartitions(root string, pr []*PartitionReader) error {
-	writers := map[string]*disk.ForwardWriter{}
+	writers := map[int64]*disk.ForwardWriter{}
 	l := log.WithField("root", root).WithField("mode", "CONSUME")
 	dw := &DiskWriter{writers: writers, root: root}
 	errChan := make(chan error)
@@ -121,7 +160,7 @@ func consumeEvents(dw *DiskWriter, pr *PartitionReader) error {
 	}
 	defer fileLock.Close() // also unlocks
 
-	ow, err := NewOffsetWriter(path.Join(dw.root, fmt.Sprintf("partition_%d.offset", pr.Partition.ID)), l)
+	ow, err := disk.NewOffsetWriter(path.Join(dw.root, fmt.Sprintf("partition_%d.offset", pr.Partition.ID)), l)
 	if err != nil {
 		return err
 	}
@@ -159,13 +198,14 @@ func consumeEvents(dw *DiskWriter, pr *PartitionReader) error {
 			envelope.Metadata.Id = uint64(m.Partition)<<56 | uint64(m.Offset)
 		}
 		PrepareEnvelope(&envelope)
-		segmentId := path.Join(dw.root, depths.SegmentFromNs(envelope.Metadata.CreatedAtNs))
+		segmentId := depths.SegmentFromNs(envelope.Metadata.CreatedAtNs)
 
 		dw.Lock()
 		forward, ok := dw.writers[segmentId]
 		if !ok {
-			l.Infof("openning new segment: %s", segmentId)
-			forward, err = disk.NewForwardWriter(segmentId, "main")
+			segmentPath := path.Join(dw.root, fmt.Sprintf("%d", segmentId))
+			l.Infof("openning new segment: %s", segmentPath)
+			forward, err = disk.NewForwardWriter(segmentPath, "main")
 			if err != nil {
 				dw.Unlock()
 				return err

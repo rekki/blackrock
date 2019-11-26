@@ -8,20 +8,25 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 	"os"
-	"path"
 	"sort"
 	"strconv"
+	"time"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
 	"github.com/gogo/protobuf/jsonpb"
 	"github.com/gogo/protobuf/proto"
-	"github.com/rekki/blackrock/cmd/jubei/disk"
 	"github.com/rekki/blackrock/cmd/orgrim/spec"
 	"github.com/rekki/blackrock/pkg/depths"
 	log "github.com/sirupsen/logrus"
 )
+
+type scoredSegmentHit struct {
+	did   int32
+	score float32
+	sid   int64
+}
 
 func intOrDefault(s string, n int) int {
 	v, err := strconv.ParseInt(s, 10, 32)
@@ -42,7 +47,6 @@ func sendResponse(c *gin.Context, out interface{}) {
 }
 
 func extractQuery(c *gin.Context) (*spec.SearchQueryRequest, error) {
-
 	qr := &spec.SearchQueryRequest{}
 
 	body, err := ioutil.ReadAll(c.Request.Body)
@@ -85,17 +89,12 @@ func extractAggregateQuery(c *gin.Context) (*spec.AggregateRequest, error) {
 	return qr, nil
 }
 
-type matching struct {
-	did   int32
-	score float32
-	m     *spec.Metadata
-}
-
 func main() {
 	var proot = flag.String("root", "/blackrock/data-topic", "root directory for the files root/topic")
 	var verbose = flag.Bool("verbose", false, "print info level logs to stdout")
 	var bind = flag.String("bind", ":9002", "bind to")
 	var nworkers = flag.Int("n-workers-per-query", 20, "how many workers to fetch from disk")
+	var updateInterval = flag.Int("update-interval", 60, "searcher update interval")
 	flag.Parse()
 
 	if *verbose {
@@ -115,6 +114,21 @@ func main() {
 		log.Fatal(err)
 	}
 
+	memIndex := NewMemOnlyIndex(root)
+	err = memIndex.Refresh()
+	if err != nil {
+		log.Fatal(err)
+	}
+	go func() {
+		for {
+			time.Sleep(time.Duration(*updateInterval) * time.Second)
+			err = memIndex.Refresh()
+			if err != nil {
+				log.Fatal(err)
+			}
+
+		}
+	}()
 	r := gin.Default()
 
 	r.Use(cors.Default())
@@ -123,89 +137,6 @@ func main() {
 	r.GET("/health", func(c *gin.Context) {
 		c.String(200, "OK")
 	})
-
-	foreach := func(qr *spec.SearchQueryRequest, limit int32, cb func(int32, *spec.Metadata, float32)) error {
-		dates := depths.ExpandYYYYMMDD(qr.From, qr.To)
-		l := log.WithField("limit", limit)
-		for _, date := range dates {
-			segment := path.Join(root, depths.SegmentFromNs(date.UnixNano()))
-			forward, err := disk.NewForwardWriter(segment, "main")
-			if err != nil {
-				l.Warnf("failed to open forward index: %s, skipping", segment)
-				continue
-			}
-
-			query, err := fromQuery(qr.Query, func(k, v string) Query {
-				return NewTermQuery(segment, qr.MaxDocumentsPerField, k, v)
-			})
-			if err != nil {
-				return err
-			}
-			parallel := *nworkers
-			l.Warnf("running query {%v} in segment: %s, with %d workers", query.String(), segment, parallel)
-
-			work := make(chan matching)
-			doneWorker := make(chan bool)
-			doneQuery := make(chan bool)
-			doneConsumer := make(chan bool)
-			completed := make(chan matching)
-
-			for i := 0; i < parallel; i++ {
-				go func() {
-					for w := range work {
-						m, err := fetchFromForwardIndex(forward, w.did)
-						if err != nil {
-							l.Warnf("failed to decode offset %d, err: %s", w.did, err)
-							continue
-						}
-						w.m = m
-						completed <- w
-					}
-					doneWorker <- true
-				}()
-			}
-
-			stopped := false
-			go func() {
-				for query.Next() != NO_MORE {
-					did := query.GetDocId()
-					score := query.Score()
-					work <- matching{did: did, score: score, m: nil}
-					if limit > 0 {
-						limit--
-						if limit == 0 {
-							stopped = true
-							break
-						}
-					}
-				}
-				doneQuery <- true
-			}()
-
-			go func() {
-				for matching := range completed {
-					cb(matching.did, matching.m, matching.score)
-				}
-				doneConsumer <- true
-			}()
-
-			<-doneQuery
-			close(work)
-
-			for i := 0; i < parallel; i++ {
-				<-doneWorker
-			}
-
-			close(completed)
-
-			<-doneConsumer
-			if stopped {
-				break
-			}
-		}
-
-		return nil
-	}
 
 	r.POST("/api/v0/search", func(c *gin.Context) {
 		qr, err := extractQuery(c)
@@ -219,32 +150,40 @@ func main() {
 			Total: 0,
 		}
 
-		err = foreach(qr, 0, func(did int32, metadata *spec.Metadata, score float32) {
+		scored := []scoredSegmentHit{}
+		err = memIndex.ForEach(qr, 0, func(sid int64, did int32, score float32) {
 			out.Total++
 			if qr.Limit == 0 {
 				return
 			}
 
 			doInsert := false
-			hit := toHit(did, metadata)
-			if len(out.Hits) < int(qr.Limit) {
-				hit.Score = score
-				out.Hits = append(out.Hits, hit)
+			hit := scoredSegmentHit{did: did, score: score, sid: sid}
+			if len(scored) < int(qr.Limit) {
+				scored = append(scored, hit)
 				doInsert = true
-			} else if out.Hits[len(out.Hits)-1].Score < score {
+			} else if scored[len(scored)-1].score < score {
 				doInsert = true
-				hit.Score = score
 			}
 			if doInsert {
-				for i := 0; i < len(out.Hits); i++ {
-					if out.Hits[i].Score < hit.Score {
-						copy(out.Hits[i+1:], out.Hits[i:])
-						out.Hits[i] = hit
+				for i := 0; i < len(scored); i++ {
+					if scored[i].score < hit.score {
+						copy(scored[i+1:], scored[i:])
+						scored[i] = hit
 						break
 					}
 				}
+
 			}
 		})
+		for _, s := range scored {
+			m, err := memIndex.ReadAndDecodeForward(s.sid, s.did)
+			if err != nil {
+				c.JSON(500, gin.H{"error": err.Error()})
+				return
+			}
+			out.Hits = append(out.Hits, toHit(s.did, m))
+		}
 		if err != nil {
 			c.JSON(400, gin.H{"error": err.Error()})
 			return
@@ -300,7 +239,7 @@ func main() {
 			}
 		}
 
-		err = foreach(qr.Query, 0, func(did int32, metadata *spec.Metadata, score float32) {
+		err = memIndex.ForEachDecodeParallel(*nworkers, qr.Query, 0, func(did int32, metadata *spec.Metadata, score float32) {
 			add(metadata.Search, out.Search)
 			add(metadata.Count, out.Count)
 
@@ -347,7 +286,7 @@ func main() {
 		w := c.Writer
 		nl := []byte{'\n'}
 		sent := false
-		err = foreach(qr, qr.Limit, func(did int32, metadata *spec.Metadata, score float32) {
+		err = memIndex.ForEachDecodeParallel(*nworkers, qr, qr.Limit, func(did int32, metadata *spec.Metadata, score float32) {
 			hit := toHit(did, metadata)
 
 			b, err := json.Marshal(hit)

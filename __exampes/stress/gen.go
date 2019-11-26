@@ -349,13 +349,10 @@ func main() {
 	}
 
 	orgrim := og.NewClient("http://localhost:9001/", "", nil)
-	for i := 0; i < *nEvents/4; i++ {
+	for i := 0; i < *nEvents; i++ {
 		pushManyEvents(
 			orgrim,
 			genEvent(times, users, books),
-			genEvent(times, users[:*nUsers/50], books[:*nBooks/20]),
-			genEvent(times, users[:*nUsers/20], books[:*nBooks/10]),
-			genEvent(times, users[:*nUsers/10], books[:*nBooks/5]),
 		)
 	}
 }
