@@ -256,6 +256,10 @@ func main() {
 				chart.Add(metadata)
 			}
 		})
+		if err != nil {
+			c.JSON(400, gin.H{"error": err.Error()})
+			return
+		}
 
 		out.Possible[foreignIdKey] = out.Total
 		out.Possible[eventTypeKey] = out.Total

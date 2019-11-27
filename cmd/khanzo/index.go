@@ -83,9 +83,14 @@ func (m *MemOnlyIndex) Refresh() error {
 
 	}
 	wait := make(chan error)
+	maxReaders := 10
+	var sem = make(chan bool, maxReaders)
+
 	for _, sid := range todo {
+		sem <- true
 		go func(sid int64) {
 			err := m.LoadSingleSegment(sid)
+			<-sem
 			wait <- err
 		}(sid)
 	}
