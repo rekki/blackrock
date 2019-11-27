@@ -14,7 +14,6 @@ import (
 
 	"github.com/gogo/protobuf/jsonpb"
 	"github.com/gogo/protobuf/proto"
-	"github.com/patrickmn/go-cache"
 	"github.com/rekki/blackrock/cmd/orgrim/spec"
 	"github.com/rekki/blackrock/pkg/depths"
 	log "github.com/sirupsen/logrus"
@@ -39,7 +38,6 @@ type Client struct {
 	endpointFetch     string
 	endpointSearch    string
 	endpointAggregate string
-	cache             *cache.Cache
 }
 
 func NewClient(url string, h *http.Client) *Client {
@@ -58,7 +56,6 @@ func NewClient(url string, h *http.Client) *Client {
 		endpointSearch:    fmt.Sprintf("%sapi/v0/search", url),
 		endpointAggregate: fmt.Sprintf("%sapi/v0/aggregate", url),
 		h:                 h,
-		cache:             cache.New(48*time.Hour, 10*time.Minute),
 	}
 }
 
@@ -171,36 +168,17 @@ func (c *Client) AggregateCoordinate(qr *spec.AggregateRequest) (*spec.Aggregate
 	done := make(chan *spec.Aggregate)
 	for _, date := range dates {
 		go func(date time.Time) {
-			segment := depths.SegmentFromNs(date.UnixNano())
-			cacheKey := fmt.Sprintf("%s:%s", segment, depths.DumpObjNoIndent(qr.Query.Query))
-			cached, found := c.cache.Get(cacheKey)
-			if found {
-				data := cached.([]byte)
-				out := &spec.Aggregate{}
-				err := proto.Unmarshal(data, out)
-				if err != nil {
-					log.WithError(err).Warnf("failed to decode")
-				}
-				done <- out
-				return
-			}
-
 			modifiedQueryRequest := *qr
 			modifiedQueryDate := *modifiedQueryRequest.Query
 			modifiedQueryDate.From = depths.YYYYMMDD(date)
 			modifiedQueryDate.To = depths.YYYYMMDD(date)
 			modifiedQueryRequest.Query = &modifiedQueryDate
+
+			// TODO(jackdoe): sum the chart data, now it is lost
+
 			out, err := c.Aggregate(&modifiedQueryRequest)
-			if time.Since(date) > 24*time.Hour {
-				data, err := proto.Marshal(out)
-				if err != nil {
-					log.WithError(err).Warnf("failed to encode")
-				} else {
-					c.cache.Set(cacheKey, data, cache.DefaultExpiration)
-				}
-			}
 			if err != nil {
-				log.WithError(err).Warnf("failed to execute query on segment: %v", segment)
+				log.WithError(err).Warnf("failed to execute query on segment: %v", date)
 			}
 			done <- out
 		}(date)
