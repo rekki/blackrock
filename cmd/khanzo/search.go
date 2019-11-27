@@ -3,9 +3,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/gogo/protobuf/proto"
 	iq "github.com/jackdoe/go-query"
-	"github.com/rekki/blackrock/cmd/jubei/disk"
 	"github.com/rekki/blackrock/cmd/orgrim/spec"
 )
 
@@ -61,20 +59,6 @@ func fromQuery(input *spec.Query, makeTermQuery func(string, string) iq.Query) (
 	}
 
 	return nil, fmt.Errorf("unknown type %v", input)
-}
-
-func fetchFromForwardIndex(forward *disk.ForwardWriter, did int32) (*spec.Metadata, error) {
-	data, _, err := forward.Read(uint32(did))
-	if err != nil {
-		return nil, err
-	}
-	p := spec.Metadata{}
-	err = proto.Unmarshal(data, &p)
-	if err != nil {
-		return nil, err
-	}
-
-	return &p, nil
 }
 
 func toHit(did int32, p *spec.Metadata) *spec.Hit {
