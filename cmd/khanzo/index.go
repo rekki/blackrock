@@ -81,17 +81,16 @@ func (m *MemOnlyIndex) Refresh() error {
 		ts := n * 3600 * 24
 		t := time.Unix(int64(ts), 0).UTC()
 		todo = append(todo, depths.SegmentFromNs(t.UnixNano()))
-
 	}
+
 	wait := make(chan error)
+
 	maxReaders := runtime.GOMAXPROCS(0)
 	var sem = make(chan bool, maxReaders)
-
 	for _, sid := range todo {
 		sem <- true
 		go func(sid int64) {
 			err := m.LoadSingleSegment(sid)
-			runtime.GC()
 			<-sem
 			wait <- err
 		}(sid)
@@ -132,8 +131,8 @@ func (m *MemOnlyIndex) LoadSingleSegment(sid int64) error {
 	t0 := time.Now()
 	cnt := 0
 
-	meta := spec.CondenseMetadata{}
 	err := segment.fw.Scan(uint32(storedOffset), func(offset uint32, data []byte) error {
+		meta := spec.CondenseMetadata{}
 		err := proto.Unmarshal(data, &meta)
 		if err != nil {
 			return err
