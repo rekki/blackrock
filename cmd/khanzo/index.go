@@ -83,7 +83,7 @@ func (m *MemOnlyIndex) Refresh() error {
 
 	}
 	wait := make(chan error)
-	maxReaders := 10
+	maxReaders := 100
 	var sem = make(chan bool, maxReaders)
 
 	for _, sid := range todo {
