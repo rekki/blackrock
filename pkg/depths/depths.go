@@ -71,11 +71,6 @@ func CreateTopic(brokers string, topic string, partitions int, replication int) 
 	}
 	return errors.New("failed to dial any broker")
 }
-func epochDayFromNs(ns int64) string {
-	s := ns / 1000000000
-	d := s / (3600 * 24)
-	return fmt.Sprintf("%d", d)
-}
 
 func epochDayFromNsInt(ns int64) int64 {
 	s := ns / 1000000000

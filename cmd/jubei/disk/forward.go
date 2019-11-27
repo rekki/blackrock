@@ -18,7 +18,6 @@ const PAD = 64
 
 type ForwardWriter struct {
 	forward *os.File
-	buffer  []byte
 	offset  uint32
 }
 

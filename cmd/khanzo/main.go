@@ -9,7 +9,6 @@ import (
 	_ "net/http/pprof"
 	"os"
 	"sort"
-	"strconv"
 	"time"
 
 	"github.com/gin-contrib/cors"
@@ -26,15 +25,6 @@ type scoredSegmentHit struct {
 	did   int32
 	score float32
 	sid   int64
-}
-
-func intOrDefault(s string, n int) int {
-	v, err := strconv.ParseInt(s, 10, 32)
-	if err != nil {
-		return n
-	}
-
-	return int(v)
 }
 
 func sendResponse(c *gin.Context, out interface{}) {
