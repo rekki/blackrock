@@ -22,7 +22,10 @@ type ForwardWriter struct {
 }
 
 func NewForwardWriter(root string, name string) (*ForwardWriter, error) {
-	os.MkdirAll(root, 0700)
+	err := os.MkdirAll(root, 0700)
+	if err != nil {
+		return nil, err
+	}
 	filename := path.Join(root, fmt.Sprintf("%s.bin", name))
 	fd, err := os.OpenFile(filename, os.O_RDWR|os.O_CREATE, 0600)
 	if err != nil {
@@ -43,8 +46,14 @@ func NewForwardWriter(root string, name string) (*ForwardWriter, error) {
 var EBADSLT = errors.New("checksum mismatch")
 
 func (fw *ForwardWriter) Scan(offset uint32, cb func(uint32, []byte) error) error {
+	return ScanFromReader(fw.forward, offset, cb)
+}
+
+var MAGIC = []byte{0xb, 0xe, 0xe, 0xf}
+
+func ScanFromReader(reader io.ReaderAt, offset uint32, cb func(uint32, []byte) error) error {
 	for {
-		data, next, err := fw.Read(offset)
+		data, next, err := ReadFromReader(reader, offset)
 		if err == io.EOF {
 			return nil
 		}
@@ -63,11 +72,9 @@ func (fw *ForwardWriter) Scan(offset uint32, cb func(uint32, []byte) error) erro
 	}
 }
 
-var MAGIC = []byte{0xb, 0xe, 0xe, 0xf}
-
-func (fw *ForwardWriter) Read(offset uint32) ([]byte, uint32, error) {
+func ReadFromReader(reader io.ReaderAt, offset uint32) ([]byte, uint32, error) {
 	header := make([]byte, 16)
-	_, err := fw.forward.ReadAt(header, int64(offset*PAD))
+	_, err := reader.ReadAt(header, int64(offset*PAD))
 	if err != nil {
 		return nil, 0, err
 	}
@@ -85,7 +92,7 @@ func (fw *ForwardWriter) Read(offset uint32) ([]byte, uint32, error) {
 	metadataLen := binary.LittleEndian.Uint32(header)
 	nextOffset := (offset + ((uint32(len(header))+(uint32(metadataLen)))+PAD-1)/PAD)
 	readInto := make([]byte, metadataLen)
-	_, err = fw.forward.ReadAt(readInto, int64(offset*PAD)+int64(len(header)))
+	_, err = reader.ReadAt(readInto, int64(offset*PAD)+int64(len(header)))
 	if err != nil {
 		return nil, 0, err
 	}
@@ -96,6 +103,10 @@ func (fw *ForwardWriter) Read(offset uint32) ([]byte, uint32, error) {
 		return nil, 0, EBADSLT
 	}
 	return readInto, nextOffset, nil
+}
+
+func (fw *ForwardWriter) Read(offset uint32) ([]byte, uint32, error) {
+	return ReadFromReader(fw.forward, offset)
 }
 
 func (fw *ForwardWriter) Close() error {
