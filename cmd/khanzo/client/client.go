@@ -179,6 +179,7 @@ func (c *Client) AggregateCoordinate(qr *spec.AggregateRequest) (*spec.Aggregate
 			out, err := c.Aggregate(&modifiedQueryRequest)
 			if err != nil {
 				log.WithError(err).Warnf("failed to execute query on segment: %v", date)
+				out = &spec.Aggregate{}
 			}
 			done <- out
 		}(date)
@@ -189,7 +190,6 @@ func (c *Client) AggregateCoordinate(qr *spec.AggregateRequest) (*spec.Aggregate
 		current := <-done
 		merged = merge(merged, current)
 	}
-
 	sort.Slice(merged.Sample, func(i, j int) bool {
 		return merged.Sample[i].Metadata.CreatedAtNs < merged.Sample[j].Metadata.CreatedAtNs
 	})
@@ -254,5 +254,37 @@ func merge(into *spec.Aggregate, from *spec.Aggregate) *spec.Aggregate {
 	into.ForeignId = mergeMapCountKV(into.ForeignId, from.ForeignId)
 	into.EventType = mergeMapCountKV(into.EventType, from.EventType)
 	into.Sample = append(into.Sample, from.Sample...)
+	if from.Chart != nil && into.Chart != nil {
+		a := into.Chart
+		b := from.Chart
+		if a.TimeStart > b.TimeStart {
+			a.TimeStart = b.TimeStart
+		}
+		if a.TimeEnd < b.TimeEnd {
+			a.TimeEnd = b.TimeEnd
+		}
+		if a.Buckets == nil {
+			a.Buckets = map[uint32]*spec.ChartBucketPerTime{}
+		}
+		for bucketKey, bucket := range b.Buckets {
+			//PerType map[string]*PointPerEventType
+			intoBucket, ok := a.Buckets[bucketKey]
+			if !ok {
+				a.Buckets[bucketKey] = bucket
+			} else {
+				for t, point := range bucket.PerType {
+					intoPoint, ok := intoBucket.PerType[t]
+					if !ok {
+						intoBucket.PerType[t] = point
+					} else {
+						intoPoint.Count += point.Count
+						intoPoint.CountUnique += point.CountUnique
+						intoPoint.Bucket = point.Bucket
+						intoPoint.EventType = point.EventType
+					}
+				}
+			}
+		}
+	}
 	return into
 }
