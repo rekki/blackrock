@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"path"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -83,13 +84,14 @@ func (m *MemOnlyIndex) Refresh() error {
 
 	}
 	wait := make(chan error)
-	maxReaders := 100
+	maxReaders := runtime.GOMAXPROCS(0)
 	var sem = make(chan bool, maxReaders)
 
 	for _, sid := range todo {
 		sem <- true
 		go func(sid int64) {
 			err := m.LoadSingleSegment(sid)
+			runtime.GC()
 			<-sem
 			wait <- err
 		}(sid)
