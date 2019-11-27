@@ -129,9 +129,10 @@ func (m *MemOnlyIndex) LoadSingleSegment(sid int64) error {
 	did := uint32(storedOffset)
 	t0 := time.Now()
 	cnt := 0
+
+	meta := spec.CondenseMetadata{}
 	err := segment.fw.Scan(uint32(storedOffset), func(offset uint32, data []byte) error {
-		meta := &spec.Metadata{}
-		err := proto.Unmarshal(data, meta)
+		err := proto.Unmarshal(data, &meta)
 		if err != nil {
 			return err
 		}

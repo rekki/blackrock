@@ -24,6 +24,19 @@ message Metadata {
         fixed64 id = 12;
 }
 
+
+message CondenseMetadata {
+        repeated KV search = 1 [(gogoproto.nullable) = false];
+        repeated KV count = 2 [(gogoproto.nullable) = false];
+
+        int64 created_at_ns  = 5;
+
+        string event_type = 7;
+        string foreign_id = 9;
+        string foreign_type = 10;
+        map<string,uint32> track = 11;
+}
+
 message Hit {
         uint64 id = 1;
         float score = 2;
