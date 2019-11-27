@@ -37,7 +37,7 @@ func fromQuery(input *spec.Query, makeTermQuery func(string, string) iq.Query) (
 				return nil, err
 			}
 			and.SetNot(p)
-			v
+
 		} else {
 			if len(queries) == 1 {
 				return queries[0], nil
