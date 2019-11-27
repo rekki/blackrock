@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/gogo/protobuf/proto"
@@ -43,41 +44,43 @@ func (s *Segment) AddMany(kv uint64, did []int32) {
 type MemOnlyIndex struct {
 	root     string
 	segments map[int64]*Segment
-	words    map[string]uint32
+	words    sync.Map
+	counter  uint32
 	sync.RWMutex
 }
 
 func (m *MemOnlyIndex) kv(k string, v string) uint64 {
-	ik, ok := m.words[k]
+	ik, ok := m.words.Load(k)
 	if !ok {
 		return 0
 	}
-	iv, ok := m.words[v]
+	iv, ok := m.words.Load(v)
 	if !ok {
 		return 0
 	}
 
-	return uint64(ik)<<32 | uint64(iv)
+	return uint64(ik.(uint32))<<32 | uint64(iv.(uint32))
 }
 
 func (m *MemOnlyIndex) kvOrNew(k string, v string) uint64 {
-	ik, ok := m.words[k]
+	ik, ok := m.words.Load(k)
 	if !ok {
-		// XXX: must start at 1, 0 is NOT_FOUND
-		ik = uint32(len(m.words) + 1)
-		m.words[k] = ik
+		id := atomic.AddUint32(&m.counter, 1) + 1
+		ik = id
+		m.words.Store(k, ik)
 	}
-	iv, ok := m.words[v]
+	iv, ok := m.words.Load(v)
 	if !ok {
-		iv = uint32(len(m.words) + 1)
-		m.words[v] = iv
+		id := atomic.AddUint32(&m.counter, 1) + 1
+		iv = id
+		m.words.Store(v, iv)
 	}
 
-	return uint64(ik)<<32 | uint64(iv)
+	return uint64(ik.(uint32))<<32 | uint64(iv.(uint32))
 }
 
 func NewMemOnlyIndex(root string) *MemOnlyIndex {
-	return &MemOnlyIndex{root: root, segments: map[int64]*Segment{}, words: map[string]uint32{}}
+	return &MemOnlyIndex{root: root, segments: map[int64]*Segment{}, words: sync.Map{}}
 }
 
 func (m *MemOnlyIndex) Refresh() error {
@@ -156,7 +159,6 @@ func (m *MemOnlyIndex) LoadSingleSegment(sid int64) error {
 			return err
 		}
 
-		m.Lock()
 		segment.Add(m.kvOrNew(meta.ForeignType, meta.ForeignId), int32(did))
 		segment.Add(m.kvOrNew("event_type", meta.EventType), int32(did))
 
@@ -166,7 +168,6 @@ func (m *MemOnlyIndex) LoadSingleSegment(sid int64) error {
 		for ex := range meta.Track {
 			segment.Add(m.kvOrNew("__experiment", ex), int32(did))
 		}
-		m.Unlock()
 
 		did = offset
 		segment.offset = did
