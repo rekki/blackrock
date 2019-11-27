@@ -16,11 +16,16 @@ import (
 	"github.com/rekki/blackrock/cmd/orgrim/spec"
 	"github.com/rekki/blackrock/pkg/depths"
 	log "github.com/sirupsen/logrus"
+	"golang.org/x/exp/mmap"
 )
 
+type ReaderAtCloser interface {
+	ReadAt(p []byte, off int64) (n int, err error)
+	Close() error
+}
 type Segment struct {
 	postings map[string]map[string][]int32
-	fw       *disk.ForwardWriter
+	mm       ReaderAtCloser
 	offset   uint32
 	sync.RWMutex
 }
@@ -32,6 +37,8 @@ func (s *Segment) Merge(o *Segment) {
 			s.AddMany(k, v, p)
 		}
 	}
+	s.mm.Close()
+	s.mm = o.mm
 }
 func (s *Segment) Add(k, v string, did int32) {
 	pk, ok := s.postings[k]
@@ -117,19 +124,17 @@ func (m *MemOnlyIndex) LoadSingleSegment(sid int64) error {
 		segment.offset = oldSegment.offset
 	}
 
-	if segment.fw == nil {
-		fw, err := disk.NewForwardWriter(p, "main")
-		if err != nil {
-			return err
-		}
-		segment.fw = fw
+	fw, err := disk.NewForwardWriter(p, "main")
+	if err != nil {
+		return err
 	}
+	defer fw.Close()
 
 	storedOffset := segment.offset
 	did := uint32(storedOffset)
 	t0 := time.Now()
 	cnt := 0
-	err := segment.fw.Scan(uint32(storedOffset), func(offset uint32, data []byte) error {
+	err = fw.Scan(uint32(storedOffset), func(offset uint32, data []byte) error {
 		meta := &spec.Metadata{}
 		err := proto.Unmarshal(data, meta)
 		if err != nil {
@@ -157,6 +162,15 @@ func (m *MemOnlyIndex) LoadSingleSegment(sid int64) error {
 		return fmt.Errorf("error scanning, startOffset: %d, currentOffset: %d, err: %s", storedOffset, did, err)
 	}
 
+	// XXX: is this safe? (as in are all offsets going to be available in the mmap)
+	// anyway, its just for testing
+	mm, err := mmap.Open(path.Join(p, "main.bin"))
+	if err != nil {
+		return err
+	}
+
+	segment.mm = mm
+
 	// merge
 	m.Lock()
 	oldSegment, ok = m.segments[sid]
@@ -168,6 +182,7 @@ func (m *MemOnlyIndex) LoadSingleSegment(sid int64) error {
 		oldSegment.Unlock()
 	}
 	m.Unlock()
+
 	return nil
 }
 
@@ -182,7 +197,7 @@ func (m *MemOnlyIndex) ReadForward(sid int64, did int32) ([]byte, error) {
 	}
 	m.RUnlock()
 
-	data, _, err := segment.fw.Read(uint32(did))
+	data, _, err := disk.ReadFromReader(segment.mm, uint32(did))
 	return data, err
 }
 
