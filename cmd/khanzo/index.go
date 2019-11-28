@@ -11,8 +11,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/RoaringBitmap/roaring"
 	"github.com/gogo/protobuf/proto"
-	iq "github.com/jackdoe/go-query"
+	iq "github.com/jackdoe/roaring-query"
 	"github.com/rekki/blackrock/cmd/jubei/disk"
 	"github.com/rekki/blackrock/cmd/orgrim/spec"
 	"github.com/rekki/blackrock/pkg/depths"
@@ -20,7 +21,7 @@ import (
 )
 
 type Segment struct {
-	postings map[string]map[string][]int32
+	postings map[string]map[string]*roaring.Bitmap
 	fw       *disk.ForwardWriter
 	offset   uint32
 	sync.RWMutex
@@ -37,19 +38,29 @@ func (s *Segment) Merge(o *Segment) {
 func (s *Segment) Add(k, v string, did int32) {
 	pk, ok := s.postings[k]
 	if !ok {
-		pk = map[string][]int32{}
+		pk = map[string]*roaring.Bitmap{}
 		s.postings[k] = pk
 	}
-	pk[v] = append(pk[v], did)
+	r, ok := pk[v]
+	if !ok {
+		r = roaring.New()
+		pk[v] = r
+	}
+	r.Add(uint32(did))
 }
 
-func (s *Segment) AddMany(k, v string, did []int32) {
+func (s *Segment) AddMany(k, v string, did *roaring.Bitmap) {
 	pk, ok := s.postings[k]
 	if !ok {
-		pk = map[string][]int32{}
+		pk = map[string]*roaring.Bitmap{}
 		s.postings[k] = pk
 	}
-	pk[v] = append(pk[v], did...)
+	r, ok := pk[v]
+	if !ok {
+		r = roaring.New()
+		pk[v] = r
+	}
+	r.Or(did)
 }
 
 type MemOnlyIndex struct {
@@ -108,7 +119,7 @@ func (m *MemOnlyIndex) Refresh() error {
 
 func (m *MemOnlyIndex) LoadSingleSegment(sid int64) error {
 	p := path.Join(m.root, fmt.Sprintf("%d", sid))
-	segment := &Segment{postings: map[string]map[string][]int32{}}
+	segment := &Segment{postings: map[string]map[string]*roaring.Bitmap{}}
 
 	m.RLock()
 	oldSegment, ok := m.segments[sid]
@@ -212,7 +223,7 @@ func (m *MemOnlyIndex) NewTermQuery(sid int64, tagKey string, tagValue string) i
 	segment, ok := m.segments[sid]
 	if !ok {
 		m.RUnlock()
-		return iq.Term(s, []int32{})
+		return iq.Term(s, roaring.New())
 	}
 	m.RUnlock()
 
@@ -220,11 +231,11 @@ func (m *MemOnlyIndex) NewTermQuery(sid int64, tagKey string, tagValue string) i
 	defer segment.RUnlock()
 	pk, ok := segment.postings[tagKey]
 	if !ok {
-		return iq.Term(s, []int32{})
+		return iq.Term(s, roaring.New())
 	}
 	pv, ok := pk[tagValue]
 	if !ok {
-		return iq.Term(s, []int32{})
+		return iq.Term(s, roaring.New())
 	}
 	return iq.Term(s, pv)
 }
@@ -239,10 +250,11 @@ func (m *MemOnlyIndex) ForEach(qr *spec.SearchQueryRequest, limit uint32, cb fun
 		if err != nil {
 			return err
 		}
-		for query.Next() != iq.NO_MORE {
-			did := query.GetDocId()
-			score := query.Score()
-			cb(sid, did, score)
+		iter := query.Iterator()
+		for iter.HasNext() {
+			did := iter.Next()
+			score := float32(1)
+			cb(sid, int32(did), score)
 			if limit > 0 {
 				limit--
 				if limit == 0 {
@@ -297,10 +309,11 @@ func (m *MemOnlyIndex) ForEachDecodeParallel(parallel int, qr *spec.SearchQueryR
 
 		stopped := false
 		go func() {
-			for query.Next() != iq.NO_MORE {
-				did := query.GetDocId()
-				score := query.Score()
-				work <- matching{did: did, score: score, m: nil}
+			iter := query.Iterator()
+			for iter.HasNext() {
+				did := iter.Next()
+				score := float32(1)
+				work <- matching{did: int32(did), score: score, m: nil}
 				if limit > 0 {
 					limit--
 					if limit == 0 {

@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 
-	iq "github.com/jackdoe/go-query"
+	iq "github.com/jackdoe/roaring-query"
 	"github.com/rekki/blackrock/cmd/orgrim/spec"
 )
 

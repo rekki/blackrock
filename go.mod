@@ -3,12 +3,14 @@ module github.com/rekki/blackrock
 go 1.13
 
 require (
+	github.com/RoaringBitmap/roaring v0.4.21
 	github.com/dgryski/go-metro v0.0.0-20180109044635-280f6062b5bc
 	github.com/gin-contrib/cors v1.3.0
 	github.com/gin-gonic/gin v1.5.0
 	github.com/gofrs/flock v0.7.1
 	github.com/gogo/protobuf v1.3.1
 	github.com/jackdoe/go-query v0.0.0-20191126084534-ec0deea2635d
+	github.com/jackdoe/roaring-query v0.0.0-20191125094732-144467b8fd83
 	github.com/mcuadros/go-gin-prometheus v0.1.0
 	github.com/mssola/user_agent v0.5.0
 	github.com/oschwald/geoip2-golang v1.3.0
