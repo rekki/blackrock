@@ -25,6 +25,7 @@ var GIANT = sync.RWMutex{}
 
 //go:generate msgp -tests=false
 type Segment struct {
+	Path     string
 	Postings map[string]map[string][]int32
 	Offset   uint32
 	fw       *disk.ForwardWriter
@@ -102,6 +103,14 @@ func (m *MemOnlyIndex) LoadFromDisk() error {
 	reader := msgp.NewReader(fo)
 
 	err = m.DecodeMsg(reader)
+	if err != nil {
+		for _, s := range m.Segments {
+			s.fw, err = disk.NewForwardWriter(s.Path, "main")
+			if err != nil {
+				return err
+			}
+		}
+	}
 	return err
 }
 func (m *MemOnlyIndex) toSegmentId(sid int64) string {
@@ -183,7 +192,7 @@ func (m *MemOnlyIndex) Refresh() error {
 
 func (m *MemOnlyIndex) LoadSingleSegment(sid int64) error {
 	p := path.Join(m.Root, fmt.Sprintf("%d", sid))
-	segment := &Segment{Postings: map[string]map[string][]int32{}}
+	segment := &Segment{Postings: map[string]map[string][]int32{}, Path: p}
 
 	GIANT.RLock()
 	oldSegment, ok := m.Segments[m.toSegmentId(sid)]

@@ -265,6 +265,12 @@ func (z *Segment) DecodeMsg(dc *msgp.Reader) (err error) {
 			return
 		}
 		switch msgp.UnsafeString(field) {
+		case "Path":
+			z.Path, err = dc.ReadString()
+			if err != nil {
+				err = msgp.WrapError(err, "Path")
+				return
+			}
 		case "Postings":
 			var zb0002 uint32
 			zb0002, err = dc.ReadMapHeader()
@@ -351,9 +357,19 @@ func (z *Segment) DecodeMsg(dc *msgp.Reader) (err error) {
 
 // EncodeMsg implements msgp.Encodable
 func (z *Segment) EncodeMsg(en *msgp.Writer) (err error) {
-	// map header, size 2
+	// map header, size 3
+	// write "Path"
+	err = en.Append(0x83, 0xa4, 0x50, 0x61, 0x74, 0x68)
+	if err != nil {
+		return
+	}
+	err = en.WriteString(z.Path)
+	if err != nil {
+		err = msgp.WrapError(err, "Path")
+		return
+	}
 	// write "Postings"
-	err = en.Append(0x82, 0xa8, 0x50, 0x6f, 0x73, 0x74, 0x69, 0x6e, 0x67, 0x73)
+	err = en.Append(0xa8, 0x50, 0x6f, 0x73, 0x74, 0x69, 0x6e, 0x67, 0x73)
 	if err != nil {
 		return
 	}
@@ -409,9 +425,12 @@ func (z *Segment) EncodeMsg(en *msgp.Writer) (err error) {
 // MarshalMsg implements msgp.Marshaler
 func (z *Segment) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	// map header, size 2
+	// map header, size 3
+	// string "Path"
+	o = append(o, 0x83, 0xa4, 0x50, 0x61, 0x74, 0x68)
+	o = msgp.AppendString(o, z.Path)
 	// string "Postings"
-	o = append(o, 0x82, 0xa8, 0x50, 0x6f, 0x73, 0x74, 0x69, 0x6e, 0x67, 0x73)
+	o = append(o, 0xa8, 0x50, 0x6f, 0x73, 0x74, 0x69, 0x6e, 0x67, 0x73)
 	o = msgp.AppendMapHeader(o, uint32(len(z.Postings)))
 	for za0001, za0002 := range z.Postings {
 		o = msgp.AppendString(o, za0001)
@@ -448,6 +467,12 @@ func (z *Segment) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			return
 		}
 		switch msgp.UnsafeString(field) {
+		case "Path":
+			z.Path, bts, err = msgp.ReadStringBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "Path")
+				return
+			}
 		case "Postings":
 			var zb0002 uint32
 			zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
@@ -535,7 +560,7 @@ func (z *Segment) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *Segment) Msgsize() (s int) {
-	s = 1 + 9 + msgp.MapHeaderSize
+	s = 1 + 5 + msgp.StringPrefixSize + len(z.Path) + 9 + msgp.MapHeaderSize
 	if z.Postings != nil {
 		for za0001, za0002 := range z.Postings {
 			_ = za0002
