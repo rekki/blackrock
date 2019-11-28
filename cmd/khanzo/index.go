@@ -19,45 +19,8 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-var growthFactor = float32(1.5)
-
-type ArrayList struct {
-	elements []int32
-	size     int
-}
-
-func (list *ArrayList) Add(values ...int32) {
-	list.growBy(len(values))
-	for _, value := range values {
-		list.elements[list.size] = value
-		list.size++
-	}
-}
-
-func (list *ArrayList) Slice() []int32 {
-	return list.elements[:list.size]
-}
-
-func (list *ArrayList) resize(cap int) {
-	newElements := make([]int32, cap, cap)
-	copy(newElements, list.elements)
-	list.elements = newElements
-}
-
-func (list *ArrayList) Fit() {
-	list.resize(list.size)
-}
-
-func (list *ArrayList) growBy(n int) {
-	currentCapacity := cap(list.elements)
-	if list.size+n >= currentCapacity {
-		newCapacity := int(growthFactor * float32(currentCapacity+n))
-		list.resize(newCapacity)
-	}
-}
-
 type Segment struct {
-	postings map[string]map[string]*ArrayList
+	postings map[string]map[string][]int32
 	fw       *disk.ForwardWriter
 	offset   uint32
 	sync.RWMutex
@@ -67,31 +30,26 @@ func (s *Segment) Merge(o *Segment) {
 	s.offset = o.offset
 	for k, pv := range o.postings {
 		for v, p := range pv {
-			s.Add(k, v, p.Slice()...)
+			s.AddMany(k, v, p)
 		}
 	}
 }
-
-func (s *Segment) Fit() {
-	for _, pv := range s.postings {
-		for _, p := range pv {
-			p.Fit()
-		}
-	}
-}
-
-func (s *Segment) Add(k, v string, did ...int32) {
+func (s *Segment) Add(k, v string, did int32) {
 	pk, ok := s.postings[k]
 	if !ok {
-		pk = map[string]*ArrayList{}
+		pk = map[string][]int32{}
 		s.postings[k] = pk
 	}
-	a, ok := pk[v]
+	pk[v] = append(pk[v], did)
+}
+
+func (s *Segment) AddMany(k, v string, did []int32) {
+	pk, ok := s.postings[k]
 	if !ok {
-		a = &ArrayList{}
-		pk[v] = a
+		pk = map[string][]int32{}
+		s.postings[k] = pk
 	}
-	a.Add(did...)
+	pk[v] = append(pk[v], did...)
 }
 
 type MemOnlyIndex struct {
@@ -150,7 +108,7 @@ func (m *MemOnlyIndex) Refresh() error {
 
 func (m *MemOnlyIndex) LoadSingleSegment(sid int64) error {
 	p := path.Join(m.root, fmt.Sprintf("%d", sid))
-	segment := &Segment{postings: map[string]map[string]*ArrayList{}}
+	segment := &Segment{postings: map[string]map[string][]int32{}}
 
 	m.RLock()
 	oldSegment, ok := m.segments[sid]
@@ -206,12 +164,10 @@ func (m *MemOnlyIndex) LoadSingleSegment(sid int64) error {
 	m.Lock()
 	oldSegment, ok = m.segments[sid]
 	if !ok {
-		segment.Fit()
 		m.segments[sid] = segment
 	} else {
 		oldSegment.Lock()
 		oldSegment.Merge(segment)
-		oldSegment.Fit()
 		oldSegment.Unlock()
 	}
 	m.Unlock()
@@ -271,7 +227,7 @@ func (m *MemOnlyIndex) NewTermQuery(sid int64, tagKey string, tagValue string) i
 	if !ok {
 		return iq.Term(s, []int32{})
 	}
-	return iq.Term(s, pv.Slice())
+	return iq.Term(s, pv)
 }
 
 func (m *MemOnlyIndex) ForEach(qr *spec.SearchQueryRequest, limit uint32, cb func(int64, int32, float32)) error {
