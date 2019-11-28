@@ -103,7 +103,7 @@ func (m *MemOnlyIndex) LoadFromDisk() error {
 	reader := msgp.NewReader(fo)
 
 	err = m.DecodeMsg(reader)
-	if err != nil {
+	if err == nil {
 		for _, s := range m.Segments {
 			s.fw, err = disk.NewForwardWriter(s.Path, "main")
 			if err != nil {
