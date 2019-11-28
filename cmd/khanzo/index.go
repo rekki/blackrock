@@ -116,6 +116,7 @@ func (m *MemOnlyIndex) LoadSingleSegment(sid int64) error {
 
 	if ok {
 		segment.offset = oldSegment.offset
+		segment.fw = oldSegment.fw
 	}
 
 	if segment.fw == nil {
