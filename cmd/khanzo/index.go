@@ -20,7 +20,7 @@ import (
 )
 
 type Segment struct {
-	postings map[string]map[string][]int32
+	postings map[uint64][]int32
 	fw       *disk.ForwardWriter
 	offset   uint32
 	sync.RWMutex
@@ -28,38 +28,56 @@ type Segment struct {
 
 func (s *Segment) Merge(o *Segment) {
 	s.offset = o.offset
-	for k, pv := range o.postings {
-		for v, p := range pv {
-			s.AddMany(k, v, p)
-		}
+	for kv, p := range o.postings {
+		s.AddMany(kv, p)
 	}
 }
-func (s *Segment) Add(k, v string, did int32) {
-	pk, ok := s.postings[k]
-	if !ok {
-		pk = map[string][]int32{}
-		s.postings[k] = pk
-	}
-	pk[v] = append(pk[v], did)
+func (s *Segment) Add(kv uint64, did int32) {
+	s.postings[kv] = append(s.postings[kv], did)
 }
 
-func (s *Segment) AddMany(k, v string, did []int32) {
-	pk, ok := s.postings[k]
-	if !ok {
-		pk = map[string][]int32{}
-		s.postings[k] = pk
-	}
-	pk[v] = append(pk[v], did...)
+func (s *Segment) AddMany(kv uint64, did []int32) {
+	s.postings[kv] = append(s.postings[kv], did...)
 }
 
 type MemOnlyIndex struct {
 	root     string
 	segments map[int64]*Segment
+	words    map[string]uint32
 	sync.RWMutex
 }
 
+func (m *MemOnlyIndex) kv(k string, v string) uint64 {
+	ik, ok := m.words[k]
+	if !ok {
+		return 0
+	}
+	iv, ok := m.words[v]
+	if !ok {
+		return 0
+	}
+
+	return uint64(ik)<<32 | uint64(iv)
+}
+
+func (m *MemOnlyIndex) kvOrNew(k string, v string) uint64 {
+	ik, ok := m.words[k]
+	if !ok {
+		// XXX: must start at 1, 0 is NOT_FOUND
+		ik = uint32(len(m.words) + 1)
+		m.words[k] = ik
+	}
+	iv, ok := m.words[v]
+	if !ok {
+		iv = uint32(len(m.words) + 1)
+		m.words[v] = iv
+	}
+
+	return uint64(ik)<<32 | uint64(iv)
+}
+
 func NewMemOnlyIndex(root string) *MemOnlyIndex {
-	return &MemOnlyIndex{root: root, segments: map[int64]*Segment{}}
+	return &MemOnlyIndex{root: root, segments: map[int64]*Segment{}, words: map[string]uint32{}}
 }
 
 func (m *MemOnlyIndex) Refresh() error {
@@ -108,7 +126,7 @@ func (m *MemOnlyIndex) Refresh() error {
 
 func (m *MemOnlyIndex) LoadSingleSegment(sid int64) error {
 	p := path.Join(m.root, fmt.Sprintf("%d", sid))
-	segment := &Segment{postings: map[string]map[string][]int32{}}
+	segment := &Segment{postings: map[uint64][]int32{}}
 
 	m.RLock()
 	oldSegment, ok := m.segments[sid]
@@ -139,15 +157,17 @@ func (m *MemOnlyIndex) LoadSingleSegment(sid int64) error {
 			return err
 		}
 
-		segment.Add(meta.ForeignType, meta.ForeignId, int32(did))
-		segment.Add("event_type", meta.EventType, int32(did))
+		m.Lock()
+		segment.Add(m.kvOrNew(meta.ForeignType, meta.ForeignId), int32(did))
+		segment.Add(m.kvOrNew("event_type", meta.EventType), int32(did))
 
 		for _, kv := range meta.Search {
-			segment.Add(kv.Key, kv.Value, int32(did))
+			segment.Add(m.kvOrNew(kv.Key, kv.Value), int32(did))
 		}
 		for ex := range meta.Track {
-			segment.Add("__experiment", ex, int32(did))
+			segment.Add(m.kvOrNew("__experiment", ex), int32(did))
 		}
+		m.Unlock()
 
 		did = offset
 		segment.offset = did
@@ -215,19 +235,18 @@ func (m *MemOnlyIndex) NewTermQuery(sid int64, tagKey string, tagValue string) i
 		m.RUnlock()
 		return iq.Term(s, []int32{})
 	}
+	kv := m.kv(tagKey, tagValue)
 	m.RUnlock()
 
 	segment.RLock()
-	defer segment.RUnlock()
-	pk, ok := segment.postings[tagKey]
+	// dont defer RUnlock because iq.Term(s, pv) takes time
+	postings, ok := segment.postings[kv]
 	if !ok {
+		segment.RUnlock()
 		return iq.Term(s, []int32{})
 	}
-	pv, ok := pk[tagValue]
-	if !ok {
-		return iq.Term(s, []int32{})
-	}
-	return iq.Term(s, pv)
+	segment.RUnlock()
+	return iq.Term(s, postings)
 }
 
 func (m *MemOnlyIndex) ForEach(qr *spec.SearchQueryRequest, limit uint32, cb func(int64, int32, float32)) error {
