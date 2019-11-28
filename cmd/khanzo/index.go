@@ -209,10 +209,10 @@ func (m *MemOnlyIndex) PrintStats() {
 			types++
 			for _, postings := range pk {
 				terms++
-				size += len(postings) * 4
+				size += 8 + (len(postings) * 4)
 			}
 		}
-		log.Warnf("segment %v, sizeMB: %d, terms: %d, types: %d, last flush: %v", sid, size/1024/1024, terms, types, v.flushedAt.Format(time.Stamp))
+		log.Warnf("segment %v, size: %dMB, terms: %d, types: %d, last flush: %v", sid, size/1024/1024, terms, types, v.flushedAt.Format(time.Stamp))
 	}
 }
 
@@ -377,43 +377,4 @@ func (m *MemOnlyIndex) ForEach(qr *spec.SearchQueryRequest, limit uint32, cb fun
 	}
 
 	return nil
-}
-
-type pieceOfWork struct {
-	s     *Segment
-	did   int32
-	score float32
-}
-
-func (m *MemOnlyIndex) ForEachParallel(nWorkers int, qr *spec.SearchQueryRequest, limit uint32, cb func(int32, float32, []byte)) error {
-	// FIXME(jackdoe): productionize
-	work := make(chan pieceOfWork, nWorkers)
-
-	var wg sync.WaitGroup
-
-	for i := 0; i < nWorkers; i++ {
-		wg.Add(1)
-		go func() {
-			for w := range work {
-				data, err := w.s.ReadForward(w.did)
-				if err != nil {
-					// XXX: this can spam
-					log.WithError(err).Warnf("error reading did: %d", w.did)
-					continue
-				}
-				cb(w.did, w.score, data)
-			}
-			wg.Done()
-		}()
-	}
-
-	err := m.ForEach(qr, limit, func(s *Segment, did int32, score float32) error {
-		work <- pieceOfWork{s, did, score}
-		return nil
-	})
-	close(work)
-
-	wg.Wait()
-
-	return err
 }
