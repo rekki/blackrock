@@ -94,7 +94,7 @@ func (m *MemOnlyIndex) PrintStats() {
 	}
 }
 func (m *MemOnlyIndex) LoadFromDisk() error {
-	fo, err := os.OpenFile(path.Join(m.Root, "inverted.current"), os.O_RDONLY, 0600)
+	fo, err := os.OpenFile(path.Join(m.Root, "inverted.current.v2"), os.O_RDONLY, 0600)
 	if err != nil {
 		return err
 	}
@@ -137,7 +137,7 @@ func (m *MemOnlyIndex) DumpToDisk() error {
 	if err != nil {
 		return err
 	}
-	current := path.Join(m.Root, "inverted.current")
+	current := path.Join(m.Root, "inverted.current.v2")
 	err = os.Rename(tmp, current)
 	if err != nil {
 		return err

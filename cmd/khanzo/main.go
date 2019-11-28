@@ -248,6 +248,7 @@ func main() {
 		}
 
 		err = memIndex.ForEachDecodeParallel(*nworkers, qr.Query, 0, func(did int32, metadata *spec.Metadata, score float32) {
+			out.Total++
 			add(metadata.Search, out.Search)
 			add(metadata.Count, out.Count)
 
