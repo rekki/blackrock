@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -24,14 +23,138 @@ import (
 
 var GIANT = sync.RWMutex{}
 
-const INVERTED_INDEX_FILE_NAME = "inverted.current.v2"
+const INVERTED_INDEX_FILE_NAME = "inverted.current.v3"
 
 //go:generate msgp -tests=false
 type Segment struct {
-	Path     string
-	Postings map[string]map[string][]int32
-	Offset   uint32
-	fw       *disk.ForwardWriter
+	Path      string
+	Postings  map[string]map[string][]int32
+	Offset    uint32
+	fw        *disk.ForwardWriter
+	dirty     bool
+	flushedAt time.Time
+}
+
+func (s *Segment) ReadForward(did int32) ([]byte, error) {
+	data, _, err := s.fw.Read(uint32(did))
+	return data, err
+}
+
+func (s *Segment) ReadForwardDecode(did int32, m proto.Message) error {
+	data, _, err := s.fw.Read(uint32(did))
+	if err != nil {
+		return err
+	}
+
+	err = proto.Unmarshal(data, m)
+	if err != nil {
+		return err
+	}
+
+	return err
+}
+
+func (s *Segment) LoadFromDisk() error {
+	fn := path.Join(s.Path, INVERTED_INDEX_FILE_NAME)
+	log.Warnf("loading %v", fn)
+	fo, err := os.OpenFile(fn, os.O_RDONLY, 0600)
+	if err != nil {
+		return err
+	}
+	defer fo.Close()
+
+	reader := msgp.NewReader(fo)
+	err = s.DecodeMsg(reader)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (s *Segment) OpenForwardIndex() error {
+	fw, err := disk.NewForwardWriter(s.Path, "main")
+	if err != nil {
+		return err
+	}
+	s.fw = fw
+	return nil
+}
+
+func (s *Segment) DumpToDisk() error {
+	if !s.dirty {
+		return nil
+	}
+
+	t0 := time.Now()
+	tmp := path.Join(s.Path, fmt.Sprintf("%s.tmp", INVERTED_INDEX_FILE_NAME))
+	fo, err := os.OpenFile(tmp, os.O_TRUNC|os.O_CREATE|os.O_RDWR, 0600)
+	if err != nil {
+		return err
+	}
+	defer fo.Close()
+	writer := msgp.NewWriter(fo)
+	err = s.EncodeMsg(writer)
+	if err != nil {
+		return err
+	}
+
+	err = writer.Flush()
+	if err != nil {
+		return err
+	}
+	current := path.Join(s.Path, INVERTED_INDEX_FILE_NAME)
+	err = os.Rename(tmp, current)
+	if err != nil {
+		return err
+	}
+	log.Warnf("[done] %s storing took %v, last flush: %v", s.Path, time.Since(t0), s.flushedAt.Format(time.Stamp))
+	s.dirty = false
+	s.flushedAt = time.Now()
+	return nil
+}
+
+func (s *Segment) Refresh() error {
+	storedOffset := s.Offset
+	did := uint32(storedOffset)
+	t0 := time.Now()
+	cnt := 0
+	temporary := &Segment{Postings: map[string]map[string][]int32{}, Offset: s.Offset}
+
+	err := s.fw.Scan(uint32(storedOffset), func(Offset uint32, data []byte) error {
+		meta := spec.SearchableMetadata{}
+		err := proto.Unmarshal(data, &meta)
+		if err != nil {
+			return err
+		}
+
+		temporary.Add(meta.ForeignType, meta.ForeignId, int32(did))
+		temporary.Add("event_type", meta.EventType, int32(did))
+
+		for _, kv := range meta.Search {
+			temporary.Add(kv.Key, kv.Value, int32(did))
+		}
+		for ex := range meta.Track {
+			temporary.Add("__experiment", ex, int32(did))
+		}
+
+		did = Offset
+		temporary.Offset = did
+		cnt++
+		return nil
+	})
+
+	if err != nil {
+		return fmt.Errorf("error scanning, startOffset: %d, currentOffset: %d, err: %s", storedOffset, did, err)
+	}
+	if cnt > 0 {
+		log.Warnf("[done] %s, Offset: %d, took: %v for %d events, last flush: %v", s.Path, storedOffset, time.Since(t0), cnt, s.flushedAt.Format(time.Stamp))
+
+		GIANT.Lock()
+		s.dirty = true
+		s.Merge(temporary)
+		GIANT.Unlock()
+	}
+	return nil
 }
 
 func (s *Segment) Merge(o *Segment) {
@@ -67,22 +190,13 @@ type MemOnlyIndex struct {
 
 func NewMemOnlyIndex(Root string) *MemOnlyIndex {
 	m := &MemOnlyIndex{Root: Root, Segments: map[string]*Segment{}}
-	t0 := time.Now()
-	err := m.LoadFromDisk()
-	if err != nil {
-		log.WithError(err).Warnf("failed to load, starting from scratch")
-	} else {
-		log.Warnf("loaded from disk, took: %v", time.Since(t0))
-		m.PrintStats()
-	}
-
 	return m
 }
 func (m *MemOnlyIndex) PrintStats() {
 	GIANT.RLock()
 	defer GIANT.RUnlock()
 	keys := []string{}
-	for sid, _ := range m.Segments {
+	for sid := range m.Segments {
 		keys = append(keys, sid)
 	}
 	sort.Strings(keys)
@@ -98,68 +212,19 @@ func (m *MemOnlyIndex) PrintStats() {
 				size += len(postings) * 4
 			}
 		}
-		log.Warnf("segment %v, sizeMB: %d, terms: %d, types: %d", sid, size/1024/1024, terms, types)
+		log.Warnf("segment %v, sizeMB: %d, terms: %d, types: %d, last flush: %v", sid, size/1024/1024, terms, types, v.flushedAt.Format(time.Stamp))
 	}
 }
-func (m *MemOnlyIndex) LoadFromDisk() error {
-	fn := path.Join(m.Root, INVERTED_INDEX_FILE_NAME)
-	log.Warnf("loading %v", fn)
-	fo, err := os.OpenFile(fn, os.O_RDONLY, 0600)
-	if err != nil {
-		return err
-	}
-	defer fo.Close()
 
-	reader := msgp.NewReader(fo)
-
-	err = m.DecodeMsg(reader)
-	if err == nil {
-		for _, s := range m.Segments {
-			s.fw, err = disk.NewForwardWriter(s.Path, "main")
-			if err != nil {
-				return err
-			}
-		}
-	}
-	return err
-}
 func (m *MemOnlyIndex) toSegmentId(sid int64) string {
 	// because of msgp
 	return fmt.Sprintf("%d", sid)
 }
-func (m *MemOnlyIndex) DumpToDisk() error {
-	GIANT.RLock()
-	defer GIANT.RUnlock()
-	t0 := time.Now()
-	tmp := path.Join(m.Root, fmt.Sprintf("%s.tmp", INVERTED_INDEX_FILE_NAME))
-	fo, err := os.OpenFile(tmp, os.O_TRUNC|os.O_CREATE|os.O_RDWR, 0600)
-	if err != nil {
-		return err
-	}
-	defer fo.Close()
-	writer := msgp.NewWriter(fo)
-	err = m.EncodeMsg(writer)
-	if err != nil {
-		return err
-	}
 
-	err = writer.Flush()
-	if err != nil {
-		return err
-	}
-	current := path.Join(m.Root, INVERTED_INDEX_FILE_NAME)
-	err = os.Rename(tmp, current)
-	if err != nil {
-		return err
-	}
-	log.Warnf("storing took %v", time.Since(t0))
-	return nil
-}
-
-func (m *MemOnlyIndex) Refresh() error {
+func (m *MemOnlyIndex) ListSegments() ([]int64, error) {
 	days, err := ioutil.ReadDir(path.Join(m.Root))
 	if err != nil {
-		return err
+		return nil, err
 	}
 	todo := []int64{}
 	for _, day := range days {
@@ -176,7 +241,30 @@ func (m *MemOnlyIndex) Refresh() error {
 		t := time.Unix(int64(ts), 0).UTC()
 		todo = append(todo, depths.SegmentFromNs(t.UnixNano()))
 	}
+	sort.Slice(todo, func(i, j int) bool {
+		return todo[i] < todo[j]
+	})
+	return todo, nil
+}
 
+func (m *MemOnlyIndex) DumpToDisk() error {
+	GIANT.RLock()
+	defer GIANT.RUnlock()
+	for _, s := range m.Segments {
+		err := s.DumpToDisk()
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (m *MemOnlyIndex) Refresh() error {
+	todo, err := m.ListSegments()
+	if err != nil {
+		return err
+	}
 	wait := make(chan error)
 
 	maxReaders := runtime.GOMAXPROCS(0)
@@ -201,100 +289,29 @@ func (m *MemOnlyIndex) Refresh() error {
 }
 
 func (m *MemOnlyIndex) LoadSingleSegment(sid int64) error {
-	p := path.Join(m.Root, fmt.Sprintf("%d", sid))
-	segment := &Segment{Postings: map[string]map[string][]int32{}, Path: p}
-
-	GIANT.RLock()
-	oldSegment, ok := m.Segments[m.toSegmentId(sid)]
-	GIANT.RUnlock()
-
-	if ok {
-		segment.Offset = oldSegment.Offset
-		segment.fw = oldSegment.fw
-	}
-
-	if segment.fw == nil {
-		fw, err := disk.NewForwardWriter(p, "main")
-		if err != nil {
-			return err
-		}
-		segment.fw = fw
-	}
-
-	storedOffset := segment.Offset
-	did := uint32(storedOffset)
-	t0 := time.Now()
-	cnt := 0
-
-	err := segment.fw.Scan(uint32(storedOffset), func(Offset uint32, data []byte) error {
-		meta := spec.CondenseMetadata{}
-		err := proto.Unmarshal(data, &meta)
-		if err != nil {
-			return err
-		}
-
-		segment.Add(meta.ForeignType, meta.ForeignId, int32(did))
-		segment.Add("event_type", meta.EventType, int32(did))
-
-		for _, kv := range meta.Search {
-			segment.Add(kv.Key, kv.Value, int32(did))
-		}
-		for ex := range meta.Track {
-			segment.Add("__experiment", ex, int32(did))
-		}
-
-		did = Offset
-		segment.Offset = did
-		cnt++
-		return nil
-	})
-
-	if cnt > 0 || storedOffset == 0 {
-		log.Warnf("loading path: %s, Offset: %d, took: %v for %d events", p, storedOffset, time.Since(t0), cnt)
-	}
-	if err != nil {
-		return fmt.Errorf("error scanning, startOffset: %d, currentOffset: %d, err: %s", storedOffset, did, err)
-	}
-
-	// merge
-	GIANT.Lock()
-	oldSegment, ok = m.Segments[m.toSegmentId(sid)]
-	if !ok {
-		m.Segments[m.toSegmentId(sid)] = segment
-	} else {
-		oldSegment.Merge(segment)
-	}
-	GIANT.Unlock()
-	return nil
-}
-
-var errNotFound = errors.New("not found")
-
-func (m *MemOnlyIndex) ReadForward(sid int64, did int32) ([]byte, error) {
 	GIANT.RLock()
 	segment, ok := m.Segments[m.toSegmentId(sid)]
-	if !ok {
-		GIANT.RUnlock()
-		return nil, errNotFound
-	}
 	GIANT.RUnlock()
 
-	data, _, err := segment.fw.Read(uint32(did))
-	return data, err
-}
+	if !ok {
+		p := path.Join(m.Root, fmt.Sprintf("%d", sid))
+		segment = &Segment{Postings: map[string]map[string][]int32{}, Path: p, Offset: 0}
+		err := segment.LoadFromDisk()
+		if err != nil {
+			log.WithError(err).Warnf("error loading from disk, continuing anyway")
+		}
 
-func (m *MemOnlyIndex) ReadAndDecodeForward(sid int64, did int32) (*spec.Metadata, error) {
-	data, err := m.ReadForward(sid, did)
-	if err != nil {
-		return nil, err
-	}
-	out := &spec.Metadata{}
-	err = proto.Unmarshal(data, out)
-	if err != nil {
-		return nil, err
+		err = segment.OpenForwardIndex()
+		if err != nil {
+			return err
+		}
+
+		GIANT.Lock()
+		m.Segments[m.toSegmentId(sid)] = segment
+		GIANT.Unlock()
 	}
 
-	return out, nil
+	return segment.Refresh()
 }
 
 func (m *MemOnlyIndex) NewTermQuery(sid int64, tagKey string, tagValue string) iq.Query {
@@ -306,6 +323,7 @@ func (m *MemOnlyIndex) NewTermQuery(sid int64, tagKey string, tagValue string) i
 	GIANT.RLock()
 	segment, ok := m.Segments[m.toSegmentId(sid)]
 	if !ok {
+		// XXX: load segment on demand
 		GIANT.RUnlock()
 		return iq.Term(s, []int32{})
 	}
@@ -324,20 +342,31 @@ func (m *MemOnlyIndex) NewTermQuery(sid int64, tagKey string, tagValue string) i
 	return iq.Term(s, pv)
 }
 
-func (m *MemOnlyIndex) ForEach(qr *spec.SearchQueryRequest, limit uint32, cb func(int64, int32, float32)) error {
+func (m *MemOnlyIndex) ForEach(qr *spec.SearchQueryRequest, limit uint32, cb func(*Segment, int32, float32) error) error {
 	dates := depths.ExpandYYYYMMDD(qr.From, qr.To)
 	for _, date := range dates {
 		sid := depths.SegmentFromNs(date.UnixNano())
+
 		query, err := fromQuery(qr.Query, func(k, v string) iq.Query {
 			return m.NewTermQuery(sid, k, v)
 		})
 		if err != nil {
 			return err
 		}
+		GIANT.RLock()
+		segment, ok := m.Segments[m.toSegmentId(sid)]
+		GIANT.RUnlock()
+		if !ok {
+			continue
+		}
+
 		for query.Next() != iq.NO_MORE {
 			did := query.GetDocId()
 			score := query.Score()
-			cb(sid, did, score)
+			err = cb(segment, did, score)
+			if err != nil {
+				return err
+			}
 			if limit > 0 {
 				limit--
 				if limit == 0 {
@@ -350,84 +379,41 @@ func (m *MemOnlyIndex) ForEach(qr *spec.SearchQueryRequest, limit uint32, cb fun
 	return nil
 }
 
-type matching struct {
+type pieceOfWork struct {
+	s     *Segment
 	did   int32
 	score float32
-	m     *spec.Metadata
 }
 
-func (m *MemOnlyIndex) ForEachDecodeParallel(parallel int, qr *spec.SearchQueryRequest, limit int32, cb func(int32, *spec.Metadata, float32)) error {
-	dates := depths.ExpandYYYYMMDD(qr.From, qr.To)
-	l := log.WithField("limit", limit)
-	for _, date := range dates {
-		sid := depths.SegmentFromNs(date.UnixNano())
-		query, err := fromQuery(qr.Query, func(k, v string) iq.Query {
-			return m.NewTermQuery(sid, k, v)
-		})
-		if err != nil {
-			return err
-		}
-		l.Warnf("running query {%v} in segment: %s, with %d workers", query.String(), date, parallel)
+func (m *MemOnlyIndex) ForEachParallel(nWorkers int, qr *spec.SearchQueryRequest, limit uint32, cb func(int32, float32, []byte)) error {
+	// FIXME(jackdoe): productionize
+	work := make(chan pieceOfWork, nWorkers)
 
-		work := make(chan matching)
-		doneWorker := make(chan bool)
-		doneQuery := make(chan bool)
-		doneConsumer := make(chan bool)
-		completed := make(chan matching)
+	var wg sync.WaitGroup
 
-		for i := 0; i < parallel; i++ {
-			go func(sid int64) {
-				for w := range work {
-					m, err := m.ReadAndDecodeForward(sid, w.did)
-					if err != nil {
-						l.Warnf("failed to decode Offset %d, err: %s", w.did, err)
-						continue
-					}
-					w.m = m
-					completed <- w
-				}
-				doneWorker <- true
-			}(sid)
-		}
-
-		stopped := false
+	for i := 0; i < nWorkers; i++ {
+		wg.Add(1)
 		go func() {
-			for query.Next() != iq.NO_MORE {
-				did := query.GetDocId()
-				score := query.Score()
-				work <- matching{did: did, score: score, m: nil}
-				if limit > 0 {
-					limit--
-					if limit == 0 {
-						stopped = true
-						break
-					}
+			for w := range work {
+				data, err := w.s.ReadForward(w.did)
+				if err != nil {
+					// XXX: this can spam
+					log.WithError(err).Warnf("error reading did: %d", w.did)
+					continue
 				}
+				cb(w.did, w.score, data)
 			}
-			doneQuery <- true
+			wg.Done()
 		}()
-
-		go func() {
-			for matching := range completed {
-				cb(matching.did, matching.m, matching.score)
-			}
-			doneConsumer <- true
-		}()
-
-		<-doneQuery
-		close(work)
-
-		for i := 0; i < parallel; i++ {
-			<-doneWorker
-		}
-
-		close(completed)
-
-		<-doneConsumer
-		if stopped {
-			break
-		}
 	}
 
-	return nil
+	err := m.ForEach(qr, limit, func(s *Segment, did int32, score float32) error {
+		work <- pieceOfWork{s, did, score}
+		return nil
+	})
+	close(work)
+
+	wg.Wait()
+
+	return err
 }

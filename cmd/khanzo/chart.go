@@ -29,7 +29,7 @@ func NewChart(timebucket uint32, dates []time.Time) *Chart {
 	}
 }
 
-func (c *Chart) Add(m *spec.Metadata) {
+func (c *Chart) Add(m *spec.CountableMetadata) {
 	bucket := (uint32(m.CreatedAtNs/1000000000) / c.out.TimeBucketSec) * c.out.TimeBucketSec
 	perTime, ok := c.out.Buckets[bucket]
 	if !ok {
