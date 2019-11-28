@@ -238,7 +238,8 @@ func (m *MemOnlyIndex) LoadSingleSegment(sid int64) error {
 		cnt++
 		return nil
 	})
-	if cnt > 0 && storedOffset != 0 {
+
+	if cnt > 0 || storedOffset == 0 {
 		log.Warnf("loading path: %s, Offset: %d, took: %v for %d events", p, storedOffset, time.Since(t0), cnt)
 	}
 	if err != nil {
