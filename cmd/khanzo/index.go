@@ -102,7 +102,9 @@ func (m *MemOnlyIndex) PrintStats() {
 	}
 }
 func (m *MemOnlyIndex) LoadFromDisk() error {
-	fo, err := os.OpenFile(path.Join(m.Root, INVERTED_INDEX_FILE_NAME), os.O_RDONLY, 0600)
+	fn := path.Join(m.Root, INVERTED_INDEX_FILE_NAME)
+	log.Warnf("loading %v", fn)
+	fo, err := os.OpenFile(fn, os.O_RDONLY, 0600)
 	if err != nil {
 		return err
 	}
