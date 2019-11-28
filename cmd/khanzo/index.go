@@ -7,6 +7,7 @@ import (
 	"os"
 	"path"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -80,8 +81,13 @@ func NewMemOnlyIndex(Root string) *MemOnlyIndex {
 func (m *MemOnlyIndex) PrintStats() {
 	GIANT.RLock()
 	defer GIANT.RUnlock()
-
-	for sid, v := range m.Segments {
+	keys := []string{}
+	for sid, _ := range m.Segments {
+		keys = append(keys, sid)
+	}
+	sort.Strings(keys)
+	for _, sid := range keys {
+		v := m.Segments[sid]
 		terms := 0
 		types := 0
 		size := 0
