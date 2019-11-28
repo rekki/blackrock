@@ -85,6 +85,8 @@ func main() {
 	var bind = flag.String("bind", ":9002", "bind to")
 	var nworkers = flag.Int("n-workers-per-query", 20, "how many workers to fetch from disk")
 	var updateInterval = flag.Int("update-interval", 60, "searcher update interval")
+
+	var storeInterval = flag.Int("store-interval", 3600, "store interval")
 	flag.Parse()
 
 	if *verbose {
@@ -109,6 +111,11 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	err = memIndex.DumpToDisk()
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	go func() {
 		for {
 			time.Sleep(time.Duration(*updateInterval) * time.Second)
@@ -116,9 +123,21 @@ func main() {
 			if err != nil {
 				log.Fatal(err)
 			}
+			memIndex.PrintStats()
+		}
+	}()
+
+	go func() {
+		for {
+			time.Sleep(time.Duration(*storeInterval) * time.Second)
+			err = memIndex.DumpToDisk()
+			if err != nil {
+				log.Fatal(err)
+			}
 
 		}
 	}()
+
 	r := gin.Default()
 
 	r.Use(cors.Default())

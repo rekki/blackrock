@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"os"
 	"path"
 	"runtime"
 	"strconv"
@@ -17,53 +18,127 @@ import (
 	"github.com/rekki/blackrock/cmd/orgrim/spec"
 	"github.com/rekki/blackrock/pkg/depths"
 	log "github.com/sirupsen/logrus"
+	"github.com/tinylib/msgp/msgp"
 )
 
+var GIANT = sync.RWMutex{}
+
+//go:generate msgp -tests=false
 type Segment struct {
-	postings map[string]map[string][]int32
+	Postings map[string]map[string][]int32
+	Offset   uint32
 	fw       *disk.ForwardWriter
-	offset   uint32
-	sync.RWMutex
 }
 
 func (s *Segment) Merge(o *Segment) {
-	s.offset = o.offset
-	for k, pv := range o.postings {
+	s.Offset = o.Offset
+	for k, pv := range o.Postings {
 		for v, p := range pv {
 			s.AddMany(k, v, p)
 		}
 	}
 }
 func (s *Segment) Add(k, v string, did int32) {
-	pk, ok := s.postings[k]
+	pk, ok := s.Postings[k]
 	if !ok {
 		pk = map[string][]int32{}
-		s.postings[k] = pk
+		s.Postings[k] = pk
 	}
 	pk[v] = append(pk[v], did)
 }
 
 func (s *Segment) AddMany(k, v string, did []int32) {
-	pk, ok := s.postings[k]
+	pk, ok := s.Postings[k]
 	if !ok {
 		pk = map[string][]int32{}
-		s.postings[k] = pk
+		s.Postings[k] = pk
 	}
 	pk[v] = append(pk[v], did...)
 }
 
 type MemOnlyIndex struct {
-	root     string
-	segments map[int64]*Segment
-	sync.RWMutex
+	Root     string
+	Segments map[string]*Segment
 }
 
-func NewMemOnlyIndex(root string) *MemOnlyIndex {
-	return &MemOnlyIndex{root: root, segments: map[int64]*Segment{}}
+func NewMemOnlyIndex(Root string) *MemOnlyIndex {
+	m := &MemOnlyIndex{Root: Root, Segments: map[string]*Segment{}}
+	t0 := time.Now()
+	err := m.LoadFromDisk()
+	if err != nil {
+		log.WithError(err).Warnf("failed to load, starting from scratch")
+	} else {
+		log.Warnf("loaded from disk, took: %v", time.Since(t0))
+		m.PrintStats()
+	}
+
+	return m
+}
+func (m *MemOnlyIndex) PrintStats() {
+	GIANT.RLock()
+	defer GIANT.RUnlock()
+
+	for sid, v := range m.Segments {
+		terms := 0
+		types := 0
+		size := 0
+		for _, pk := range v.Postings {
+			types++
+			for _, postings := range pk {
+				terms++
+				size += len(postings) * 4
+			}
+		}
+		log.Warnf("segment %v, sizeMB: %d, terms: %d, types: %d", sid, size/1024/1024, terms, types)
+	}
+}
+func (m *MemOnlyIndex) LoadFromDisk() error {
+	fo, err := os.OpenFile(path.Join(m.Root, "inverted.current"), os.O_RDONLY, 0600)
+	if err != nil {
+		return err
+	}
+	defer fo.Close()
+
+	reader := msgp.NewReader(fo)
+
+	err = m.DecodeMsg(reader)
+	return err
+}
+func (m *MemOnlyIndex) toSegmentId(sid int64) string {
+	// because of msgp
+	return fmt.Sprintf("%d", sid)
+}
+func (m *MemOnlyIndex) DumpToDisk() error {
+	GIANT.RLock()
+	defer GIANT.RUnlock()
+	t0 := time.Now()
+	tmp := path.Join(m.Root, "inverted.tmp")
+	fo, err := os.OpenFile(tmp, os.O_TRUNC|os.O_CREATE|os.O_RDWR, 0600)
+	if err != nil {
+		return err
+	}
+	defer fo.Close()
+	writer := msgp.NewWriter(fo)
+	err = m.EncodeMsg(writer)
+	if err != nil {
+		return err
+	}
+
+	err = writer.Flush()
+	if err != nil {
+		return err
+	}
+	current := path.Join(m.Root, "inverted.current")
+	err = os.Rename(tmp, current)
+	if err != nil {
+		return err
+	}
+	log.Warnf("storing took %v", time.Since(t0))
+	return nil
 }
 
 func (m *MemOnlyIndex) Refresh() error {
-	days, err := ioutil.ReadDir(path.Join(m.root))
+	days, err := ioutil.ReadDir(path.Join(m.Root))
 	if err != nil {
 		return err
 	}
@@ -107,15 +182,15 @@ func (m *MemOnlyIndex) Refresh() error {
 }
 
 func (m *MemOnlyIndex) LoadSingleSegment(sid int64) error {
-	p := path.Join(m.root, fmt.Sprintf("%d", sid))
-	segment := &Segment{postings: map[string]map[string][]int32{}}
+	p := path.Join(m.Root, fmt.Sprintf("%d", sid))
+	segment := &Segment{Postings: map[string]map[string][]int32{}}
 
-	m.RLock()
-	oldSegment, ok := m.segments[sid]
-	m.RUnlock()
+	GIANT.RLock()
+	oldSegment, ok := m.Segments[m.toSegmentId(sid)]
+	GIANT.RUnlock()
 
 	if ok {
-		segment.offset = oldSegment.offset
+		segment.Offset = oldSegment.Offset
 		segment.fw = oldSegment.fw
 	}
 
@@ -127,12 +202,12 @@ func (m *MemOnlyIndex) LoadSingleSegment(sid int64) error {
 		segment.fw = fw
 	}
 
-	storedOffset := segment.offset
+	storedOffset := segment.Offset
 	did := uint32(storedOffset)
 	t0 := time.Now()
 	cnt := 0
 
-	err := segment.fw.Scan(uint32(storedOffset), func(offset uint32, data []byte) error {
+	err := segment.fw.Scan(uint32(storedOffset), func(Offset uint32, data []byte) error {
 		meta := spec.CondenseMetadata{}
 		err := proto.Unmarshal(data, &meta)
 		if err != nil {
@@ -149,41 +224,39 @@ func (m *MemOnlyIndex) LoadSingleSegment(sid int64) error {
 			segment.Add("__experiment", ex, int32(did))
 		}
 
-		did = offset
-		segment.offset = did
+		did = Offset
+		segment.Offset = did
 		cnt++
 		return nil
 	})
 
-	log.Warnf("loading path: %s, offset: %d, took: %v for %d events", p, storedOffset, time.Since(t0), cnt)
+	log.Warnf("loading path: %s, Offset: %d, took: %v for %d events", p, storedOffset, time.Since(t0), cnt)
 	if err != nil {
 		return fmt.Errorf("error scanning, startOffset: %d, currentOffset: %d, err: %s", storedOffset, did, err)
 	}
 
 	// merge
-	m.Lock()
-	oldSegment, ok = m.segments[sid]
+	GIANT.Lock()
+	oldSegment, ok = m.Segments[m.toSegmentId(sid)]
 	if !ok {
-		m.segments[sid] = segment
+		m.Segments[m.toSegmentId(sid)] = segment
 	} else {
-		oldSegment.Lock()
 		oldSegment.Merge(segment)
-		oldSegment.Unlock()
 	}
-	m.Unlock()
+	GIANT.Unlock()
 	return nil
 }
 
 var errNotFound = errors.New("not found")
 
 func (m *MemOnlyIndex) ReadForward(sid int64, did int32) ([]byte, error) {
-	m.RLock()
-	segment, ok := m.segments[sid]
+	GIANT.RLock()
+	segment, ok := m.Segments[m.toSegmentId(sid)]
 	if !ok {
-		m.RUnlock()
+		GIANT.RUnlock()
 		return nil, errNotFound
 	}
-	m.RUnlock()
+	GIANT.RUnlock()
 
 	data, _, err := segment.fw.Read(uint32(did))
 	return data, err
@@ -209,24 +282,24 @@ func (m *MemOnlyIndex) NewTermQuery(sid int64, tagKey string, tagValue string) i
 
 	s := fmt.Sprintf("%s:%s", tagKey, tagValue)
 
-	m.RLock()
-	segment, ok := m.segments[sid]
+	GIANT.RLock()
+	segment, ok := m.Segments[m.toSegmentId(sid)]
 	if !ok {
-		m.RUnlock()
+		GIANT.RUnlock()
 		return iq.Term(s, []int32{})
 	}
-	m.RUnlock()
 
-	segment.RLock()
-	defer segment.RUnlock()
-	pk, ok := segment.postings[tagKey]
+	pk, ok := segment.Postings[tagKey]
 	if !ok {
+		GIANT.RUnlock()
 		return iq.Term(s, []int32{})
 	}
 	pv, ok := pk[tagValue]
 	if !ok {
+		GIANT.RUnlock()
 		return iq.Term(s, []int32{})
 	}
+	GIANT.RUnlock()
 	return iq.Term(s, pv)
 }
 
@@ -286,7 +359,7 @@ func (m *MemOnlyIndex) ForEachDecodeParallel(parallel int, qr *spec.SearchQueryR
 				for w := range work {
 					m, err := m.ReadAndDecodeForward(sid, w.did)
 					if err != nil {
-						l.Warnf("failed to decode offset %d, err: %s", w.did, err)
+						l.Warnf("failed to decode Offset %d, err: %s", w.did, err)
 						continue
 					}
 					w.m = m
