@@ -23,6 +23,8 @@ import (
 
 var GIANT = sync.RWMutex{}
 
+const INVERTED_INDEX_FILE_NAME = "inverted.current.v2"
+
 //go:generate msgp -tests=false
 type Segment struct {
 	Path     string
@@ -94,7 +96,7 @@ func (m *MemOnlyIndex) PrintStats() {
 	}
 }
 func (m *MemOnlyIndex) LoadFromDisk() error {
-	fo, err := os.OpenFile(path.Join(m.Root, "inverted.current.v2"), os.O_RDONLY, 0600)
+	fo, err := os.OpenFile(path.Join(m.Root, INVERTED_INDEX_FILE_NAME), os.O_RDONLY, 0600)
 	if err != nil {
 		return err
 	}
@@ -121,7 +123,7 @@ func (m *MemOnlyIndex) DumpToDisk() error {
 	GIANT.RLock()
 	defer GIANT.RUnlock()
 	t0 := time.Now()
-	tmp := path.Join(m.Root, "inverted.tmp")
+	tmp := path.Join(m.Root, fmt.Sprintf("%s.tmp", INVERTED_INDEX_FILE_NAME))
 	fo, err := os.OpenFile(tmp, os.O_TRUNC|os.O_CREATE|os.O_RDWR, 0600)
 	if err != nil {
 		return err
@@ -137,7 +139,7 @@ func (m *MemOnlyIndex) DumpToDisk() error {
 	if err != nil {
 		return err
 	}
-	current := path.Join(m.Root, "inverted.current.v2")
+	current := path.Join(m.Root, INVERTED_INDEX_FILE_NAME)
 	err = os.Rename(tmp, current)
 	if err != nil {
 		return err
