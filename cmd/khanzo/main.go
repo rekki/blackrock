@@ -115,7 +115,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-
+	memIndex.PrintStats()
 	go func() {
 		for {
 			time.Sleep(time.Duration(*updateInterval) * time.Second)
@@ -123,7 +123,6 @@ func main() {
 			if err != nil {
 				log.Fatal(err)
 			}
-			memIndex.PrintStats()
 		}
 	}()
 
@@ -134,7 +133,7 @@ func main() {
 			if err != nil {
 				log.Fatal(err)
 			}
-
+			memIndex.PrintStats()
 		}
 	}()
 
