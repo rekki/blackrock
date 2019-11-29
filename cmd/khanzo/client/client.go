@@ -23,13 +23,13 @@ type ErrorBody struct {
 	Error string `json:"error"`
 }
 
-func tryParseError(data []byte) error {
+func tryParseError(code int, status string, data []byte) error {
 	e := &ErrorBody{}
 	err := json.Unmarshal(data, e)
-	if err == nil {
+	if err == nil && e.Error != "" {
 		return errors.New(e.Error)
 	} else {
-		return errors.New(string(data))
+		return fmt.Errorf("error code: %d, status: %s, body: %s", code, status, string(data))
 	}
 }
 
@@ -119,7 +119,7 @@ func (c *Client) Aggregate(query *spec.AggregateRequest) (*spec.Aggregate, error
 	}
 
 	if resp.StatusCode != 200 {
-		return nil, tryParseError(data)
+		return nil, tryParseError(resp.StatusCode, resp.Status, data)
 	}
 	agg := &spec.Aggregate{}
 	err = proto.Unmarshal(data, agg)
@@ -152,7 +152,7 @@ func (c *Client) Search(query *spec.SearchQueryRequest) (*spec.SearchQueryRespon
 		return nil, err
 	}
 	if resp.StatusCode != 200 {
-		return nil, tryParseError(data)
+		return nil, tryParseError(resp.StatusCode, resp.Status, data)
 	}
 
 	err = proto.Unmarshal(data, sq)
@@ -226,27 +226,13 @@ func merge(into *spec.Aggregate, from *spec.Aggregate) *spec.Aggregate {
 		return from
 	}
 
-	/*
-		message CountPerKV {
-		        map<string, uint32> count = 1;
-		        uint32 total = 2;
-		        string key = 3;
-		}
-
-		message Aggregate {
-		        map<string, CountPerKV> search = 1;
-		        map<string, CountPerKV> count = 2;
-		        map<string, CountPerKV> foreign_id = 3;
-		        map<string, CountPerKV> event_type = 4;
-		        map<string, uint32> possible = 6;
-		        uint32 total = 5;
-		}
-	*/
-
 	into.Total += from.Total
-
-	for k, v := range from.Possible {
-		into.Possible[k] += v
+	if into.Possible == nil {
+		into.Possible = from.Possible
+	} else {
+		for k, v := range from.Possible {
+			into.Possible[k] += v
+		}
 	}
 
 	into.Search = mergeMapCountKV(into.Search, from.Search)
