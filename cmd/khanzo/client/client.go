@@ -162,10 +162,15 @@ func (c *Client) Search(query *spec.SearchQueryRequest) (*spec.SearchQueryRespon
 	return sq, nil
 }
 
+type aggregateAndError struct {
+	a   *spec.Aggregate
+	err error
+}
+
 func (c *Client) AggregateCoordinate(qr *spec.AggregateRequest) (*spec.Aggregate, error) {
 	dates := depths.ExpandYYYYMMDD(qr.Query.From, qr.Query.To)
 
-	done := make(chan *spec.Aggregate)
+	done := make(chan aggregateAndError)
 	for _, date := range dates {
 		go func(date time.Time) {
 			modifiedQueryRequest := *qr
@@ -181,14 +186,18 @@ func (c *Client) AggregateCoordinate(qr *spec.AggregateRequest) (*spec.Aggregate
 				log.WithError(err).Warnf("failed to execute query on segment: %v", date)
 				out = &spec.Aggregate{}
 			}
-			done <- out
+			done <- aggregateAndError{out, err}
 		}(date)
 	}
 
 	var merged *spec.Aggregate
+	var err error
 	for range dates {
 		current := <-done
-		merged = merge(merged, current)
+		merged = merge(merged, current.a)
+		if current.err != nil {
+			err = current.err
+		}
 	}
 	sort.Slice(merged.Sample, func(i, j int) bool {
 		return merged.Sample[i].Metadata.CreatedAtNs < merged.Sample[j].Metadata.CreatedAtNs
@@ -196,7 +205,7 @@ func (c *Client) AggregateCoordinate(qr *spec.AggregateRequest) (*spec.Aggregate
 	if len(merged.Sample) > int(qr.SampleLimit) {
 		merged.Sample = merged.Sample[:qr.SampleLimit]
 	}
-	return merged, nil
+	return merged, err
 }
 
 func mergeMapCountKV(into map[string]*spec.CountPerKV, from map[string]*spec.CountPerKV) map[string]*spec.CountPerKV {
