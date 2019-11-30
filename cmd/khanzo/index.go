@@ -56,13 +56,13 @@ func (s *Segment) ReadForwardDecode(did int32, m proto.Message) error {
 
 func (s *Segment) LoadFromDisk() error {
 	fn := path.Join(s.Path, INVERTED_INDEX_FILE_NAME)
-	log.Warnf("loading %v", fn)
 	fo, err := os.OpenFile(fn, os.O_RDONLY, 0600)
 	if err != nil {
 		return err
 	}
 	defer fo.Close()
 
+	log.Infof("loading %v", fn)
 	reader := msgp.NewReader(fo)
 	err = s.DecodeMsg(reader)
 	if err != nil {
@@ -107,7 +107,7 @@ func (s *Segment) DumpToDisk() error {
 	if err != nil {
 		return err
 	}
-	log.Warnf("[done] %s storing took %v, last flush: %v", s.Path, time.Since(t0), s.flushedAt.Format(time.Stamp))
+	log.Warnf("[done] %s storing took %v", s.Path, time.Since(t0))
 	s.dirty = false
 	s.flushedAt = time.Now()
 	return nil
@@ -147,7 +147,7 @@ func (s *Segment) Refresh() error {
 		return fmt.Errorf("error scanning, startOffset: %d, currentOffset: %d, err: %s", storedOffset, did, err)
 	}
 	if cnt > 0 {
-		log.Warnf("[done] %s, Offset: %d, took: %v for %d events, last flush: %v", s.Path, storedOffset, time.Since(t0), cnt, s.flushedAt.Format(time.Stamp))
+		log.Warnf("[done] %s, Offset: %d, took: %v for %d events", s.Path, storedOffset, time.Since(t0), cnt)
 
 		GIANT.Lock()
 		s.dirty = true
@@ -212,7 +212,7 @@ func (m *MemOnlyIndex) PrintStats() {
 				size += 8 + (len(postings) * 4)
 			}
 		}
-		log.Warnf("segment %v, size: %dMB, terms: %d, types: %d, last flush: %v", sid, size/1024/1024, terms, types, v.flushedAt.Format(time.Stamp))
+		log.Warnf("segment %v, size: %02fMB, terms: %d, types: %d, dirty: %v", sid, float32(size)/1024/1024, terms, types, v.dirty)
 	}
 }
 
@@ -271,8 +271,8 @@ func (m *MemOnlyIndex) Refresh(store bool) error {
 	var sem = make(chan bool, maxReaders)
 	for _, sid := range todo {
 		sem <- true
-		go func(sid int64) {
-			s, err := m.LoadSingleSegment(sid)
+		go func(segmentId int64) {
+			s, err := m.LoadSingleSegment(segmentId)
 			if err != nil {
 				panic(err)
 			}
@@ -303,7 +303,7 @@ func (m *MemOnlyIndex) LoadSingleSegment(sid int64) (*Segment, error) {
 		p := path.Join(m.Root, fmt.Sprintf("%d", sid))
 		segment = &Segment{Postings: map[string]map[string][]int32{}, Path: p, Offset: 0}
 		err := segment.LoadFromDisk()
-		if err != nil {
+		if err != nil && !os.IsNotExist(err) {
 			log.WithError(err).Warnf("error loading from disk, continuing anyway")
 		}
 
