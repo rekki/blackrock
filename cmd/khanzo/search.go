@@ -18,7 +18,11 @@ func fromQuery(input *spec.Query, makeTermQuery func(string, string) iq.Query) (
 		if input.Key == "" {
 			return nil, fmt.Errorf("missing tag, %v", input)
 		}
-		return makeTermQuery(input.Key, input.Value), nil
+		t := makeTermQuery(input.Key, input.Value)
+		if input.Boost > 0 {
+			t.SetBoost(input.Boost)
+		}
+		return t, nil
 	}
 	queries := []iq.Query{}
 	for _, q := range input.Queries {
@@ -43,6 +47,9 @@ func fromQuery(input *spec.Query, makeTermQuery func(string, string) iq.Query) (
 				return queries[0], nil
 			}
 		}
+		if input.Boost > 0 {
+			and.SetBoost(input.Boost)
+		}
 
 		return and, nil
 	}
@@ -54,8 +61,12 @@ func fromQuery(input *spec.Query, makeTermQuery func(string, string) iq.Query) (
 		if len(queries) == 1 {
 			return queries[0], nil
 		}
+		or := iq.Or(queries...)
+		if input.Boost > 0 {
+			or.SetBoost(input.Boost)
+		}
 
-		return iq.Or(queries...), nil
+		return or, nil
 	}
 
 	if input.Type == spec.Query_DISMAX {
@@ -66,7 +77,12 @@ func fromQuery(input *spec.Query, makeTermQuery func(string, string) iq.Query) (
 			return queries[0], nil
 		}
 
-		return iq.DisMax(input.Tiebreaker, queries...), nil
+		d := iq.DisMax(input.Tiebreaker, queries...)
+		if input.Boost > 0 {
+			d.SetBoost(input.Boost)
+		}
+
+		return d, nil
 	}
 
 	return nil, fmt.Errorf("unknown type %v", input)

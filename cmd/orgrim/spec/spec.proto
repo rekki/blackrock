@@ -74,6 +74,7 @@ message Query {
         string value = 4;
         Query not = 5;
         float tiebreaker = 6;
+        float boost = 7;
 }
 
 message SearchQueryRequest {
