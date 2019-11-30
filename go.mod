@@ -8,7 +8,7 @@ require (
 	github.com/gin-gonic/gin v1.5.0
 	github.com/gofrs/flock v0.7.1
 	github.com/gogo/protobuf v1.3.1
-	github.com/jackdoe/go-query v0.0.0-20191129004034-ea0e136d117d
+	github.com/jackdoe/go-query v0.0.0-20191130172240-8f6240b6074c
 	github.com/mcuadros/go-gin-prometheus v0.1.0
 	github.com/mssola/user_agent v0.5.0
 	github.com/oschwald/geoip2-golang v1.3.0

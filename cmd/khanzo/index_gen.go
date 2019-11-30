@@ -344,6 +344,12 @@ func (z *Segment) DecodeMsg(dc *msgp.Reader) (err error) {
 				err = msgp.WrapError(err, "Offset")
 				return
 			}
+		case "TotalDocs":
+			z.TotalDocs, err = dc.ReadInt()
+			if err != nil {
+				err = msgp.WrapError(err, "TotalDocs")
+				return
+			}
 		default:
 			err = dc.Skip()
 			if err != nil {
@@ -357,9 +363,9 @@ func (z *Segment) DecodeMsg(dc *msgp.Reader) (err error) {
 
 // EncodeMsg implements msgp.Encodable
 func (z *Segment) EncodeMsg(en *msgp.Writer) (err error) {
-	// map header, size 3
+	// map header, size 4
 	// write "Path"
-	err = en.Append(0x83, 0xa4, 0x50, 0x61, 0x74, 0x68)
+	err = en.Append(0x84, 0xa4, 0x50, 0x61, 0x74, 0x68)
 	if err != nil {
 		return
 	}
@@ -419,15 +425,25 @@ func (z *Segment) EncodeMsg(en *msgp.Writer) (err error) {
 		err = msgp.WrapError(err, "Offset")
 		return
 	}
+	// write "TotalDocs"
+	err = en.Append(0xa9, 0x54, 0x6f, 0x74, 0x61, 0x6c, 0x44, 0x6f, 0x63, 0x73)
+	if err != nil {
+		return
+	}
+	err = en.WriteInt(z.TotalDocs)
+	if err != nil {
+		err = msgp.WrapError(err, "TotalDocs")
+		return
+	}
 	return
 }
 
 // MarshalMsg implements msgp.Marshaler
 func (z *Segment) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	// map header, size 3
+	// map header, size 4
 	// string "Path"
-	o = append(o, 0x83, 0xa4, 0x50, 0x61, 0x74, 0x68)
+	o = append(o, 0x84, 0xa4, 0x50, 0x61, 0x74, 0x68)
 	o = msgp.AppendString(o, z.Path)
 	// string "Postings"
 	o = append(o, 0xa8, 0x50, 0x6f, 0x73, 0x74, 0x69, 0x6e, 0x67, 0x73)
@@ -446,6 +462,9 @@ func (z *Segment) MarshalMsg(b []byte) (o []byte, err error) {
 	// string "Offset"
 	o = append(o, 0xa6, 0x4f, 0x66, 0x66, 0x73, 0x65, 0x74)
 	o = msgp.AppendUint32(o, z.Offset)
+	// string "TotalDocs"
+	o = append(o, 0xa9, 0x54, 0x6f, 0x74, 0x61, 0x6c, 0x44, 0x6f, 0x63, 0x73)
+	o = msgp.AppendInt(o, z.TotalDocs)
 	return
 }
 
@@ -546,6 +565,12 @@ func (z *Segment) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "Offset")
 				return
 			}
+		case "TotalDocs":
+			z.TotalDocs, bts, err = msgp.ReadIntBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "TotalDocs")
+				return
+			}
 		default:
 			bts, err = msgp.Skip(bts)
 			if err != nil {
@@ -573,6 +598,6 @@ func (z *Segment) Msgsize() (s int) {
 			}
 		}
 	}
-	s += 7 + msgp.Uint32Size
+	s += 7 + msgp.Uint32Size + 10 + msgp.IntSize
 	return
 }

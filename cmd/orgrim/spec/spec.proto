@@ -62,16 +62,18 @@ message Hit {
 }
 
 message Query {
-        repeated Query sub = 1;
+        repeated Query queries = 1;
         enum Type {
         TERM = 0;
         AND = 1;
         OR = 2;
+        DISMAX = 3;
         }
         Type type = 2;
-        string tag = 3;
+        string key = 3;
         string value = 4;
         Query not = 5;
+        float tiebreaker = 6;
 }
 
 message SearchQueryRequest {

@@ -173,7 +173,7 @@ func main() {
 					hit.Id = uint64(did) + 1
 				}
 				hit.Metadata = &m
-
+				hit.Score = score
 				if len(scored) < int(qr.Limit) {
 					scored = append(scored, hit)
 				}

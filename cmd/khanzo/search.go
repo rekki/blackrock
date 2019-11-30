@@ -12,16 +12,16 @@ func fromQuery(input *spec.Query, makeTermQuery func(string, string) iq.Query) (
 		return nil, fmt.Errorf("nil input")
 	}
 	if input.Type == spec.Query_TERM {
-		if input.Not != nil || len(input.Sub) != 0 {
+		if input.Not != nil || len(input.Queries) != 0 {
 			return nil, fmt.Errorf("term queries can have only tag and value, %v", input)
 		}
-		if input.Tag == "" {
+		if input.Key == "" {
 			return nil, fmt.Errorf("missing tag, %v", input)
 		}
-		return makeTermQuery(input.Tag, input.Value), nil
+		return makeTermQuery(input.Key, input.Value), nil
 	}
 	queries := []iq.Query{}
-	for _, q := range input.Sub {
+	for _, q := range input.Queries {
 		p, err := fromQuery(q, makeTermQuery)
 		if err != nil {
 			return nil, err
@@ -56,6 +56,17 @@ func fromQuery(input *spec.Query, makeTermQuery func(string, string) iq.Query) (
 		}
 
 		return iq.Or(queries...), nil
+	}
+
+	if input.Type == spec.Query_DISMAX {
+		if input.Not != nil {
+			return nil, fmt.Errorf("or queries cant have 'not' value, %v", input)
+		}
+		if len(queries) == 1 {
+			return queries[0], nil
+		}
+
+		return iq.DisMax(input.Tiebreaker, queries...), nil
 	}
 
 	return nil, fmt.Errorf("unknown type %v", input)

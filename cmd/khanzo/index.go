@@ -23,13 +23,14 @@ import (
 
 var GIANT = sync.RWMutex{}
 
-const INVERTED_INDEX_FILE_NAME = "inverted.current.v4"
+const INVERTED_INDEX_FILE_NAME = "inverted.current.v5"
 
 //go:generate msgp -tests=false
 type Segment struct {
 	Path      string
 	Postings  map[string]map[string][]int32
 	Offset    uint32
+	TotalDocs int
 	fw        *disk.ForwardWriter
 	dirty     bool
 	flushedAt time.Time
@@ -61,13 +62,15 @@ func (s *Segment) LoadFromDisk() error {
 		return err
 	}
 	defer fo.Close()
+	t0 := time.Now()
 
-	log.Infof("loading %v", fn)
 	reader := msgp.NewReader(fo)
 	err = s.DecodeMsg(reader)
 	if err != nil {
 		return err
 	}
+
+	log.Warnf("[done] loading %v, took: %v", fn, time.Since(t0))
 	return nil
 }
 
@@ -118,7 +121,7 @@ func (s *Segment) Refresh() error {
 	did := uint32(storedOffset)
 	t0 := time.Now()
 	cnt := 0
-	temporary := &Segment{Postings: map[string]map[string][]int32{}, Offset: s.Offset}
+	temporary := &Segment{Postings: map[string]map[string][]int32{}, Offset: s.Offset, TotalDocs: s.TotalDocs}
 
 	err := s.fw.Scan(uint32(storedOffset), func(offset uint32, data []byte) error {
 		meta := spec.SearchableMetadata{}
@@ -139,6 +142,7 @@ func (s *Segment) Refresh() error {
 
 		did = offset
 		temporary.Offset = did
+		temporary.TotalDocs++
 		cnt++
 		return nil
 	})
@@ -159,6 +163,7 @@ func (s *Segment) Refresh() error {
 
 func (s *Segment) Merge(o *Segment) {
 	s.Offset = o.Offset
+	s.TotalDocs = o.TotalDocs
 	for k, pv := range o.Postings {
 		for v, p := range pv {
 			s.AddMany(k, v, p)
@@ -212,7 +217,7 @@ func (m *MemOnlyIndex) PrintStats() {
 				size += 8 + (len(postings) * 4)
 			}
 		}
-		log.Warnf("segment %v, size: %02fMB, terms: %d, types: %d, dirty: %v", sid, float32(size)/1024/1024, terms, types, v.dirty)
+		log.Warnf("segment %v, #docs: %d, invsize: %02fMB, terms: %d, types: %d, dirty: %v", sid, v.TotalDocs, float32(size)/1024/1024, terms, types, v.dirty)
 	}
 }
 
@@ -331,21 +336,21 @@ func (m *MemOnlyIndex) NewTermQuery(sid int64, tagKey string, tagValue string) i
 	if !ok {
 		// XXX: load segment on demand
 		GIANT.RUnlock()
-		return iq.Term(s, []int32{})
+		return iq.Term(segment.TotalDocs, s, []int32{})
 	}
 
 	pk, ok := segment.Postings[tagKey]
 	if !ok {
 		GIANT.RUnlock()
-		return iq.Term(s, []int32{})
+		return iq.Term(segment.TotalDocs, s, []int32{})
 	}
 	pv, ok := pk[tagValue]
 	if !ok {
 		GIANT.RUnlock()
-		return iq.Term(s, []int32{})
+		return iq.Term(segment.TotalDocs, s, []int32{})
 	}
 	GIANT.RUnlock()
-	return iq.Term(s, pv)
+	return iq.Term(segment.TotalDocs, s, pv)
 }
 
 func (m *MemOnlyIndex) ForEach(qr *spec.SearchQueryRequest, limit uint32, cb func(*Segment, int32, float32) error) error {

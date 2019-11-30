@@ -52,6 +52,8 @@ github.com/jackdoe/go-query v0.0.0-20191128235708-ca0d915f466e h1:QZD8OpMG2txFj2
 github.com/jackdoe/go-query v0.0.0-20191128235708-ca0d915f466e/go.mod h1:1Sz4WYjh1mRnISP4fEq4Tg8SgwF5vzfaZjCQKasABQM=
 github.com/jackdoe/go-query v0.0.0-20191129004034-ea0e136d117d h1:dwB9bBeQtc9xe978GuW/SSdRB5siOY6+T9sMznYZgS4=
 github.com/jackdoe/go-query v0.0.0-20191129004034-ea0e136d117d/go.mod h1:1Sz4WYjh1mRnISP4fEq4Tg8SgwF5vzfaZjCQKasABQM=
+github.com/jackdoe/go-query v0.0.0-20191130172240-8f6240b6074c h1:Z8BNAlzIW3CVnP0wObLZYE29tdUe75rMfn7OWU/YZT8=
+github.com/jackdoe/go-query v0.0.0-20191130172240-8f6240b6074c/go.mod h1:1Sz4WYjh1mRnISP4fEq4Tg8SgwF5vzfaZjCQKasABQM=
 github.com/json-iterator/go v1.1.6/go.mod h1:+SdeFBvtyEkXs7REEP0seUULqWtbJapLOCVDaaPEHmU=
 github.com/json-iterator/go v1.1.7 h1:KfgG9LzI+pYjr4xvmz/5H4FXjokeP+rlHLhv3iH62Fo=
 github.com/json-iterator/go v1.1.7/go.mod h1:KdQUCv79m/52Kvf8AW2vK1V8akMuk1QjK/uOdHXbAo4=
