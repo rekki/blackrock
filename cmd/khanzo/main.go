@@ -100,11 +100,7 @@ func main() {
 	}
 
 	memIndex := NewMemOnlyIndex(root)
-	err = memIndex.Refresh()
-	if err != nil {
-		log.Fatal(err)
-	}
-	err = memIndex.DumpToDisk()
+	err = memIndex.Refresh(true)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -112,7 +108,7 @@ func main() {
 	go func() {
 		for {
 			time.Sleep(time.Duration(*updateInterval) * time.Second)
-			err = memIndex.Refresh()
+			err = memIndex.Refresh(false)
 			if err != nil {
 				log.Fatal(err)
 			}

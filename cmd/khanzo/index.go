@@ -260,35 +260,41 @@ func (m *MemOnlyIndex) DumpToDisk() error {
 	return nil
 }
 
-func (m *MemOnlyIndex) Refresh() error {
+func (m *MemOnlyIndex) Refresh(store bool) error {
 	todo, err := m.ListSegments()
 	if err != nil {
 		return err
 	}
-	wait := make(chan error)
+	wait := make(chan bool)
 
 	maxReaders := runtime.GOMAXPROCS(0)
 	var sem = make(chan bool, maxReaders)
 	for _, sid := range todo {
 		sem <- true
 		go func(sid int64) {
-			err := m.LoadSingleSegment(sid)
+			s, err := m.LoadSingleSegment(sid)
+			if err != nil {
+				panic(err)
+			}
+			if store {
+				err := s.DumpToDisk()
+				if err != nil {
+					panic(err)
+				}
+			}
+
 			<-sem
-			wait <- err
+			wait <- true
 		}(sid)
 	}
 
 	for range todo {
-		err := <-wait
-		if err != nil {
-			// XXX: abandon everything, we panic anyway
-			return err
-		}
+		<-wait
 	}
 	return nil
 }
 
-func (m *MemOnlyIndex) LoadSingleSegment(sid int64) error {
+func (m *MemOnlyIndex) LoadSingleSegment(sid int64) (*Segment, error) {
 	GIANT.RLock()
 	segment, ok := m.Segments[m.toSegmentId(sid)]
 	GIANT.RUnlock()
@@ -303,7 +309,7 @@ func (m *MemOnlyIndex) LoadSingleSegment(sid int64) error {
 
 		err = segment.OpenForwardIndex()
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		GIANT.Lock()
@@ -311,7 +317,7 @@ func (m *MemOnlyIndex) LoadSingleSegment(sid int64) error {
 		GIANT.Unlock()
 	}
 
-	return segment.Refresh()
+	return segment, segment.Refresh()
 }
 
 func (m *MemOnlyIndex) NewTermQuery(sid int64, tagKey string, tagValue string) iq.Query {
