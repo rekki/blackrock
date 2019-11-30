@@ -151,12 +151,13 @@ func (s *Segment) Refresh() error {
 		return fmt.Errorf("error scanning, startOffset: %d, currentOffset: %d, err: %s", storedOffset, did, err)
 	}
 	if cnt > 0 {
-		log.Warnf("[done] %s, Offset: %d, took: %v for %d events", s.Path, storedOffset, time.Since(t0), cnt)
 
 		GIANT.Lock()
 		s.dirty = true
 		s.Merge(temporary)
 		GIANT.Unlock()
+
+		log.Warnf("[done] %s, Offset: %d, #docs: %d, took: %v for %d events", s.Path, storedOffset, s.TotalDocs, time.Since(t0), cnt)
 	}
 	return nil
 }
