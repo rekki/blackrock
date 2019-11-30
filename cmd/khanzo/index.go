@@ -23,7 +23,7 @@ import (
 
 var GIANT = sync.RWMutex{}
 
-const INVERTED_INDEX_FILE_NAME = "inverted.current.v3"
+const INVERTED_INDEX_FILE_NAME = "inverted.current.v4"
 
 //go:generate msgp -tests=false
 type Segment struct {
@@ -120,7 +120,7 @@ func (s *Segment) Refresh() error {
 	cnt := 0
 	temporary := &Segment{Postings: map[string]map[string][]int32{}, Offset: s.Offset}
 
-	err := s.fw.Scan(uint32(storedOffset), func(Offset uint32, data []byte) error {
+	err := s.fw.Scan(uint32(storedOffset), func(offset uint32, data []byte) error {
 		meta := spec.SearchableMetadata{}
 		err := proto.Unmarshal(data, &meta)
 		if err != nil {
@@ -137,7 +137,7 @@ func (s *Segment) Refresh() error {
 			temporary.Add("__experiment", ex, int32(did))
 		}
 
-		did = Offset
+		did = offset
 		temporary.Offset = did
 		cnt++
 		return nil
