@@ -9,8 +9,8 @@ import (
 
 	"github.com/bxcodec/faker"
 
+	spec "github.com/rekki/blackrock/cmd/orgrim/blackrock_io"
 	og "github.com/rekki/blackrock/cmd/orgrim/client"
-	spec "github.com/rekki/blackrock/cmd/orgrim/spec"
 )
 
 var UA = []string{

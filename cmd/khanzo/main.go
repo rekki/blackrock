@@ -16,7 +16,7 @@ import (
 	"github.com/gin-gonic/gin/binding"
 	"github.com/gogo/protobuf/jsonpb"
 	"github.com/gogo/protobuf/proto"
-	"github.com/rekki/blackrock/cmd/orgrim/spec"
+	spec "github.com/rekki/blackrock/cmd/orgrim/blackrock_io"
 	"github.com/rekki/blackrock/pkg/depths"
 	log "github.com/sirupsen/logrus"
 )

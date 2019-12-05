@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	iq "github.com/jackdoe/go-query"
-	"github.com/rekki/blackrock/cmd/orgrim/spec"
+	spec "github.com/rekki/blackrock/cmd/orgrim/blackrock_io"
 )
 
 func fromQuery(input *spec.Query, makeTermQuery func(string, string) iq.Query) (iq.Query, error) {

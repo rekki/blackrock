@@ -15,7 +15,7 @@ import (
 	"github.com/gogo/protobuf/proto"
 
 	"github.com/rekki/blackrock/cmd/jubei/disk"
-	"github.com/rekki/blackrock/cmd/orgrim/spec"
+	spec "github.com/rekki/blackrock/cmd/orgrim/blackrock_io"
 	"github.com/rekki/blackrock/pkg/depths"
 	"github.com/segmentio/kafka-go"
 	log "github.com/sirupsen/logrus"

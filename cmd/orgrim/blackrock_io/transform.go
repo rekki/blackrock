@@ -1,4 +1,4 @@
-package spec
+package blackrock_io
 
 import (
 	"encoding/json"

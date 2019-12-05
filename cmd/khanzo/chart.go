@@ -3,7 +3,7 @@ package main
 import (
 	"time"
 
-	"github.com/rekki/blackrock/cmd/orgrim/spec"
+	spec "github.com/rekki/blackrock/cmd/orgrim/blackrock_io"
 )
 
 type FKV struct {
