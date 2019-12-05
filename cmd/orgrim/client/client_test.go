@@ -6,7 +6,7 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/rekki/blackrock/cmd/orgrim/spec"
+	spec "github.com/rekki/blackrock/cmd/orgrim/blackrock_io"
 )
 
 var src = rand.NewSource(time.Now().UnixNano())

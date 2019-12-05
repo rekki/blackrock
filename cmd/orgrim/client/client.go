@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/gogo/protobuf/proto"
-	"github.com/rekki/blackrock/cmd/orgrim/spec"
+	spec "github.com/rekki/blackrock/cmd/orgrim/blackrock_io"
 )
 
 type Client struct {
