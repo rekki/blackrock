@@ -5,8 +5,8 @@ import (
 	"sort"
 	"testing"
 
+	spec "github.com/rekki/blackrock/cmd/orgrim/blackrock_io"
 	"github.com/rekki/blackrock/pkg/depths"
-	"github.com/rekki/blackrock/cmd/orgrim/spec"
 )
 
 func Equals(a, b []spec.KV) bool {

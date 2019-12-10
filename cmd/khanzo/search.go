@@ -3,8 +3,8 @@ package main
 import (
 	"fmt"
 
-	iq "github.com/jackdoe/go-query"
 	spec "github.com/rekki/blackrock/cmd/orgrim/blackrock_io"
+	iq "github.com/rekki/go-query"
 )
 
 func fromQuery(input *spec.Query, makeTermQuery func(string, string) iq.Query) (iq.Query, error) {

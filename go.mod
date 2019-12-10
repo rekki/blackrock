@@ -8,13 +8,13 @@ require (
 	github.com/gin-gonic/gin v1.5.0
 	github.com/gofrs/flock v0.7.1
 	github.com/gogo/protobuf v1.3.1
-	github.com/jackdoe/go-query v0.0.0-20191130202507-42017f3c149b
 	github.com/mcuadros/go-gin-prometheus v0.1.0
 	github.com/mssola/user_agent v0.5.0
 	github.com/oschwald/geoip2-golang v1.3.0
 	github.com/oschwald/maxminddb-golang v1.5.0 // indirect
 	github.com/philhofer/fwd v1.0.0 // indirect
 	github.com/prometheus/client_golang v1.2.1 // indirect
+	github.com/rekki/go-query v0.0.0-20191210155545-5e6fbe27cf0c
 	github.com/segmentio/kafka-go v0.3.4
 	github.com/sirupsen/logrus v1.4.2
 	github.com/tinylib/msgp v1.1.0
