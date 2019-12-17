@@ -13,9 +13,9 @@ import (
 	"time"
 
 	"github.com/gogo/protobuf/proto"
-	"github.com/rekki/blackrock/cmd/jubei/disk"
 	spec "github.com/rekki/blackrock/cmd/orgrim/blackrock_io"
 	"github.com/rekki/blackrock/pkg/depths"
+	"github.com/rekki/go-pen"
 	iq "github.com/rekki/go-query"
 	log "github.com/sirupsen/logrus"
 	"github.com/tinylib/msgp/msgp"
@@ -31,7 +31,7 @@ type Segment struct {
 	Postings  map[string]map[string][]int32
 	Offset    uint32
 	TotalDocs int
-	fw        *disk.ForwardWriter
+	fw        *pen.Reader
 	dirty     bool
 	flushedAt time.Time
 }
@@ -75,7 +75,7 @@ func (s *Segment) LoadFromDisk() error {
 }
 
 func (s *Segment) OpenForwardIndex() error {
-	fw, err := disk.NewForwardWriter(s.Path, "main")
+	fw, err := pen.NewReader(path.Join(s.Path, "main.bin"))
 	if err != nil {
 		return err
 	}

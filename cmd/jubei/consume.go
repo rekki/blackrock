@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"path"
 	"strconv"
 	"strings"
@@ -14,15 +15,15 @@ import (
 	"github.com/gofrs/flock"
 	"github.com/gogo/protobuf/proto"
 
-	"github.com/rekki/blackrock/cmd/jubei/disk"
 	spec "github.com/rekki/blackrock/cmd/orgrim/blackrock_io"
 	"github.com/rekki/blackrock/pkg/depths"
+	pen "github.com/rekki/go-pen"
 	"github.com/segmentio/kafka-go"
 	log "github.com/sirupsen/logrus"
 )
 
 type DiskWriter struct {
-	writers map[int64]*disk.ForwardWriter
+	writers map[int64]*pen.Writer
 	root    string
 	counter uint64
 	sync.Mutex
@@ -119,7 +120,7 @@ func PrepareEnvelope(envelope *spec.Envelope) {
 }
 
 func consumeEventsFromAllPartitions(root string, pr []*PartitionReader) error {
-	writers := map[int64]*disk.ForwardWriter{}
+	writers := map[int64]*pen.Writer{}
 	l := log.WithField("root", root).WithField("mode", "CONSUME")
 	dw := &DiskWriter{writers: writers, root: root}
 	errChan := make(chan error)
@@ -160,7 +161,7 @@ func consumeEvents(dw *DiskWriter, pr *PartitionReader) error {
 	}
 	defer fileLock.Close() // also unlocks
 
-	ow, err := disk.NewOffsetWriter(path.Join(dw.root, fmt.Sprintf("partition_%d.offset", pr.Partition.ID)), l)
+	ow, err := pen.NewOffsetWriter(path.Join(dw.root, fmt.Sprintf("partition_%d.offset", pr.Partition.ID)))
 	if err != nil {
 		return err
 	}
@@ -205,7 +206,13 @@ func consumeEvents(dw *DiskWriter, pr *PartitionReader) error {
 		if !ok {
 			segmentPath := path.Join(dw.root, fmt.Sprintf("%d", segmentId))
 			l.Infof("openning new segment: %s", segmentPath)
-			forward, err = disk.NewForwardWriter(segmentPath, "main")
+			err = os.MkdirAll(segmentPath, 0700)
+			if err != nil {
+				dw.Unlock()
+				return err
+			}
+
+			forward, err = pen.NewWriter(path.Join(segmentPath, "main.bin"))
 			if err != nil {
 				dw.Unlock()
 				return err

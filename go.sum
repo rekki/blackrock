@@ -107,6 +107,8 @@ github.com/prometheus/procfs v0.0.0-20181005140218-185b4288413d/go.mod h1:c3At6R
 github.com/prometheus/procfs v0.0.2/go.mod h1:TjEm7ze935MbeOT/UhFTIMYKhuLP4wbCsTZCD3I8kEA=
 github.com/prometheus/procfs v0.0.5 h1:3+auTFlqw+ZaQYJARz6ArODtkaIwtvBTx3N2NehQlL8=
 github.com/prometheus/procfs v0.0.5/go.mod h1:4A/X28fw3Fc593LaREMrKMqOKvUAntwMDaekg4FpcdQ=
+github.com/rekki/go-pen v0.0.0-20191217165117-9b4df0d07ac5 h1:+PqeazXMxuMq+agewSc0Jkx9LrZPMx/H2bCYftbPi5A=
+github.com/rekki/go-pen v0.0.0-20191217165117-9b4df0d07ac5/go.mod h1:84YjGc3WmerTFqfTdFnx9o7w60yH27UM3Hi/Rh3eAr8=
 github.com/rekki/go-query v0.0.0-20191210155545-5e6fbe27cf0c h1:N222Epxq6vDqmenLJIUvg1oNEVclU780jvKFiYia7YM=
 github.com/rekki/go-query v0.0.0-20191210155545-5e6fbe27cf0c/go.mod h1:Sx4jDUG86FffGfoeH4iDbFBj/pZsfBi52+iactXpMSc=
 github.com/segmentio/kafka-go v0.3.4 h1:Mv9AcnCgU14/cU6Vd0wuRdG1FBO0HzXQLnjBduDLy70=
