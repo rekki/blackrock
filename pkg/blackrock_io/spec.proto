@@ -1,0 +1,208 @@
+syntax = "proto3";
+
+package blackrock.io;
+
+import "github.com/gogo/protobuf/gogoproto/gogo.proto";
+import "github.com/rekki/go-query/util/go_query_dsl/dsl.proto";
+import "google/api/annotations.proto";
+option (gogoproto.goproto_registration) = true;
+
+message KV {
+        string key = 1;
+        string value = 2;
+}
+
+message KF {
+        string key = 1;
+        double value = 2;
+}
+
+message Metadata {
+        option (gogoproto.goproto_unrecognized) = false;
+        option (gogoproto.goproto_unkeyed) = false;
+        option (gogoproto.goproto_sizecache) = false;
+
+        repeated KV search = 1 [(gogoproto.nullable) = false];
+        repeated KV count = 2 [(gogoproto.nullable) = false];
+        repeated KV properties = 3 [(gogoproto.nullable) = false];
+
+        repeated KF numeric = 13 [(gogoproto.nullable) = false];
+
+        int64 created_at_ns  = 5;
+
+        string event_type = 7;
+        string foreign_id = 9;
+        string foreign_type = 10;
+        map<string,uint32> track = 11;
+        fixed64 id = 12;
+}
+
+message SearchableMetadata {
+        option (gogoproto.goproto_unrecognized) = false;
+        option (gogoproto.goproto_unkeyed) = false;
+        option (gogoproto.goproto_sizecache) = false;
+
+        repeated KV search = 1 [(gogoproto.nullable) = false];
+        string event_type = 7;
+        string foreign_id = 9;
+        string foreign_type = 10;
+        map<string,uint32> track = 11;
+}
+
+message BasicMetadata {
+        option (gogoproto.goproto_unrecognized) = false;
+        option (gogoproto.goproto_unkeyed) = false;
+        option (gogoproto.goproto_sizecache) = false;
+
+        int64 created_at_ns  = 5;
+        string event_type = 7;
+        string foreign_id = 9;
+        string foreign_type = 10;
+}
+
+
+
+message NumericMetadata {
+        option (gogoproto.goproto_unrecognized) = false;
+        option (gogoproto.goproto_unkeyed) = false;
+        option (gogoproto.goproto_sizecache) = false;
+
+        repeated KF numeric = 1 [(gogoproto.nullable) = false];
+        string event_type = 7;
+        string foreign_id = 9;
+        string foreign_type = 10;
+}
+
+message CountableMetadata {
+        option (gogoproto.goproto_unrecognized) = false;
+        option (gogoproto.goproto_unkeyed) = false;
+        option (gogoproto.goproto_sizecache) = false;
+
+        repeated KV search = 1 [(gogoproto.nullable) = false];
+        repeated KV count = 2 [(gogoproto.nullable) = false];
+        int64 created_at_ns  = 5;
+        string event_type = 7;
+        string foreign_id = 9;
+        string foreign_type = 10;
+}
+
+message Hit {
+        uint64 id = 1;
+        float score = 2;
+        Metadata metadata = 3;
+}
+
+
+message SearchQueryRequest {
+        uint32 from_second = 1;
+        uint32 to_second = 2;
+        go.query.dsl.Query query = 3;
+        int32 limit = 4;
+}
+
+message CountPerKV {
+        map<string, uint32> count = 1;
+        uint32 total = 2;
+        string key = 3;
+}
+
+message PointPerEventType {
+        uint32 count = 1;
+        uint32 count_unique = 2;
+        uint32 bucket = 3;
+        string event_type = 4;
+}
+
+message ChartBucketPerTime {
+        map<string, PointPerEventType> per_type = 1;
+}
+
+message Chart {
+        map<uint32, ChartBucketPerTime> buckets = 1;
+        uint32 time_start = 2;
+        uint32 time_end = 3;
+        uint32 time_bucket_sec = 4;
+}
+
+message AggregateRequest {
+        SearchQueryRequest query = 1;
+        map<string,bool> fields = 2;
+        int32 sample_limit = 3;
+        uint32 time_bucket_sec = 4;
+}
+
+message Aggregate {
+        map<string, CountPerKV> search = 1;
+        map<string, CountPerKV> count = 2;
+        map<string, CountPerKV> foreign_id = 3;
+        map<string, CountPerKV> event_type = 4;
+        map<string, uint32> possible = 5;
+        uint32 total = 6;
+        repeated Hit sample = 7;
+        Chart chart = 8;
+}
+
+message SearchQueryResponse {
+        repeated Hit hits = 1;
+        uint64 total = 2;
+}
+
+message Envelope {
+        Metadata metadata = 1;
+        bytes payload = 2;
+}
+
+message Success {
+        bool success = 1;
+}
+
+message HealthRequest {
+}
+
+service Enqueue {
+  rpc SayPush (stream Envelope) returns (Success) {
+    option (google.api.http) = {
+      post: "/api/v1/push"
+      body: "*"
+    };
+  }
+  rpc SayHealth (HealthRequest) returns (Success) {
+    option (google.api.http) = {
+      get: "/health"
+    };
+  }
+}
+
+service Search {
+  rpc SayPush (stream Envelope) returns (Success) {
+    option (google.api.http) = {
+      post: "/api/v1/push"
+      body: "*"
+    };
+  }
+
+  rpc SaySearch (SearchQueryRequest) returns (SearchQueryResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/search"
+      body: "*"
+    };
+  }
+  rpc SayFetch (SearchQueryRequest) returns (stream Hit) {
+    option (google.api.http) = {
+      post: "/api/v1/fetch"
+      body: "*"
+    };
+  }
+  rpc SayAggregate (AggregateRequest) returns (Aggregate) {
+    option (google.api.http) = {
+      post: "/api/v1/aggregate"
+      body: "*"
+    };
+  }
+  rpc SayHealth (HealthRequest) returns (Success) {
+    option (google.api.http) = {
+      get: "/health"
+    };
+  }
+}
+

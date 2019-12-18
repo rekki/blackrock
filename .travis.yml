@@ -1,25 +1,14 @@
-notifications:
-  email: false
+language: go
 
-git:
-  depth: 1
+go:
+  - 1.10.x
+  - tip
 
-matrix:
-  include:
-    - os: linux
-      language: go
-      go:
-        - 1.x
-      cache:
-        directories:
-          - $HOME/.cache/go-build
-          - $HOME/gopath/pkg/mod
+before_install:
+  - go get -t -v ./...
 
-    - os: osx
-      language: go
-      go:
-        - 1.x
-      cache:
-        directories:
-          - $HOME/Library/Caches/go-build
-          - $HOME/gopath/pkg/mod
+script:
+  - go test -coverprofile=coverage.txt -covermode=atomic ./...
+
+after_success:
+  - bash <(curl -s https://codecov.io/bash)

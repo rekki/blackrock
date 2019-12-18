@@ -146,32 +146,32 @@ func FlattenString(nestedstr, prefix string, style SeparatorStyle) (string, erro
 
 func flatten(top bool, flatMap map[string]string, nested interface{}, prefix string, style SeparatorStyle) error {
 	assign := func(newKey string, v interface{}) error {
-		switch v.(type) {
+		switch v := v.(type) {
 		case map[string]interface{}, []interface{}:
 			if err := flatten(false, flatMap, v, newKey, style); err != nil {
 				return err
 			}
 
 		case string:
-			flatMap[newKey] = v.(string)
+			flatMap[newKey] = v
 		case int:
-			flatMap[newKey] = fmt.Sprintf("%d", v.(int))
+			flatMap[newKey] = fmt.Sprintf("%d", v)
 		case int32:
-			flatMap[newKey] = fmt.Sprintf("%d", v.(int32))
+			flatMap[newKey] = fmt.Sprintf("%d", v)
 		case int64:
-			flatMap[newKey] = fmt.Sprintf("%d", v.(int64))
+			flatMap[newKey] = fmt.Sprintf("%d", v)
 		case int16:
-			flatMap[newKey] = fmt.Sprintf("%d", v.(int16))
+			flatMap[newKey] = fmt.Sprintf("%d", v)
 		case uint32:
-			flatMap[newKey] = fmt.Sprintf("%d", v.(uint32))
+			flatMap[newKey] = fmt.Sprintf("%d", v)
 		case uint64:
-			flatMap[newKey] = fmt.Sprintf("%d", v.(uint64))
+			flatMap[newKey] = fmt.Sprintf("%d", v)
 		case uint16:
-			flatMap[newKey] = fmt.Sprintf("%d", v.(uint16))
+			flatMap[newKey] = fmt.Sprintf("%d", v)
 		case float32:
-			flatMap[newKey] = strconv.FormatFloat(float64(v.(float32)), 'f', 0, 64)
+			flatMap[newKey] = strconv.FormatFloat(float64(v), 'f', 0, 64)
 		case float64:
-			flatMap[newKey] = strconv.FormatFloat(v.(float64), 'f', 0, 64)
+			flatMap[newKey] = strconv.FormatFloat(v, 'f', 0, 64)
 
 		default:
 			flatMap[newKey] = fmt.Sprintf("%v", v)
@@ -181,16 +181,16 @@ func flatten(top bool, flatMap map[string]string, nested interface{}, prefix str
 		return nil
 	}
 
-	switch nested.(type) {
+	switch nested := nested.(type) {
 	case map[string]interface{}:
-		for k, v := range nested.(map[string]interface{}) {
+		for k, v := range nested {
 			newKey := enkey(top, prefix, k, style)
-			assign(newKey, v)
+			_ = assign(newKey, v)
 		}
 	case []interface{}:
-		for i, v := range nested.([]interface{}) {
+		for i, v := range nested {
 			newKey := enkey(top, prefix, strconv.Itoa(i), style)
-			assign(newKey, v)
+			_ = assign(newKey, v)
 		}
 	default:
 		return NotValidInputError

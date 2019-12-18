@@ -1,0 +1,523 @@
+{
+  "swagger": "2.0",
+  "info": {
+    "title": "spec.proto",
+    "version": "version not set"
+  },
+  "consumes": [
+    "application/json"
+  ],
+  "produces": [
+    "application/json"
+  ],
+  "paths": {
+    "/api/v1/aggregate": {
+      "post": {
+        "operationId": "SayAggregate",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/ioAggregate"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/ioAggregateRequest"
+            }
+          }
+        ],
+        "tags": [
+          "Search"
+        ]
+      }
+    },
+    "/api/v1/fetch": {
+      "post": {
+        "operationId": "SayFetch",
+        "responses": {
+          "200": {
+            "description": "A successful response.(streaming responses)",
+            "schema": {
+              "$ref": "#/x-stream-definitions/ioHit"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/ioSearchQueryRequest"
+            }
+          }
+        ],
+        "tags": [
+          "Search"
+        ]
+      }
+    },
+    "/api/v1/push": {
+      "post": {
+        "operationId": "SayPush",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/ioSuccess"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "description": " (streaming inputs)",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/ioEnvelope"
+            }
+          }
+        ],
+        "tags": [
+          "Search"
+        ]
+      }
+    },
+    "/api/v1/search": {
+      "post": {
+        "operationId": "SaySearch",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/ioSearchQueryResponse"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/ioSearchQueryRequest"
+            }
+          }
+        ],
+        "tags": [
+          "Search"
+        ]
+      }
+    },
+    "/health": {
+      "get": {
+        "operationId": "SayHealth",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/ioSuccess"
+            }
+          }
+        },
+        "tags": [
+          "Search"
+        ]
+      }
+    }
+  },
+  "definitions": {
+    "dslQuery": {
+      "type": "object",
+      "properties": {
+        "queries": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/dslQuery"
+          }
+        },
+        "type": {
+          "$ref": "#/definitions/dslQueryType"
+        },
+        "field": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        },
+        "not": {
+          "$ref": "#/definitions/dslQuery"
+        },
+        "tiebreaker": {
+          "type": "number",
+          "format": "float"
+        },
+        "boost": {
+          "type": "number",
+          "format": "float"
+        }
+      }
+    },
+    "dslQueryType": {
+      "type": "string",
+      "enum": [
+        "TERM",
+        "AND",
+        "OR",
+        "DISMAX"
+      ],
+      "default": "TERM"
+    },
+    "ioAggregate": {
+      "type": "object",
+      "properties": {
+        "search": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/ioCountPerKV"
+          }
+        },
+        "count": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/ioCountPerKV"
+          }
+        },
+        "foreign_id": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/ioCountPerKV"
+          }
+        },
+        "event_type": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/ioCountPerKV"
+          }
+        },
+        "possible": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "total": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "sample": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ioHit"
+          }
+        },
+        "chart": {
+          "$ref": "#/definitions/ioChart"
+        }
+      }
+    },
+    "ioAggregateRequest": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "$ref": "#/definitions/ioSearchQueryRequest"
+        },
+        "fields": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "boolean",
+            "format": "boolean"
+          }
+        },
+        "sample_limit": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "time_bucket_sec": {
+          "type": "integer",
+          "format": "int64"
+        }
+      }
+    },
+    "ioChart": {
+      "type": "object",
+      "properties": {
+        "buckets": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/ioChartBucketPerTime"
+          }
+        },
+        "time_start": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "time_end": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "time_bucket_sec": {
+          "type": "integer",
+          "format": "int64"
+        }
+      }
+    },
+    "ioChartBucketPerTime": {
+      "type": "object",
+      "properties": {
+        "per_type": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/ioPointPerEventType"
+          }
+        }
+      }
+    },
+    "ioCountPerKV": {
+      "type": "object",
+      "properties": {
+        "count": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "total": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "key": {
+          "type": "string"
+        }
+      }
+    },
+    "ioEnvelope": {
+      "type": "object",
+      "properties": {
+        "metadata": {
+          "$ref": "#/definitions/ioMetadata"
+        },
+        "payload": {
+          "type": "string",
+          "format": "byte"
+        }
+      }
+    },
+    "ioHit": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "score": {
+          "type": "number",
+          "format": "float"
+        },
+        "metadata": {
+          "$ref": "#/definitions/ioMetadata"
+        }
+      }
+    },
+    "ioKF": {
+      "type": "object",
+      "properties": {
+        "key": {
+          "type": "string"
+        },
+        "value": {
+          "type": "number",
+          "format": "double"
+        }
+      }
+    },
+    "ioKV": {
+      "type": "object",
+      "properties": {
+        "key": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        }
+      }
+    },
+    "ioMetadata": {
+      "type": "object",
+      "properties": {
+        "search": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ioKV"
+          }
+        },
+        "count": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ioKV"
+          }
+        },
+        "properties": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ioKV"
+          }
+        },
+        "numeric": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ioKF"
+          }
+        },
+        "created_at_ns": {
+          "type": "string",
+          "format": "int64"
+        },
+        "event_type": {
+          "type": "string"
+        },
+        "foreign_id": {
+          "type": "string"
+        },
+        "foreign_type": {
+          "type": "string"
+        },
+        "track": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "id": {
+          "type": "string",
+          "format": "uint64"
+        }
+      }
+    },
+    "ioPointPerEventType": {
+      "type": "object",
+      "properties": {
+        "count": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "count_unique": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "bucket": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "event_type": {
+          "type": "string"
+        }
+      }
+    },
+    "ioSearchQueryRequest": {
+      "type": "object",
+      "properties": {
+        "from_second": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "to_second": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "query": {
+          "$ref": "#/definitions/dslQuery"
+        },
+        "limit": {
+          "type": "integer",
+          "format": "int32"
+        }
+      }
+    },
+    "ioSearchQueryResponse": {
+      "type": "object",
+      "properties": {
+        "hits": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ioHit"
+          }
+        },
+        "total": {
+          "type": "string",
+          "format": "uint64"
+        }
+      }
+    },
+    "ioSuccess": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean",
+          "format": "boolean"
+        }
+      }
+    },
+    "protobufAny": {
+      "type": "object",
+      "properties": {
+        "type_url": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string",
+          "format": "byte"
+        }
+      }
+    },
+    "runtimeStreamError": {
+      "type": "object",
+      "properties": {
+        "grpc_code": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "http_code": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "message": {
+          "type": "string"
+        },
+        "http_status": {
+          "type": "string"
+        },
+        "details": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/protobufAny"
+          }
+        }
+      }
+    }
+  },
+  "x-stream-definitions": {
+    "ioHit": {
+      "type": "object",
+      "properties": {
+        "result": {
+          "$ref": "#/definitions/ioHit"
+        },
+        "error": {
+          "$ref": "#/definitions/runtimeStreamError"
+        }
+      },
+      "title": "Stream result of ioHit"
+    }
+  }
+}

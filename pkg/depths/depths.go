@@ -6,38 +6,14 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"errors"
-	"fmt"
-	"io/ioutil"
+	"log"
 	"math/rand"
 	"strings"
-	"time"
 	"unicode"
 
 	"github.com/dgryski/go-metro"
-	"github.com/gin-gonic/gin"
-	"github.com/gogo/protobuf/jsonpb"
-	"github.com/gogo/protobuf/proto"
 	"github.com/segmentio/kafka-go"
-	log "github.com/sirupsen/logrus"
 )
-
-func UnmarshalAndClose(c *gin.Context, into proto.Message) error {
-	body := c.Request.Body
-	defer body.Close()
-
-	var err error
-	if c.Request.Header.Get("content-type") == "application/protobuf" {
-		var data []byte
-		data, err = ioutil.ReadAll(body)
-		if err == nil {
-			err = proto.Unmarshal(data, into)
-		}
-	} else {
-		err = jsonpb.Unmarshal(body, into)
-	}
-
-	return err
-}
 
 func ShuffledStrings(list []string) []string {
 	shuffledList := make([]string, len(list))
@@ -57,7 +33,6 @@ func HealthCheckKafka(brokers string, topic string) error {
 
 			return nil
 		}
-		log.Warnf("failed to dial leader for partition 0, error: %s", err.Error())
 	}
 	return errors.New("failed to dial leader for partition 0, assuming we cant reach kafka")
 }
@@ -70,16 +45,6 @@ func CreateTopic(brokers string, topic string, partitions int, replication int) 
 		}
 	}
 	return errors.New("failed to dial any broker")
-}
-
-func epochDayFromNsInt(ns int64) int64 {
-	s := ns / 1000000000
-	d := s / (3600 * 24)
-	return d
-}
-
-func SegmentFromNs(ns int64) int64 {
-	return epochDayFromNsInt(ns)
 }
 
 func Cleanup(s string) string {
@@ -169,40 +134,7 @@ func DumpObj(src interface{}) string {
 	if err != nil {
 		log.Fatalf("failed to dump object: %s", err.Error())
 	}
-	return string(out.Bytes())
-}
-
-func YYYYMMDD(t time.Time) string {
-	year, month, day := t.UTC().Date()
-	return fmt.Sprintf("%d-%02d-%02d", year, month, day)
-}
-
-func ExpandYYYYMMDD(from string, to string) []time.Time {
-	fromTime := time.Now().UTC().AddDate(0, 0, -3)
-	toTime := time.Now().UTC()
-
-	if from != "" {
-		d, err := time.Parse("2006-01-02", from)
-		if err == nil {
-			fromTime = d
-		}
-	}
-	if to != "" {
-		d, err := time.Parse("2006-01-02", to)
-		if err == nil {
-			toTime = d
-		}
-	}
-	dateQuery := []time.Time{}
-	start := fromTime.AddDate(0, 0, 0)
-	for {
-		dateQuery = append(dateQuery, start)
-		start = start.AddDate(0, 0, 1)
-		if start.Sub(toTime) > 0 {
-			break
-		}
-	}
-	return dateQuery
+	return out.String()
 }
 
 func DumpObjNoIndent(src interface{}) string {
