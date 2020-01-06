@@ -38,7 +38,7 @@ func UnmarshalAndClose(c *gin.Context, into proto.Message) error {
 }
 func main() {
 	var bind = flag.String("bind", ":9001", "bind to")
-	var remote = flag.String("enqueue-grpc", ":8001", "connect to enqueue grpc")
+	var remote = flag.String("producer-grpc", ":8001", "connect to producer grpc")
 	var geoipFile = flag.String("geoip", "", "path to https://dev.maxmind.com/geoip/geoip2/geolite2/ file")
 	flag.Parse()
 
