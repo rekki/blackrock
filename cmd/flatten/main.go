@@ -67,7 +67,7 @@ func main() {
 	r.GET("/health", func(c *gin.Context) {
 		_, err := enqueue.SayHealth(context.Background(), &spec.HealthRequest{})
 		if err != nil {
-			c.String(http.StatusInternalServerError, "BAD")
+			c.String(http.StatusInternalServerError, err.Error())
 		} else {
 			c.String(http.StatusOK, "OK")
 		}
