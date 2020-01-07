@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"os"
+	"time"
 
 	spec "github.com/rekki/blackrock/pkg/blackrock_io"
 	. "github.com/rekki/blackrock/pkg/logger"
@@ -24,14 +25,24 @@ func main() {
 	if err != nil {
 		Log.Fatal(err)
 	}
+	var (
+		si   spec.SearchClient
+		conn *grpc.ClientConn
+	)
 
-	conn, err := grpc.Dial(*remote, grpc.WithInsecure())
-	if err != nil {
-		Log.Fatal(err)
+	// just keep trying every second
+
+	for {
+		conn, err = grpc.Dial(*remote, grpc.WithInsecure())
+		if err != nil {
+			Log.Warnf("error connecting, sleepint 1 second, err: %v", err.Error())
+			time.Sleep(1 * time.Second)
+			continue
+		}
+		break
 	}
-	defer conn.Close()
 
-	si := spec.NewSearchClient(conn)
+	si = spec.NewSearchClient(conn)
 
 	err = consumeKafka(si, *root, *dataTopic, *kafkaServers)
 	if err != nil {
