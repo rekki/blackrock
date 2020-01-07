@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"os"
 	"time"
@@ -35,7 +36,7 @@ func main() {
 	for {
 		conn, err = grpc.Dial(*remote, grpc.WithInsecure())
 		if err != nil {
-			Log.Warnf("error connecting, sleepint 1 second, err: %v", err.Error())
+			Log.Warnf("error connecting, sleeping 1 second, err: %v", err.Error())
 			time.Sleep(1 * time.Second)
 			continue
 		}
@@ -43,7 +44,16 @@ func main() {
 	}
 
 	si = spec.NewSearchClient(conn)
+	for {
+		_, err = si.SayHealth(context.Background(), &spec.HealthRequest{})
+		if err != nil {
+			Log.Warnf("error health, sleeping 1 second, err: %v", err.Error())
+			time.Sleep(1 * time.Second)
+			continue
+		}
 
+		break
+	}
 	err = consumeKafka(si, *root, *dataTopic, *kafkaServers)
 	if err != nil {
 		conn.Close()
