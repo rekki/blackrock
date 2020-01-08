@@ -2,7 +2,6 @@ package index
 
 import (
 	"errors"
-	"strconv"
 	"strings"
 	"time"
 
@@ -60,18 +59,6 @@ func PrepareEnvelope(envelope *spec.Envelope) error {
 			value = "__empty"
 		}
 		meta.Search[i] = spec.KV{Key: lc, Value: value}
-
-		f64, err := strconv.ParseFloat(value, 64)
-		if err != nil {
-			meta.Numeric = append(meta.Numeric, spec.KF{Key: lc, Value: f64})
-		}
-	}
-
-	for _, kv := range meta.Count {
-		f64, err := strconv.ParseFloat(kv.Value, 64)
-		if err != nil {
-			meta.Numeric = append(meta.Numeric, spec.KF{Key: kv.Key, Value: f64})
-		}
 	}
 
 	// add some automatic tags

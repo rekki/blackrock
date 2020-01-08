@@ -328,18 +328,6 @@
         }
       }
     },
-    "ioKF": {
-      "type": "object",
-      "properties": {
-        "key": {
-          "type": "string"
-        },
-        "value": {
-          "type": "number",
-          "format": "double"
-        }
-      }
-    },
     "ioKV": {
       "type": "object",
       "properties": {
@@ -370,12 +358,6 @@
           "type": "array",
           "items": {
             "$ref": "#/definitions/ioKV"
-          }
-        },
-        "numeric": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/ioKF"
           }
         },
         "created_at_ns": {

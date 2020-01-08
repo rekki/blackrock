@@ -26,8 +26,6 @@ message Metadata {
         repeated KV count = 2 [(gogoproto.nullable) = false];
         repeated KV properties = 3 [(gogoproto.nullable) = false];
 
-        repeated KF numeric = 13 [(gogoproto.nullable) = false];
-
         int64 created_at_ns  = 5;
 
         string event_type = 7;
@@ -55,17 +53,6 @@ message BasicMetadata {
         option (gogoproto.goproto_sizecache) = false;
 
         int64 created_at_ns  = 5;
-        string event_type = 7;
-        string foreign_id = 9;
-        string foreign_type = 10;
-}
-
-message NumericMetadata {
-        option (gogoproto.goproto_unrecognized) = false;
-        option (gogoproto.goproto_unkeyed) = false;
-        option (gogoproto.goproto_sizecache) = false;
-
-        repeated KF numeric = 13 [(gogoproto.nullable) = false];
         string event_type = 7;
         string foreign_id = 9;
         string foreign_type = 10;
