@@ -60,14 +60,12 @@ message BasicMetadata {
         string foreign_type = 10;
 }
 
-
-
 message NumericMetadata {
         option (gogoproto.goproto_unrecognized) = false;
         option (gogoproto.goproto_unkeyed) = false;
         option (gogoproto.goproto_sizecache) = false;
 
-        repeated KF numeric = 1 [(gogoproto.nullable) = false];
+        repeated KF numeric = 13 [(gogoproto.nullable) = false];
         string event_type = 7;
         string foreign_id = 9;
         string foreign_type = 10;
