@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"io"
 	"net"
@@ -103,7 +104,9 @@ func (s *server) SayAggregate(ctx context.Context, qr *spec.AggregateRequest) (*
 	for _, ns := range steps {
 		dates = append(dates, time.Unix(ns/1000000000, 0))
 	}
-
+	if len(dates) == 0 {
+		return nil, errors.New("bad date range, to_second must be older than from_second")
+	}
 	out := &spec.Aggregate{
 		Search:    map[string]*spec.CountPerKV{},
 		Count:     map[string]*spec.CountPerKV{},
