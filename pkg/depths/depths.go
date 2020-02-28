@@ -47,14 +47,6 @@ func CreateTopic(brokers string, topic string, partitions int, replication int) 
 	return errors.New("failed to dial any broker")
 }
 
-func Cleanup(s string) string {
-	return cleanup(s, false)
-}
-
-func CleanupAllowDot(s string) string {
-	return cleanup(s, true)
-}
-
 func cleanup(s string, allowDot bool) string {
 	clean := strings.Map(
 		func(r rune) rune {

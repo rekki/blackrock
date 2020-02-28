@@ -9,7 +9,6 @@ import (
 	"runtime"
 	"sort"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -17,7 +16,6 @@ import (
 
 	"github.com/rekki/blackrock/pkg/logger"
 
-	"github.com/rekki/blackrock/pkg/depths"
 	. "github.com/rekki/blackrock/pkg/logger"
 	iq "github.com/rekki/go-query"
 	dsl "github.com/rekki/go-query/util/index"
@@ -237,8 +235,6 @@ func (m *SearchIndex) loadSegmentFromDisk(segmentId string) (*Segment, error) {
 }
 
 func (m *SearchIndex) newTermQuery(segment *Segment, tagKey string, tagValue string) iq.Query {
-	tagKey = depths.Cleanup(strings.ToLower(tagKey))
-	tagValue = depths.Cleanup(strings.ToLower(tagValue))
 	termString := fmt.Sprintf("%s:%s", tagKey, tagValue)
 
 	pk, ok := segment.Postings[tagKey]

@@ -2,11 +2,9 @@ package index
 
 import (
 	"errors"
-	"strings"
 	"time"
 
 	spec "github.com/rekki/blackrock/pkg/blackrock_io"
-	"github.com/rekki/blackrock/pkg/depths"
 )
 
 var dateCache = NewDateCache()
@@ -26,9 +24,9 @@ func PrepareEnvelope(envelope *spec.Envelope) error {
 		meta.CreatedAtNs = time.Now().UnixNano()
 	}
 
-	foreignId := depths.Cleanup(strings.ToLower(meta.ForeignId))
-	foreignType := depths.Cleanup(strings.ToLower(meta.ForeignType))
-	eventType := depths.Cleanup(strings.ToLower(meta.EventType))
+	foreignId := meta.ForeignId
+	foreignType := meta.ForeignType
+	eventType := meta.EventType
 	if foreignId == "" {
 		return errMissingForeignId
 	}
@@ -43,26 +41,16 @@ func PrepareEnvelope(envelope *spec.Envelope) error {
 	meta.EventType = eventType
 	meta.ForeignType = foreignType
 	meta.ForeignId = foreignId
-	second := int32(meta.CreatedAtNs / 1e9)
+
 	for i, kv := range meta.Search {
-		k := kv.Key
-		v := kv.Value
-
-		lc := depths.Cleanup(strings.ToLower(k))
-
-		if lc == "event_type" || lc == "foreign_type" || lc == "foreign_id" || lc == foreignType || lc == "" {
-			continue
+		if kv.Value == "" {
+			meta.Search[i] = spec.KV{Key: kv.Key, Value: "__empty"}
 		}
-
-		value := depths.Cleanup(strings.ToLower(v))
-		if value == "" {
-			value = "__empty"
-		}
-		meta.Search[i] = spec.KV{Key: lc, Value: value}
 	}
 
 	// add some automatic tags
 	{
+		second := int32(meta.CreatedAtNs / 1e9)
 		t := time.Unix(int64(second), 0).UTC()
 		year, year_month, year_month_day, year_month_day_hour := dateCache.Expand(t)
 
