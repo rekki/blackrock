@@ -30,7 +30,7 @@ var si *index.SearchIndex
 
 func init() {
 	logger.LogInit(3)
-	si = index.NewSearchIndex(BR_ROOT, 0, 3600, true)
+	si = index.NewSearchIndex(BR_ROOT, 0, 3600, true, map[string]bool{})
 }
 
 func ElasticScroll(query elastic.Query, expected int, b *testing.B) {
@@ -63,7 +63,7 @@ func ElasticScroll(query elastic.Query, expected int, b *testing.B) {
 }
 
 func ElasticSearch(query elastic.Query, expected int, b *testing.B) {
-	b.StopTimer()
+v	b.StopTimer()
 	es, err := elastic.NewClient()
 	if err != nil {
 		panic(err)

@@ -10,6 +10,7 @@ import (
 	_ "net/http/pprof"
 	"os"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/gogo/gateway"
@@ -274,6 +275,7 @@ func main() {
 
 	var logLevel = flag.Int("log-level", 0, "log level")
 	var segmentStep = flag.Int("segment-step", 3600, "segment step")
+	var pwhitelist = flag.String("whitelist", "", "csv list of indexable search terms, nothing means all")
 	var loadN = flag.Int("load-n-at-boot", 0, "load N segments at boot, 0 means all")
 	var storeInterval = flag.Int("store-interval", 3600, "store interval, 0 means dont store the inverted index")
 	var enableSegmentCache = flag.Bool("enable-segment-cache", false, "enable memory cache")
@@ -286,8 +288,13 @@ func main() {
 	}()
 
 	root := *proot
-
-	si := index.NewSearchIndex(root, int64(*storeInterval), int64(*segmentStep), *enableSegmentCache)
+	whitelist := map[string]bool{}
+	for _, v := range strings.Split(*pwhitelist, ",") {
+		if len(v) > 0 {
+			whitelist[v] = true
+		}
+	}
+	si := index.NewSearchIndex(root, int64(*storeInterval), int64(*segmentStep), *enableSegmentCache, whitelist)
 	err := si.LoadAtBoot(*loadN)
 	if err != nil {
 		Log.Fatalf("failed to load, err: %v", err)

@@ -26,12 +26,13 @@ import (
 type SearchIndex struct {
 	root               string
 	Segments           map[string]*Segment
+	whitelist          map[string]bool
 	SegmentStep        int64
 	enableSegmentCache bool
 	sync.RWMutex
 }
 
-func NewSearchIndex(root string, storeInterval, segmentStep int64, enableSegmentCache bool) *SearchIndex {
+func NewSearchIndex(root string, storeInterval, segmentStep int64, enableSegmentCache bool, whitelist map[string]bool) *SearchIndex {
 	root = path.Join(root, fmt.Sprintf("%d", segmentStep))
 
 	err := os.MkdirAll(root, 0700)
@@ -39,7 +40,7 @@ func NewSearchIndex(root string, storeInterval, segmentStep int64, enableSegment
 		Log.Fatal(err)
 	}
 
-	m := &SearchIndex{root: root, Segments: map[string]*Segment{}, SegmentStep: segmentStep, enableSegmentCache: enableSegmentCache}
+	m := &SearchIndex{root: root, Segments: map[string]*Segment{}, SegmentStep: segmentStep, enableSegmentCache: enableSegmentCache, whitelist: whitelist}
 
 	if storeInterval > 0 {
 		go func() {
@@ -212,7 +213,7 @@ func (m *SearchIndex) LookupSingleSegment(ns int64) *Segment {
 
 func (m *SearchIndex) loadSegmentFromDisk(segmentId string) (*Segment, error) {
 	p := path.Join(m.root, segmentId)
-	segment, err := NewSegment(p, m.enableSegmentCache)
+	segment, err := NewSegment(p, m.enableSegmentCache, m.whitelist)
 	if err != nil {
 		return nil, err
 	}

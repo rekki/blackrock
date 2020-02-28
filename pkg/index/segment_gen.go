@@ -103,6 +103,36 @@ func (z *Segment) DecodeMsg(dc *msgp.Reader) (err error) {
 				err = msgp.WrapError(err, "Offset")
 				return
 			}
+		case "Whitelist":
+			var zb0005 uint32
+			zb0005, err = dc.ReadMapHeader()
+			if err != nil {
+				err = msgp.WrapError(err, "Whitelist")
+				return
+			}
+			if z.Whitelist == nil {
+				z.Whitelist = make(map[string]bool, zb0005)
+			} else if len(z.Whitelist) > 0 {
+				for key := range z.Whitelist {
+					delete(z.Whitelist, key)
+				}
+			}
+			for zb0005 > 0 {
+				zb0005--
+				var za0006 string
+				var za0007 bool
+				za0006, err = dc.ReadString()
+				if err != nil {
+					err = msgp.WrapError(err, "Whitelist")
+					return
+				}
+				za0007, err = dc.ReadBool()
+				if err != nil {
+					err = msgp.WrapError(err, "Whitelist", za0006)
+					return
+				}
+				z.Whitelist[za0006] = za0007
+			}
 		case "TotalDocs":
 			z.TotalDocs, err = dc.ReadInt()
 			if err != nil {
@@ -122,9 +152,9 @@ func (z *Segment) DecodeMsg(dc *msgp.Reader) (err error) {
 
 // EncodeMsg implements msgp.Encodable
 func (z *Segment) EncodeMsg(en *msgp.Writer) (err error) {
-	// map header, size 4
+	// map header, size 5
 	// write "Path"
-	err = en.Append(0x84, 0xa4, 0x50, 0x61, 0x74, 0x68)
+	err = en.Append(0x85, 0xa4, 0x50, 0x61, 0x74, 0x68)
 	if err != nil {
 		return
 	}
@@ -184,6 +214,28 @@ func (z *Segment) EncodeMsg(en *msgp.Writer) (err error) {
 		err = msgp.WrapError(err, "Offset")
 		return
 	}
+	// write "Whitelist"
+	err = en.Append(0xa9, 0x57, 0x68, 0x69, 0x74, 0x65, 0x6c, 0x69, 0x73, 0x74)
+	if err != nil {
+		return
+	}
+	err = en.WriteMapHeader(uint32(len(z.Whitelist)))
+	if err != nil {
+		err = msgp.WrapError(err, "Whitelist")
+		return
+	}
+	for za0006, za0007 := range z.Whitelist {
+		err = en.WriteString(za0006)
+		if err != nil {
+			err = msgp.WrapError(err, "Whitelist")
+			return
+		}
+		err = en.WriteBool(za0007)
+		if err != nil {
+			err = msgp.WrapError(err, "Whitelist", za0006)
+			return
+		}
+	}
 	// write "TotalDocs"
 	err = en.Append(0xa9, 0x54, 0x6f, 0x74, 0x61, 0x6c, 0x44, 0x6f, 0x63, 0x73)
 	if err != nil {
@@ -200,9 +252,9 @@ func (z *Segment) EncodeMsg(en *msgp.Writer) (err error) {
 // MarshalMsg implements msgp.Marshaler
 func (z *Segment) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	// map header, size 4
+	// map header, size 5
 	// string "Path"
-	o = append(o, 0x84, 0xa4, 0x50, 0x61, 0x74, 0x68)
+	o = append(o, 0x85, 0xa4, 0x50, 0x61, 0x74, 0x68)
 	o = msgp.AppendString(o, z.Path)
 	// string "Postings"
 	o = append(o, 0xa8, 0x50, 0x6f, 0x73, 0x74, 0x69, 0x6e, 0x67, 0x73)
@@ -221,6 +273,13 @@ func (z *Segment) MarshalMsg(b []byte) (o []byte, err error) {
 	// string "Offset"
 	o = append(o, 0xa6, 0x4f, 0x66, 0x66, 0x73, 0x65, 0x74)
 	o = msgp.AppendUint32(o, z.Offset)
+	// string "Whitelist"
+	o = append(o, 0xa9, 0x57, 0x68, 0x69, 0x74, 0x65, 0x6c, 0x69, 0x73, 0x74)
+	o = msgp.AppendMapHeader(o, uint32(len(z.Whitelist)))
+	for za0006, za0007 := range z.Whitelist {
+		o = msgp.AppendString(o, za0006)
+		o = msgp.AppendBool(o, za0007)
+	}
 	// string "TotalDocs"
 	o = append(o, 0xa9, 0x54, 0x6f, 0x74, 0x61, 0x6c, 0x44, 0x6f, 0x63, 0x73)
 	o = msgp.AppendInt(o, z.TotalDocs)
@@ -324,6 +383,36 @@ func (z *Segment) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "Offset")
 				return
 			}
+		case "Whitelist":
+			var zb0005 uint32
+			zb0005, bts, err = msgp.ReadMapHeaderBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "Whitelist")
+				return
+			}
+			if z.Whitelist == nil {
+				z.Whitelist = make(map[string]bool, zb0005)
+			} else if len(z.Whitelist) > 0 {
+				for key := range z.Whitelist {
+					delete(z.Whitelist, key)
+				}
+			}
+			for zb0005 > 0 {
+				var za0006 string
+				var za0007 bool
+				zb0005--
+				za0006, bts, err = msgp.ReadStringBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Whitelist")
+					return
+				}
+				za0007, bts, err = msgp.ReadBoolBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Whitelist", za0006)
+					return
+				}
+				z.Whitelist[za0006] = za0007
+			}
 		case "TotalDocs":
 			z.TotalDocs, bts, err = msgp.ReadIntBytes(bts)
 			if err != nil {
@@ -357,6 +446,13 @@ func (z *Segment) Msgsize() (s int) {
 			}
 		}
 	}
-	s += 7 + msgp.Uint32Size + 10 + msgp.IntSize
+	s += 7 + msgp.Uint32Size + 10 + msgp.MapHeaderSize
+	if z.Whitelist != nil {
+		for za0006, za0007 := range z.Whitelist {
+			_ = za0007
+			s += msgp.StringPrefixSize + len(za0006) + msgp.BoolSize
+		}
+	}
+	s += 10 + msgp.IntSize
 	return
 }

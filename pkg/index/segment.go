@@ -19,14 +19,14 @@ const INVERTED_INDEX_FILE_NAME = "inverted.current.v5"
 
 //go:generate msgp -tests=false
 type Segment struct {
-	Path      string
-	Postings  map[string]map[string][]int32
-	Offset    uint32
-	TotalDocs int
-	reader    *pen.Reader
-	writer    *pen.Writer
-	dirty     bool
-
+	Path        string
+	Postings    map[string]map[string][]int32
+	Offset      uint32
+	Whitelist   map[string]bool
+	TotalDocs   int
+	reader      *pen.Reader
+	writer      *pen.Writer
+	dirty       bool
 	loadedAt    time.Time
 	searchedAt  time.Time
 	writtenAt   time.Time
@@ -34,8 +34,8 @@ type Segment struct {
 	enableCache bool
 }
 
-func NewSegment(root string, enableCache bool) (*Segment, error) {
-	return &Segment{Postings: map[string]map[string][]int32{}, Path: root, Offset: 0, enableCache: enableCache}, nil
+func NewSegment(root string, enableCache bool, whitelist map[string]bool) (*Segment, error) {
+	return &Segment{Postings: map[string]map[string][]int32{}, Path: root, Offset: 0, enableCache: enableCache, Whitelist: whitelist}, nil
 }
 
 func (s *Segment) Catchup() error {
@@ -50,7 +50,9 @@ func (s *Segment) Catchup() error {
 		}
 
 		for _, kv := range meta.Search {
-			s.Add(kv.Key, kv.Value, int32(current))
+			if s.Whitelist == nil || len(s.Whitelist) == 0 || s.Whitelist[kv.Key] {
+				s.Add(kv.Key, kv.Value, int32(current))
+			}
 		}
 
 		s.Add(meta.ForeignType, meta.ForeignId, int32(current))
@@ -83,7 +85,9 @@ func (s *Segment) Ingest(envelope *spec.Envelope) error {
 	meta := envelope.Metadata
 
 	for _, kv := range meta.Search {
-		s.Add(kv.Key, kv.Value, int32(did))
+		if s.Whitelist == nil || len(s.Whitelist) == 0 || s.Whitelist[kv.Key] {
+			s.Add(kv.Key, kv.Value, int32(did))
+		}
 	}
 
 	s.Add(meta.ForeignType, meta.ForeignId, int32(did))
