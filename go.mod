@@ -19,7 +19,7 @@ require (
 	github.com/philhofer/fwd v1.0.0 // indirect
 	github.com/reiver/go-porterstemmer v1.0.1 // indirect
 	github.com/rekki/go-pen v0.0.0-20200218192651-554d70d2e76d
-	github.com/rekki/go-query v0.0.0-20200311163623-3880c69d7789
+	github.com/rekki/go-query v0.0.0-20200311194413-c28540b01060
 	github.com/segmentio/kafka-go v0.3.4
 	github.com/sirupsen/logrus v1.4.2
 	github.com/tinylib/msgp v1.1.0

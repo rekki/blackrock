@@ -96,8 +96,8 @@ github.com/reiver/go-porterstemmer v1.0.1 h1:WyERBkASXgoXrTwq/IQ6wyNj/YG7j/ZURvT
 github.com/reiver/go-porterstemmer v1.0.1/go.mod h1:Z8uL/f/7UEwaeAJNwx1sO8kbqXiEuQieNuD735hLrSU=
 github.com/rekki/go-pen v0.0.0-20200218192651-554d70d2e76d h1:Dhl1BKAvRMjxBodKapy8We0yYz3q9OSMNYwrJFxsCe0=
 github.com/rekki/go-pen v0.0.0-20200218192651-554d70d2e76d/go.mod h1:84YjGc3WmerTFqfTdFnx9o7w60yH27UM3Hi/Rh3eAr8=
-github.com/rekki/go-query v0.0.0-20200311163623-3880c69d7789 h1:S82li4gsw4vxUiLDSxeR3zvyQOojgq5YhbiVOQjDKoQ=
-github.com/rekki/go-query v0.0.0-20200311163623-3880c69d7789/go.mod h1:Sx4jDUG86FffGfoeH4iDbFBj/pZsfBi52+iactXpMSc=
+github.com/rekki/go-query v0.0.0-20200311194413-c28540b01060 h1:JFK1Ezu3zISk9NcPybT3KBGMSiTevn8fyR0IYQFYisw=
+github.com/rekki/go-query v0.0.0-20200311194413-c28540b01060/go.mod h1:Sx4jDUG86FffGfoeH4iDbFBj/pZsfBi52+iactXpMSc=
 github.com/rogpeppe/fastuuid v0.0.0-20150106093220-6724a57986af/go.mod h1:XWv6SoW27p1b0cqNHllgS5HIMJraePCO15w5zCzIWYg=
 github.com/rogpeppe/fastuuid v1.2.0/go.mod h1:jVj6XXZzXRy/MSR5jhDC/2q6DgLz+nrA6LYCDYWNEvQ=
 github.com/rogpeppe/go-internal v1.3.0/go.mod h1:M8bDsm7K2OlrFYOpmOWEs/qY81heoFRclV5y23lUDJ4=
