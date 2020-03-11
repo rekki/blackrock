@@ -6,15 +6,12 @@ import (
 	"io/ioutil"
 	"os"
 	"path"
-	"runtime"
 	"sort"
 	"strconv"
 	"sync"
 	"time"
 
 	spec "github.com/rekki/blackrock/pkg/blackrock_io"
-
-	"github.com/rekki/blackrock/pkg/logger"
 
 	. "github.com/rekki/blackrock/pkg/logger"
 	iq "github.com/rekki/go-query"
@@ -27,10 +24,11 @@ type SearchIndex struct {
 	whitelist          map[string]bool
 	SegmentStep        int64
 	enableSegmentCache bool
+	fdCache            dsl.FileDescriptorCache
 	sync.RWMutex
 }
 
-func NewSearchIndex(root string, storeInterval, segmentStep int64, enableSegmentCache bool, whitelist map[string]bool) *SearchIndex {
+func NewSearchIndex(root string, nOpenFD int, segmentStep int64, enableSegmentCache bool, whitelist map[string]bool) *SearchIndex {
 	root = path.Join(root, fmt.Sprintf("%d", segmentStep))
 
 	err := os.MkdirAll(root, 0700)
@@ -38,22 +36,8 @@ func NewSearchIndex(root string, storeInterval, segmentStep int64, enableSegment
 		Log.Fatal(err)
 	}
 
-	m := &SearchIndex{root: root, Segments: map[string]*Segment{}, SegmentStep: segmentStep, enableSegmentCache: enableSegmentCache, whitelist: whitelist}
-
-	if storeInterval > 0 {
-		go func() {
-			store := time.Duration(storeInterval) * time.Second
-			for {
-				time.Sleep(store)
-
-				err = m.DumpToDisk()
-				if err != nil {
-					Log.Fatal(err)
-				}
-				m.PrintStats()
-			}
-		}()
-	}
+	fdc := dsl.NewFDCache(nOpenFD)
+	m := &SearchIndex{root: root, fdCache: fdc, Segments: map[string]*Segment{}, SegmentStep: segmentStep, enableSegmentCache: enableSegmentCache, whitelist: whitelist}
 
 	return m
 }
@@ -65,35 +49,9 @@ func (m *SearchIndex) Ingest(envelope *spec.Envelope) error {
 	}
 
 	err = m.holdWrite(envelope.Metadata.CreatedAtNs, func(segment *Segment) error {
-		segment.writtenAt = time.Now()
 		return segment.Ingest(envelope)
 	})
 	return err
-}
-
-func (m *SearchIndex) PrintStats() {
-	m.RLock()
-	defer m.RUnlock()
-
-	keys := []string{}
-	for sid := range m.Segments {
-		keys = append(keys, sid)
-	}
-	sort.Strings(keys)
-	for _, sid := range keys {
-		v := m.Segments[sid]
-		terms := 0
-		types := 0
-		size := 0
-		for _, pk := range v.Postings {
-			types++
-			for _, postings := range pk {
-				terms++
-				size += 8 + (len(postings) * 4)
-			}
-		}
-		Log.Infof("segment %v, #docs: %d, invsize: %02fMB, terms: %d, types: %d, dirty: %v", sid, v.TotalDocs, float32(size)/1024/1024, terms, types, v.dirty)
-	}
 }
 
 func (m *SearchIndex) Close() {
@@ -137,70 +95,6 @@ func (m *SearchIndex) ListSegments() ([]int64, error) {
 	return todo, nil
 }
 
-func (m *SearchIndex) DumpToDisk() error {
-	c := map[string]*Segment{}
-
-	m.Lock()
-	for k, s := range m.Segments {
-		c[k] = s
-	}
-	m.Unlock()
-
-	for _, s := range c {
-		m.Lock()
-		if !s.dirty {
-			m.Unlock()
-			continue
-		}
-
-		s.dirty = false
-		m.Unlock()
-
-		m.RLock()
-		// NB: if this fails we should panic?(and we do in the caller, but its not obvious)
-		err := s.DumpToDisk()
-		m.RUnlock()
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (m *SearchIndex) LoadAtBoot(n int) error {
-	todo, err := m.ListSegments()
-	if err != nil {
-		return err
-	}
-	wait := make(chan bool)
-
-	if n > 0 && len(todo) > n {
-		todo = todo[:n]
-	}
-	maxReaders := runtime.GOMAXPROCS(0)
-	var sem = make(chan bool, maxReaders)
-	for _, sid := range todo {
-		sem <- true
-		go func(segmentId int64) {
-			err := m.holdWrite(segmentId, func(segment *Segment) error {
-				return nil
-			})
-			if err != nil {
-				panic(err)
-			}
-
-			<-sem
-			wait <- true
-		}(sid)
-	}
-
-	for range todo {
-		<-wait
-	}
-	return nil
-}
-
 func (m *SearchIndex) LookupSingleSegment(ns int64) *Segment {
 	segmentId := m.toSegmentId(ns)
 	m.RLock()
@@ -211,46 +105,11 @@ func (m *SearchIndex) LookupSingleSegment(ns int64) *Segment {
 
 func (m *SearchIndex) loadSegmentFromDisk(segmentId string) (*Segment, error) {
 	p := path.Join(m.root, segmentId)
-	segment, err := NewSegment(p, m.enableSegmentCache, m.whitelist)
+	segment, err := NewSegment(p, m.fdCache, m.enableSegmentCache, m.whitelist)
 	if err != nil {
-		return nil, err
-	}
-	err = segment.LoadFromDisk()
-	if err != nil && !os.IsNotExist(err) {
-		logger.Log.Warnf("error loading from disk, continuing anyway, err: %s", err.Error())
-	}
-
-	segment.loadedAt = time.Now()
-	err = segment.OpenForwardIndex()
-	if err != nil {
-		return nil, err
-	}
-
-	err = segment.Catchup()
-	if err != nil {
-		segment.Close()
 		return nil, err
 	}
 	return segment, nil
-}
-
-func (m *SearchIndex) newTermQuery(segment *Segment, tagKey string, tagValue string) iq.Query {
-	termString := fmt.Sprintf("%s:%s", tagKey, tagValue)
-
-	pk, ok := segment.Postings[tagKey]
-	if !ok {
-		logger.Log.Infof("%s missing field: %s", segment.Path, tagKey)
-		return iq.Term(segment.TotalDocs, termString, []int32{})
-	}
-
-	pv, ok := pk[tagValue]
-	if !ok {
-		logger.Log.Infof("%s missing value: %s", segment.Path, tagValue)
-		return iq.Term(segment.TotalDocs, termString, []int32{})
-	}
-
-	logger.Log.Infof("%s found %s, postings: %d", segment.Path, termString, len(pv))
-	return iq.Term(segment.TotalDocs, termString, pv)
 }
 
 func (m *SearchIndex) holdRead(step int64, cb func(s *Segment) error) error {
@@ -278,11 +137,6 @@ func (m *SearchIndex) holdRead(step int64, cb func(s *Segment) error) error {
 			segment.Close()
 			segment = overriden
 		} else {
-			err = segment.Catchup()
-			if err != nil {
-				m.Unlock()
-				return err
-			}
 			m.Segments[segmentId] = segment
 		}
 
@@ -323,10 +177,16 @@ func (m *SearchIndex) ForEach(qr *spec.SearchQueryRequest, limit uint32, cb func
 
 	for _, step := range steps {
 		err := m.holdRead(step, func(segment *Segment) error {
-			segment.searchedAt = time.Now()
-
 			query, err := dsl.Parse(qr.Query, func(k, v string) iq.Query {
-				return m.newTermQuery(segment, k, v)
+				if len(k) == 0 || len(v) == 0 {
+					return iq.Term(1, k+":"+v, []int32{})
+				}
+				queries := segment.dir.Terms(k, v)
+				if len(queries) == 1 {
+					return queries[0]
+				} else {
+					return iq.Or(queries...)
+				}
 			})
 			if err != nil {
 				return err

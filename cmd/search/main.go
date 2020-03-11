@@ -275,9 +275,8 @@ func main() {
 
 	var logLevel = flag.Int("log-level", 0, "log level")
 	var segmentStep = flag.Int("segment-step", 3600, "segment step")
+	var maxOpenFD = flag.Int("max-open-fd", 1000, "max open file descriptors to write")
 	var pwhitelist = flag.String("whitelist", "", "csv list of indexable search terms, nothing means all")
-	var loadN = flag.Int("load-n-at-boot", 0, "load N segments at boot, 0 means all")
-	var storeInterval = flag.Int("store-interval", 3600, "store interval, 0 means dont store the inverted index")
 	var enableSegmentCache = flag.Bool("enable-segment-cache", false, "enable memory cache")
 	flag.Parse()
 
@@ -294,11 +293,7 @@ func main() {
 			whitelist[v] = true
 		}
 	}
-	si := index.NewSearchIndex(root, int64(*storeInterval), int64(*segmentStep), *enableSegmentCache, whitelist)
-	err := si.LoadAtBoot(*loadN)
-	if err != nil {
-		Log.Fatalf("failed to load, err: %v", err)
-	}
+	si := index.NewSearchIndex(root, *maxOpenFD, int64(*segmentStep), *enableSegmentCache, whitelist)
 	go func() {
 		err := runProxy(*bindHttp, *bindGrpc)
 		if err != nil {

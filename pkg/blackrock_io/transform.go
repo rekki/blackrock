@@ -115,18 +115,28 @@ func Transform(m map[string]interface{}, expand bool) ([]KV, error) {
 
 func Decorate(g *geoip2.Reader, r *http.Request, e *Envelope) error {
 	m := e.Metadata
-	ip := net.ParseIP(realip.FromRequest(r))
+	var ips string
+	for _, kv := range m.Search {
+		if kv.Key == "ip" {
+			ips = kv.Value
+			break
+		}
+	}
+	if ips != "" {
+		ips = realip.FromRequest(r)
+	}
+
+	ip := net.ParseIP(ips)
 	m.Search = append(m.Search, KV{Key: "ip", Value: ip.String()})
 
 	if g != nil {
 		record, err := g.City(ip)
-		if err != nil {
-			return err
-		}
-		lang := "en"
+		if err == nil {
+			lang := "en"
 
-		m.Search = append(m.Search, KV{Key: "geoip_city", Value: record.City.Names[lang]})
-		m.Search = append(m.Search, KV{Key: "geoip_country", Value: record.Country.Names[lang]})
+			m.Search = append(m.Search, KV{Key: "geoip_city", Value: record.City.Names[lang]})
+			m.Search = append(m.Search, KV{Key: "geoip_country", Value: record.Country.Names[lang]})
+		}
 	}
 	agent := r.Header.Get("User-Agent")
 	ua := user_agent.New(agent)

@@ -78,7 +78,7 @@ func TestSearchCache(t *testing.T) {
 			t.Fatal(err)
 		}
 		defer os.RemoveAll(root)
-		si := NewSearchIndex(root, 0, 3600, doCache, map[string]bool{})
+		si := NewSearchIndex(root, 10, 3600, doCache, map[string]bool{})
 		query := &spec.SearchQueryRequest{FromSecond: 1, ToSecond: 7200, Query: &go_query_dsl.Query{Field: "blackrock", Value: "match_all"}}
 
 		inserted := uint64(1000)
@@ -122,8 +122,7 @@ func TestSearchIndexBasic(t *testing.T) {
 	}
 	defer os.RemoveAll(root)
 
-	si := NewSearchIndex(root, 0, 3600, false, map[string]bool{})
-	si.PrintStats()
+	si := NewSearchIndex(root, 10, 3600, false, map[string]bool{})
 	err = si.Ingest(&spec.Envelope{Metadata: nil})
 	if err != errMissingMetadata {
 		t.Fatal("expected missing metadata")
@@ -185,15 +184,10 @@ func TestSearchIndexBasic(t *testing.T) {
 		t.Fatalf("expected %d got %d", inserted, matching)
 	}
 
-	err = si.DumpToDisk()
-	if err != nil {
-		t.Fatal(err)
-	}
-	si.PrintStats()
 	si.Close()
 
 	matching = uint64(0)
-	si = NewSearchIndex(root, 0, 3600, true, map[string]bool{})
+	si = NewSearchIndex(root, 10, 3600, true, map[string]bool{})
 	err = si.ForEach(query, 0, func(s *Segment, did int32, score float32) error {
 		atomic.AddUint64(&matching, 1)
 		b, err := s.ReadForward(did)
@@ -282,12 +276,12 @@ func TestConcurrentReadAndWrite(t *testing.T) {
 	}
 	defer os.RemoveAll(root)
 
-	si := NewSearchIndex(root, 0, 3600, true, map[string]bool{})
+	si := NewSearchIndex(root, 10, 3600, true, map[string]bool{})
 	writers := 15
 	readers := 15
 	written := uint64(0)
 	read := uint64(0)
-	readWhileWrite := uint64(0)
+
 	query := &spec.SearchQueryRequest{FromSecond: 1, ToSecond: 7200, Query: &go_query_dsl.Query{Field: "blackrock", Value: "match_all"}}
 	wg := sync.WaitGroup{}
 
@@ -320,12 +314,6 @@ func TestConcurrentReadAndWrite(t *testing.T) {
 		go func() {
 			for i := 0; i < 100; i++ {
 				time.Sleep(10 * time.Millisecond)
-
-				err := si.DumpToDisk()
-				if err != nil {
-					panic(err)
-				}
-
 			}
 
 			wg.Done()
@@ -336,11 +324,8 @@ func TestConcurrentReadAndWrite(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			for i := 0; i < 10000; i++ {
-				old := 0
+
 				err = si.ForEach(query, 10, func(s *Segment, did int32, score float32) error {
-					if old != s.TotalDocs {
-						atomic.AddUint64(&readWhileWrite, 1)
-					}
 					m := &spec.Metadata{}
 
 					err := s.ReadForwardDecode(did, m)
@@ -352,7 +337,7 @@ func TestConcurrentReadAndWrite(t *testing.T) {
 						panic("expected non 0")
 					}
 					atomic.AddUint64(&read, 1)
-					old = s.TotalDocs
+
 					return nil
 				})
 			}
@@ -361,7 +346,7 @@ func TestConcurrentReadAndWrite(t *testing.T) {
 	}
 	wg.Wait()
 
-	if written == 0 || read == 0 || readWhileWrite == 0 {
+	if written == 0 || read == 0 {
 		t.Fatal("expected something to happen")
 	}
 
@@ -397,7 +382,7 @@ func BenchmarkIngest1000(b *testing.B) {
 			panic(err)
 		}
 
-		si := NewSearchIndex(root, 0, 3600, false, map[string]bool{})
+		si := NewSearchIndex(root, 10, 3600, false, map[string]bool{})
 		n := 1000
 		envelopes := RandomEnvelopes(n, 1)
 		b.StartTimer()
@@ -422,7 +407,7 @@ func BenchmarkSearch1000000(b *testing.B) {
 		panic(err)
 	}
 
-	si := NewSearchIndex(root, 0, 3600, false, map[string]bool{})
+	si := NewSearchIndex(root, 10, 3600, false, map[string]bool{})
 	n := 1000000
 	for i := 0; i < n; i++ {
 		err = si.Ingest(RandomEnvelope(1))
@@ -457,7 +442,7 @@ func BenchmarkSearchDecode1000000(b *testing.B) {
 		panic(err)
 	}
 
-	si := NewSearchIndex(root, 0, 3600, false, map[string]bool{})
+	si := NewSearchIndex(root, 10, 3600, false, map[string]bool{})
 	n := 1000000
 	for i := 0; i < n; i++ {
 		err = si.Ingest(RandomEnvelope(1))
@@ -501,7 +486,7 @@ func BenchmarkSearchRead1000000(b *testing.B) {
 		panic(err)
 	}
 
-	si := NewSearchIndex(root, 0, 3600, false, map[string]bool{})
+	si := NewSearchIndex(root, 10, 3600, false, map[string]bool{})
 	n := 1000000
 	for i := 0; i < n; i++ {
 		err = si.Ingest(RandomEnvelope(1))
@@ -541,7 +526,7 @@ func BenchmarkSearchRead10(b *testing.B) {
 		panic(err)
 	}
 
-	si := NewSearchIndex(root, 0, 3600, true, map[string]bool{})
+	si := NewSearchIndex(root, 10, 3600, true, map[string]bool{})
 	n := 1000000
 	for i := 0; i < n; i++ {
 		err = si.Ingest(RandomEnvelope(1))
@@ -574,35 +559,4 @@ func BenchmarkSearchRead10(b *testing.B) {
 	b.StopTimer()
 	os.RemoveAll(root)
 
-}
-
-func BenchmarkStore1000(b *testing.B) {
-	for i := 0; i < b.N; i++ {
-		b.StopTimer()
-		root, err := ioutil.TempDir("", "si")
-		if err != nil {
-			panic(err)
-		}
-
-		si := NewSearchIndex(root, 0, 3600, true, map[string]bool{})
-		n := 1000
-		envelopes := RandomEnvelopes(n, 1)
-
-		for _, v := range envelopes {
-			err = si.Ingest(v)
-			if err != nil {
-				panic(err)
-			}
-
-			dontOptimizeMe++
-		}
-		b.StartTimer()
-		err = si.DumpToDisk()
-		if err != nil {
-			panic(err)
-		}
-
-		b.StopTimer()
-		os.RemoveAll(root)
-	}
 }

@@ -4,6 +4,8 @@ github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03
 github.com/DataDog/zstd v1.4.0 h1:vhoV+DUHnRZdKW1i5UMjAk2G4JY8wN4ayRfYDNdEhwo=
 github.com/DataDog/zstd v1.4.0/go.mod h1:1jcaCB/ufaK+sKp1NBhlGmpz41jOoPQ35bpF36t7BBo=
 github.com/antihax/optional v0.0.0-20180407024304-ca021399b1a6/go.mod h1:V8iCPQYkqmusNa815XgQio277wI47sdRh1dUOLdyC6Q=
+github.com/blevesearch/go-porterstemmer v1.0.2 h1:qe7n69gBd1OLY5sHKnxQHIbzn0LNJA4hpAf+5XDxV2I=
+github.com/blevesearch/go-porterstemmer v1.0.2/go.mod h1:haWQqFT3RdOGz7PJuM3or/pWNJS1pKkoZJWCkWu0DVA=
 github.com/client9/misspell v0.3.4/go.mod h1:qj6jICC3Q7zFZvVWo7KLAzC3yx5G7kyvSDkc90ppPyw=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
@@ -94,8 +96,8 @@ github.com/reiver/go-porterstemmer v1.0.1 h1:WyERBkASXgoXrTwq/IQ6wyNj/YG7j/ZURvT
 github.com/reiver/go-porterstemmer v1.0.1/go.mod h1:Z8uL/f/7UEwaeAJNwx1sO8kbqXiEuQieNuD735hLrSU=
 github.com/rekki/go-pen v0.0.0-20191221112641-4f862431f0f0 h1:btLY4DLa7pTmSlFEqx0LCi8/bDBaxqni+XvGzw2EH9o=
 github.com/rekki/go-pen v0.0.0-20191221112641-4f862431f0f0/go.mod h1:84YjGc3WmerTFqfTdFnx9o7w60yH27UM3Hi/Rh3eAr8=
-github.com/rekki/go-query v0.0.0-20191210155545-5e6fbe27cf0c h1:N222Epxq6vDqmenLJIUvg1oNEVclU780jvKFiYia7YM=
-github.com/rekki/go-query v0.0.0-20191210155545-5e6fbe27cf0c/go.mod h1:Sx4jDUG86FffGfoeH4iDbFBj/pZsfBi52+iactXpMSc=
+github.com/rekki/go-query v0.0.0-20200311163623-3880c69d7789 h1:S82li4gsw4vxUiLDSxeR3zvyQOojgq5YhbiVOQjDKoQ=
+github.com/rekki/go-query v0.0.0-20200311163623-3880c69d7789/go.mod h1:Sx4jDUG86FffGfoeH4iDbFBj/pZsfBi52+iactXpMSc=
 github.com/rogpeppe/fastuuid v0.0.0-20150106093220-6724a57986af/go.mod h1:XWv6SoW27p1b0cqNHllgS5HIMJraePCO15w5zCzIWYg=
 github.com/rogpeppe/fastuuid v1.2.0/go.mod h1:jVj6XXZzXRy/MSR5jhDC/2q6DgLz+nrA6LYCDYWNEvQ=
 github.com/rogpeppe/go-internal v1.3.0/go.mod h1:M8bDsm7K2OlrFYOpmOWEs/qY81heoFRclV5y23lUDJ4=

@@ -3,6 +3,7 @@ module github.com/rekki/blackrock
 go 1.13
 
 require (
+	github.com/blevesearch/go-porterstemmer v1.0.2 // indirect
 	github.com/dgryski/go-metro v0.0.0-20180109044635-280f6062b5bc
 	github.com/gin-contrib/cors v1.3.0
 	github.com/gin-gonic/gin v1.5.0
@@ -18,7 +19,7 @@ require (
 	github.com/philhofer/fwd v1.0.0 // indirect
 	github.com/reiver/go-porterstemmer v1.0.1 // indirect
 	github.com/rekki/go-pen v0.0.0-20191221112641-4f862431f0f0
-	github.com/rekki/go-query v0.0.0-20191210155545-5e6fbe27cf0c
+	github.com/rekki/go-query v0.0.0-20200311163623-3880c69d7789
 	github.com/segmentio/kafka-go v0.3.4
 	github.com/sirupsen/logrus v1.4.2
 	github.com/tinylib/msgp v1.1.0
