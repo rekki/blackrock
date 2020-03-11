@@ -32,10 +32,7 @@ func consumeEvents(si spec.SearchClient, root string, pr *PartitionReader) error
 	}
 	defer ow.Close() // close also syncs
 
-	offset, err := ow.ReadOrDefault(kafka.FirstOffset)
-	if err != nil {
-		return err
-	}
+	offset := ow.ReadOrDefault(kafka.FirstOffset)
 
 	if offset != kafka.FirstOffset {
 		offset++ // start from the next one, as we already stored the current one
