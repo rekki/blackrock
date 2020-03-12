@@ -23,6 +23,7 @@ type Segment struct {
 	writer      *pen.Writer
 	cache       sync.Map
 	enableCache bool
+	sync.Mutex
 }
 
 func NewSegment(root string, fdc dsl.FileDescriptorCache, enableCache bool, whitelist map[string]bool) (*Segment, error) {
@@ -48,6 +49,9 @@ func (x *Indexable) DocumentID() int32 {
 }
 
 func (s *Segment) Ingest(envelope *spec.Envelope) error {
+	s.Lock()
+	defer s.Unlock()
+
 	encoded, err := proto.Marshal(envelope.Metadata)
 	if err != nil {
 		return err
