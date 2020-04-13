@@ -10,8 +10,8 @@ import (
 	spec "github.com/rekki/blackrock/pkg/blackrock_io"
 	"github.com/rekki/blackrock/pkg/index"
 	"github.com/rekki/blackrock/pkg/logger"
-	"github.com/rekki/go-query/util/go_query_dsl"
-	iq "github.com/rekki/go-query/util/go_query_dsl"
+	"github.com/rekki/go-query-index/go_query_dsl"
+	iq "github.com/rekki/go-query-index/go_query_dsl"
 	elastic "gopkg.in/olivere/elastic.v6"
 )
 

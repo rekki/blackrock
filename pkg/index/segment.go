@@ -8,7 +8,7 @@ import (
 	"github.com/gogo/protobuf/proto"
 	spec "github.com/rekki/blackrock/pkg/blackrock_io"
 	pen "github.com/rekki/go-pen"
-	dsl "github.com/rekki/go-query/util/index"
+	dsl "github.com/rekki/go-query-index"
 )
 
 func init() {

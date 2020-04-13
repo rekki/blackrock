@@ -15,7 +15,7 @@ import (
 
 	. "github.com/rekki/blackrock/pkg/logger"
 	iq "github.com/rekki/go-query"
-	dsl "github.com/rekki/go-query/util/index"
+	dsl "github.com/rekki/go-query-index"
 )
 
 type SearchIndex struct {

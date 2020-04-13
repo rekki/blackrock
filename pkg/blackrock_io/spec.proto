@@ -3,7 +3,7 @@ syntax = "proto3";
 package blackrock.io;
 
 import "github.com/gogo/protobuf/gogoproto/gogo.proto";
-import "github.com/rekki/go-query/util/go_query_dsl/dsl.proto";
+import "github.com/rekki/go-query-index/go_query_dsl/dsl.proto";
 import "google/api/annotations.proto";
 option (gogoproto.goproto_registration) = true;
 
