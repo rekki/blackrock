@@ -3,7 +3,7 @@ syntax = "proto3";
 package blackrock.io;
 
 import "github.com/gogo/protobuf/gogoproto/gogo.proto";
-import "github.com/rekki/go-query-index/go_query_dsl/dsl.proto";
+import "github.com/rekki/go-query-index-dsl/dsl.proto";
 import "google/api/annotations.proto";
 option (gogoproto.goproto_registration) = true;
 
@@ -81,7 +81,7 @@ message Hit {
 message SearchQueryRequest {
         uint32 from_second = 1;
         uint32 to_second = 2;
-        go.query.dsl.Query query = 3;
+        go.query.index.dsl.Query query = 3;
         int32 limit = 4;
 }
 

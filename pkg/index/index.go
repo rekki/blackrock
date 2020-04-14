@@ -15,7 +15,8 @@ import (
 
 	. "github.com/rekki/blackrock/pkg/logger"
 	iq "github.com/rekki/go-query"
-	dsl "github.com/rekki/go-query-index"
+	dir "github.com/rekki/go-query-index"
+	dsl "github.com/rekki/go-query-index-dsl"
 )
 
 type SearchIndex struct {
@@ -24,7 +25,7 @@ type SearchIndex struct {
 	whitelist          map[string]bool
 	SegmentStep        int64
 	enableSegmentCache bool
-	fdCache            dsl.FileDescriptorCache
+	fdCache            dir.FileDescriptorCache
 	sync.RWMutex
 }
 
@@ -36,7 +37,7 @@ func NewSearchIndex(root string, nOpenFD int, segmentStep int64, enableSegmentCa
 		Log.Fatal(err)
 	}
 
-	fdc := dsl.NewFDCache(nOpenFD)
+	fdc := dir.NewFDCache(nOpenFD)
 	m := &SearchIndex{root: root, fdCache: fdc, Segments: map[string]*Segment{}, SegmentStep: segmentStep, enableSegmentCache: enableSegmentCache, whitelist: whitelist}
 
 	return m

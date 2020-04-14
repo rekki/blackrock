@@ -239,6 +239,8 @@ github.com/rekki/go-query v0.0.0-20200413215351-8e586173880d h1:OaUOB5uJ/iFslXN7
 github.com/rekki/go-query v0.0.0-20200413215351-8e586173880d/go.mod h1:SiHS/zCfSoEpDM6y0lfnqFR0O3sWLG3ET2YwZeLlwes=
 github.com/rekki/go-query-index v0.0.0-20200413220733-87f35b2ede15 h1:0H5/vWOOXhQgMzVmwAp3YcaVCLDWKkFDBWiA6NJdIMI=
 github.com/rekki/go-query-index v0.0.0-20200413220733-87f35b2ede15/go.mod h1:nbFULDfOhDVBQk16lyBglVyvf5zN4/bDeXBDR7b7bKg=
+github.com/rekki/go-query-index-dsl v0.0.0-20200414080008-48770f1e6f34 h1:OWSQfIr6xwdK/BmnCsxAKXKGvZJDTJ2P6PhD5frKKT0=
+github.com/rekki/go-query-index-dsl v0.0.0-20200414080008-48770f1e6f34/go.mod h1:BcUMDzwTzUPxiIVMcU/B12ycGTrHnxP24/SYef+mCLM=
 github.com/rekki/go-query-normalize v0.0.0-20200413193040-74b6001ad75f/go.mod h1:avG0LKWd4OF1JEcNTH4WwAlf/WrvL6kIqzch8hlMDXo=
 github.com/rekki/go-query-normalize v0.0.0-20200413195628-3179d159bfaa h1:GrFBp52q+OwtpFNY7pkmoKQUhDfFIODk3F0XBoN+PUw=
 github.com/rekki/go-query-normalize v0.0.0-20200413195628-3179d159bfaa/go.mod h1:dS98jcQlb1AhubijbQDS2gHXmGqM9iHn4C9h3w9qiSg=

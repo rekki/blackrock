@@ -18,6 +18,7 @@ require (
 	github.com/rekki/go-pen v0.0.0-20200218192651-554d70d2e76d
 	github.com/rekki/go-query v0.0.0-20200413215351-8e586173880d
 	github.com/rekki/go-query-index v0.0.0-20200413220733-87f35b2ede15
+	github.com/rekki/go-query-index-dsl v0.0.0-20200414080008-48770f1e6f34
 	github.com/segmentio/kafka-go v0.3.4
 	github.com/sirupsen/logrus v1.4.2
 	github.com/tomasen/realip v0.0.0-20180522021738-f0c99a92ddce
