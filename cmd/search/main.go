@@ -24,7 +24,8 @@ import (
 )
 
 type server struct {
-	si *index.SearchIndex
+	si         *index.SearchIndex
+	ignoreType map[string]bool
 }
 
 func (s *server) SaySearch(ctx context.Context, qr *spec.SearchQueryRequest) (*spec.SearchQueryResponse, error) {
@@ -217,6 +218,9 @@ func (s *server) SayPush(stream spec.Search_SayPushServer) error {
 		if err != nil {
 			return err
 		}
+		if envelope.Metadata != nil && s.ignoreType[envelope.Metadata.EventType] {
+			continue
+		}
 		err = s.si.Ingest(envelope)
 		if err != nil {
 			return err
@@ -277,6 +281,7 @@ func main() {
 	var segmentStep = flag.Int("segment-step", 3600, "segment step")
 	var maxOpenFD = flag.Int("max-open-fd", 1000, "max open file descriptors to write")
 	var pwhitelist = flag.String("whitelist", "", "csv list of indexable search terms, nothing means all")
+	var pignore = flag.String("ignore-type", "", "csv list of event types to ignore")
 	var enableSegmentCache = flag.Bool("enable-segment-cache", false, "enable memory cache")
 	flag.Parse()
 
@@ -293,6 +298,14 @@ func main() {
 			whitelist[v] = true
 		}
 	}
+
+	ignoreType := map[string]bool{}
+	for _, v := range strings.Split(*pignore, ",") {
+		if len(v) > 0 {
+			ignoreType[v] = true
+		}
+	}
+
 	si := index.NewSearchIndex(root, *maxOpenFD, int64(*segmentStep), *enableSegmentCache, whitelist)
 	go func() {
 		err := runProxy(*bindHttp, *bindGrpc)
@@ -308,7 +321,8 @@ func main() {
 	}
 
 	grpcServer := grpc.NewServer(AddLogging([]grpc.ServerOption{})...)
-	srv := &server{si: si}
+
+	srv := &server{si: si, ignoreType: ignoreType}
 	spec.RegisterSearchServer(grpcServer, srv)
 	err = grpcServer.Serve(lis)
 	Log.Fatal(err)
